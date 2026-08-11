@@ -47,11 +47,14 @@ npm install
    (el plan gratuito alcanza de sobra para este uso).
 2. En **Project Settings → API**, copiá `Project URL` y `anon public key`.
 3. Corré las migraciones de base de datos: en el SQL Editor de Supabase,
-   pegá y ejecutá en orden el contenido de `supabase/migrations/0001_init.sql`
-   y luego `supabase/migrations/0002_events.sql`. Esto crea las tablas
-   (`profiles`, `groups`, `group_members`, `expenses`, `expense_shares`,
-   `events`, `event_rsvps`), las políticas de Row Level Security y el
-   trigger que crea un perfil automáticamente cuando alguien inicia sesión.
+   pegá y ejecutá en orden el contenido de cada archivo en
+   `supabase/migrations/` (`0001_init.sql`, `0002_events.sql`,
+   `0003_harden_definer_functions.sql`). Esto crea las tablas (`profiles`,
+   `groups`, `group_members`, `expenses`, `expense_shares`, `events`,
+   `event_rsvps`), las políticas de Row Level Security, el trigger que
+   crea un perfil automáticamente cuando alguien inicia sesión, y endurece
+   los permisos de las funciones internas para que no queden expuestas
+   por la REST API.
 
 ### 3. Habilitar login con Google
 
