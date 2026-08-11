@@ -28,8 +28,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-2xl border border-black/10 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-zinc-900">
         <h1 className="text-2xl font-semibold tracking-tight">JAPapp</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Calculadoras de asado, empanadas y gastos compartidos entre
-          amigos.
+          Eventos, calculadoras de asado y empanadas, y gastos compartidos
+          entre amigos.
         </p>
         <button
           onClick={handleGoogleLogin}

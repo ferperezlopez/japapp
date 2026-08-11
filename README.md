@@ -1,7 +1,8 @@
 # JAPapp
 
-App privada para el grupo de amigos: calculadoras de asado y empanadas, y
-un módulo de gastos compartidos estilo Splitwise/Tricount.
+App privada para el grupo de amigos: eventos con confirmación de
+asistencia, calculadoras de asado y empanadas, y un módulo de gastos
+compartidos estilo Splitwise/Tricount.
 
 ## Stack
 
@@ -11,6 +12,9 @@ un módulo de gastos compartidos estilo Splitwise/Tricount.
 
 ## Funcionalidades
 
+- **Eventos** (`/eventos`): crear juntadas (ej. "JAPA del viernes") con
+  fecha, lugar y notas. Cualquier usuario logueado puede confirmar su
+  asistencia (Voy / Tal vez / No voy) y ver quién más confirmó.
 - **Calculadoras** (`/calculadoras`): asado y empanadas. Calculan cantidades
   de compra a partir de la cantidad de participantes/docenas, con la misma
   lógica que las planillas de Google Sheets originales del grupo.
@@ -19,7 +23,15 @@ un módulo de gastos compartidos estilo Splitwise/Tricount.
   balances + sugerencias de transferencias para saldar cuentas con el
   mínimo de pagos posible.
 
-Ambas secciones requieren estar logueado con Google.
+Todas las secciones requieren estar logueado con Google.
+
+### Roadmap: estadísticas
+
+La tabla `events` ya tiene una columna `group_id` opcional para poder
+enlazar un evento a un grupo de gastos existente. La idea a futuro es usar
+eso, junto con `event_rsvps`, para armar una sección de estadísticas
+(asistencia histórica, costo por evento/por persona, etc.) sin tener que
+migrar el esquema de nuevo.
 
 ## Setup
 
@@ -34,11 +46,12 @@ npm install
 1. Andá a [supabase.com](https://supabase.com) y creá un proyecto nuevo
    (el plan gratuito alcanza de sobra para este uso).
 2. En **Project Settings → API**, copiá `Project URL` y `anon public key`.
-3. Corré la migración de base de datos: en el SQL Editor de Supabase, pegá
-   y ejecutá el contenido de `supabase/migrations/0001_init.sql`. Esto crea
-   las tablas (`profiles`, `groups`, `group_members`, `expenses`,
-   `expense_shares`), las políticas de Row Level Security y el trigger que
-   crea un perfil automáticamente cuando alguien inicia sesión.
+3. Corré las migraciones de base de datos: en el SQL Editor de Supabase,
+   pegá y ejecutá en orden el contenido de `supabase/migrations/0001_init.sql`
+   y luego `supabase/migrations/0002_events.sql`. Esto crea las tablas
+   (`profiles`, `groups`, `group_members`, `expenses`, `expense_shares`,
+   `events`, `event_rsvps`), las políticas de Row Level Security y el
+   trigger que crea un perfil automáticamente cuando alguien inicia sesión.
 
 ### 3. Habilitar login con Google
 
@@ -85,13 +98,13 @@ Redirect URLs de Supabase (paso 3.4).
 ## Notas técnicas
 
 - `src/lib/supabase/database.types.ts` está escrito a mano para reflejar
-  el esquema de `supabase/migrations/0001_init.sql`. Una vez creado el
-  proyecto real, se puede regenerar con:
+  el esquema de las migraciones en `supabase/migrations/`. Una vez creado
+  el proyecto real, se puede regenerar con:
 
   ```bash
   npx supabase gen types typescript --project-id <tu-project-id> > src/lib/supabase/database.types.ts
   ```
 
-- La protección de rutas (`/calculadoras`, `/gastos`) vive en
+- La protección de rutas (`/calculadoras`, `/gastos`, `/eventos`) vive en
   `src/proxy.ts` (el archivo `proxy.ts` reemplazó a `middleware.ts` en
   Next.js 16; la lógica es la misma).

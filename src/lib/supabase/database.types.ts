@@ -182,6 +182,90 @@ export interface Database {
           },
         ];
       };
+      events: {
+        Row: {
+          id: string;
+          name: string;
+          event_date: string;
+          location: string | null;
+          description: string | null;
+          group_id: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          event_date: string;
+          location?: string | null;
+          description?: string | null;
+          group_id?: string | null;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          event_date?: string;
+          location?: string | null;
+          description?: string | null;
+          group_id?: string | null;
+          created_by?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "events_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "events_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      event_rsvps: {
+        Row: {
+          event_id: string;
+          user_id: string;
+          status: "yes" | "no" | "maybe";
+          responded_at: string;
+        };
+        Insert: {
+          event_id: string;
+          user_id: string;
+          status: "yes" | "no" | "maybe";
+          responded_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          user_id?: string;
+          status?: "yes" | "no" | "maybe";
+          responded_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvps_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_rsvps_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
   };
 }

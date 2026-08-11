@@ -1,0 +1,117 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { CreateEventForm } from "./CreateEventForm";
+
+const dateFormatter = new Intl.DateTimeFormat("es-AR", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const STATUS_EMOJI: Record<string, string> = {
+  yes: "✅",
+  maybe: "🤔",
+  no: "❌",
+};
+
+export default async function EventosPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [{ data: events }, { data: rsvps }] = await Promise.all([
+    supabase
+      .from("events")
+      .select("id, name, event_date, location")
+      .order("event_date", { ascending: true }),
+    supabase.from("event_rsvps").select("event_id, user_id, status"),
+  ]);
+
+  const rsvpsByEvent = new Map<string, { userId: string; status: string }[]>();
+  for (const r of rsvps ?? []) {
+    const list = rsvpsByEvent.get(r.event_id) ?? [];
+    list.push({ userId: r.user_id, status: r.status });
+    rsvpsByEvent.set(r.event_id, list);
+  }
+
+  // Route is already forced dynamic by the cookie-based auth call above,
+  // so this can't be cached/prerendered stale.
+  // eslint-disable-next-line react-hooks/purity -- see comment above
+  const now = Date.now();
+  const upcoming = (events ?? []).filter(
+    (e) => new Date(e.event_date).getTime() >= now,
+  );
+  const past = (events ?? [])
+    .filter((e) => new Date(e.event_date).getTime() < now)
+    .reverse();
+
+  const renderEvent = (event: { id: string; name: string; event_date: string; location: string | null }) => {
+    const eventRsvps = rsvpsByEvent.get(event.id) ?? [];
+    const counts = { yes: 0, maybe: 0, no: 0 };
+    let myStatus: string | undefined;
+    for (const r of eventRsvps) {
+      counts[r.status as keyof typeof counts]++;
+      if (r.userId === user?.id) myStatus = r.status;
+    }
+
+    return (
+      <Link
+        key={event.id}
+        href={`/eventos/${event.id}`}
+        className="block rounded-xl border border-black/10 bg-white px-4 py-3 hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="font-medium">{event.name}</p>
+            <p className="text-xs text-zinc-500">
+              {dateFormatter.format(new Date(event.event_date))}
+              {event.location ? ` · ${event.location}` : ""}
+            </p>
+          </div>
+          {myStatus && (
+            <span className="text-lg" title="Tu respuesta">
+              {STATUS_EMOJI[myStatus]}
+            </span>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-zinc-500">
+          {STATUS_EMOJI.yes} {counts.yes} · {STATUS_EMOJI.maybe} {counts.maybe} ·{" "}
+          {STATUS_EMOJI.no} {counts.no}
+        </p>
+      </Link>
+    );
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
+      <h1 className="text-2xl font-semibold tracking-tight">Eventos</h1>
+      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+        Organizá juntadas y confirmá tu asistencia.
+      </p>
+
+      <div className="mt-6">
+        <CreateEventForm />
+      </div>
+
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold text-zinc-500">Próximos</h2>
+        <div className="mt-2 space-y-2">
+          {upcoming.map(renderEvent)}
+          {upcoming.length === 0 && (
+            <p className="text-sm text-zinc-500">No hay eventos próximos.</p>
+          )}
+        </div>
+      </section>
+
+      {past.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-zinc-500">Pasados</h2>
+          <div className="mt-2 space-y-2">{past.map(renderEvent)}</div>
+        </section>
+      )}
+    </div>
+  );
+}

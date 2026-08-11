@@ -17,6 +17,12 @@ export async function Header() {
         {user && (
           <nav className="flex items-center gap-1 text-sm">
             <Link
+              href="/eventos"
+              className="rounded-full px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Eventos
+            </Link>
+            <Link
               href="/calculadoras/asado"
               className="rounded-full px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
