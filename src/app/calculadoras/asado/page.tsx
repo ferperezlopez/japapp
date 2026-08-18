@@ -1,3 +1,5 @@
+"use client";
+
 import { CalculatorForm } from "@/components/CalculatorForm";
 import { calcularAsado, CRIOLLA_BASE } from "@/lib/calculators/asado";
 

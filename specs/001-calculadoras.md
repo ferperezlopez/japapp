@@ -84,3 +84,11 @@ planillas de Google Sheets originales del grupo.
 - 2026-08-18: spec retroactiva creada, feature ya implementada en
   commit `046bbf1` ("Scaffold JAPapp: calculadoras de asado/empanadas y
   gastos compartidos").
+- 2026-08-18: fix de bug en producción — `asado/page.tsx` y
+  `empanadas/page.tsx` eran Server Components pasando la función
+  `calcularX` como prop a `CalculatorForm` (Client Component), lo cual
+  Next.js no permite (las funciones no son serializables cruzando el
+  límite servidor→cliente). Nunca se había probado en un browser real,
+  solo `npm run build` (que no detecta este error, es de runtime). Fix:
+  ambas páginas pasan a ser Client Components (`"use client"`), ya que
+  no tienen lógica server-only. Verificado con Playwright local.

@@ -1,3 +1,5 @@
+"use client";
+
 import { CalculatorForm } from "@/components/CalculatorForm";
 import {
   calcularEmpanadas,
