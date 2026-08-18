@@ -10,6 +10,22 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Design system de la feature de eventos (specs/004): paleta coral
+     (acción primaria), amber (dinero/deuda), teal (confirmado/a favor).
+     Aditivo — no reemplaza --background/--foreground, así que no afecta
+     al resto de la app (calculadoras, login, gastos standalone, home). */
+  --color-coral-soft: #faece7;
+  --color-coral-mid: #f5c4b3;
+  --color-coral: #d85a30;
+  --color-coral-hover: #993c1d;
+  --color-coral-ink: #4a1b0c;
+  --color-amber-soft: #faeeda;
+  --color-amber: #ef9f27;
+  --color-amber-ink: #412402;
+  --color-teal-soft: #e1f5ee;
+  --color-teal: #1d9e75;
+  --color-teal-ink: #04342c;
 }
 
 @media (prefers-color-scheme: dark) {

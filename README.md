@@ -14,8 +14,11 @@ compartidos estilo Splitwise/Tricount.
 
 - **Eventos** (`/eventos`): crear juntadas (ej. "JAPA del viernes") con
   fecha, lugar y notas. Cualquier usuario logueado puede confirmar su
-  asistencia (Voy / Tal vez / No voy) y ver quién más confirmó.
-  Ver [`specs/003-eventos.md`](specs/003-eventos.md).
+  asistencia (Voy / Tal vez / No voy) y ver quién más confirmó. Cada evento
+  tiene además, en la misma página, sus gastos compartidos (se puede cargar
+  si confirmaste "Voy") y una galería de fotos.
+  Ver [`specs/003-eventos.md`](specs/003-eventos.md) y
+  [`specs/004-eventos-gastos-y-fotos.md`](specs/004-eventos-gastos-y-fotos.md).
 - **Calculadoras** (`/calculadoras`): asado y empanadas. Calculan cantidades
   de compra a partir de la cantidad de participantes/docenas, con la misma
   lógica que las planillas de Google Sheets originales del grupo.
@@ -36,11 +39,10 @@ para la convención.
 
 ### Roadmap: estadísticas
 
-La tabla `events` ya tiene una columna `group_id` opcional para poder
-enlazar un evento a un grupo de gastos existente. La idea a futuro es usar
-eso, junto con `event_rsvps`, para armar una sección de estadísticas
-(asistencia histórica, costo por evento/por persona, etc.) sin tener que
-migrar el esquema de nuevo.
+Todo evento ya tiene su propio grupo de gastos enlazado automáticamente
+(`events.group_id`, ver `specs/004-eventos-gastos-y-fotos.md`). La idea a
+futuro es usar eso, junto con `event_rsvps`, para armar una sección de
+estadísticas (asistencia histórica, costo por evento/por persona, etc.).
 
 ## Setup
 
@@ -58,12 +60,13 @@ npm install
 3. Corré las migraciones de base de datos: en el SQL Editor de Supabase,
    pegá y ejecutá en orden el contenido de cada archivo en
    `supabase/migrations/` (`0001_init.sql`, `0002_events.sql`,
-   `0003_harden_definer_functions.sql`). Esto crea las tablas (`profiles`,
-   `groups`, `group_members`, `expenses`, `expense_shares`, `events`,
-   `event_rsvps`), las políticas de Row Level Security, el trigger que
-   crea un perfil automáticamente cuando alguien inicia sesión, y endurece
-   los permisos de las funciones internas para que no queden expuestas
-   por la REST API.
+   `0003_harden_definer_functions.sql`, `0004_event_groups_and_media.sql`).
+   Esto crea las tablas (`profiles`, `groups`, `group_members`, `expenses`,
+   `expense_shares`, `events`, `event_rsvps`, `event_media`), las políticas
+   de Row Level Security, el trigger que crea un perfil automáticamente
+   cuando alguien inicia sesión, endurece los permisos de las funciones
+   internas, y crea el bucket de Storage `event-photos` para las fotos de
+   los eventos.
 
 ### 3. Habilitar login con Google
 

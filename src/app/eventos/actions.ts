@@ -62,9 +62,104 @@ export async function setRsvp(eventId: string, status: "yes" | "no" | "maybe") {
 
 export async function deleteEvent(eventId: string) {
   const supabase = await createClient();
+
+  // Borrar las fotos del evento en Storage antes de borrar la fila: el
+  // `on delete cascade` de event_media limpia Postgres solo, pero no hay
+  // ningún mecanismo que borre los archivos reales del bucket.
+  const { data: media } = await supabase
+    .from("event_media")
+    .select("storage_path")
+    .eq("event_id", eventId);
+
+  if (media && media.length > 0) {
+    await supabase.storage
+      .from("event-photos")
+      .remove(media.map((m) => m.storage_path));
+  }
+
   const { error } = await supabase.from("events").delete().eq("id", eventId);
   if (error) return { error: error.message };
 
   revalidatePath("/eventos");
+  return { ok: true };
+}
+
+// Fallback defensivo: todo evento nuevo consigue su group_id via el
+// trigger private.handle_new_event, pero por si alguno quedó sin enlazar
+// (evento pre-existente que el backfill no alcanzó a cubrir, por ejemplo).
+export async function ensureEventGroup(eventId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("id, name, group_id, created_by")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (!event) return { error: "Evento no encontrado." };
+  if (event.group_id) return { groupId: event.group_id };
+
+  const { data: group, error } = await supabase
+    .from("groups")
+    .insert({ name: event.name, created_by: event.created_by })
+    .select("id")
+    .single();
+
+  if (error || !group) return { error: error?.message ?? "No se pudo crear el grupo." };
+
+  await supabase
+    .from("group_members")
+    .insert({ group_id: group.id, user_id: event.created_by });
+
+  const { error: updateError } = await supabase
+    .from("events")
+    .update({ group_id: group.id })
+    .eq("id", eventId);
+
+  if (updateError) return { error: updateError.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { groupId: group.id as string };
+}
+
+export async function addEventMedia(eventId: string, storagePath: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { error } = await supabase.from("event_media").insert({
+    event_id: eventId,
+    uploaded_by: user.id,
+    storage_path: storagePath,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+export async function deleteEventMedia(
+  eventId: string,
+  mediaId: string,
+  storagePath: string,
+) {
+  const supabase = await createClient();
+
+  const { error: storageError } = await supabase.storage
+    .from("event-photos")
+    .remove([storagePath]);
+  if (storageError) return { error: storageError.message };
+
+  const { error } = await supabase.from("event_media").delete().eq("id", mediaId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
   return { ok: true };
 }

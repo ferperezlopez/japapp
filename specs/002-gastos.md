@@ -4,7 +4,9 @@
 - **Rutas:** `/gastos`, `/gastos/[groupId]`
 - **Migraciones relacionadas:** `supabase/migrations/0001_init.sql`
   (tablas y RLS), `supabase/migrations/0003_harden_definer_functions.sql`
-  (endurecimiento de `is_group_member`)
+  (endurecimiento de `is_group_member`), `supabase/migrations/0004_event_groups_and_media.sql`
+  (relaja el SELECT de este esquema para grupos enlazados a un evento — ver
+  `specs/004-eventos-gastos-y-fotos.md`)
 - **Última actualización:** 2026-08-18
 
 ## 1. Resumen
@@ -98,8 +100,10 @@ Puntos que el SQL no explica por sí solo:
       todos los casos, pero converge y es determinístico).
 - [x] Solo aparece el botón de borrar gasto para quien lo creó; borrar
       vía policy RLS solo lo permite a `created_by`.
-- [x] Un usuario no miembro de un grupo no puede ver sus gastos ni
-      miembros (enforced por `is_group_member()` en las policies SELECT).
+- [x] Un usuario no miembro de un grupo standalone (sin evento enlazado) no
+      puede ver sus gastos ni miembros (enforced por `is_group_member()` en
+      las policies SELECT). Desde `specs/004-eventos-gastos-y-fotos.md`,
+      esto ya NO aplica a grupos enlazados a un evento — ver esa spec.
 - [x] Todas las rutas de `/gastos` requieren login.
 
 ## 6. Decisiones y tradeoffs
@@ -119,11 +123,17 @@ Puntos que el SQL no explica por sí solo:
   existe en DB, falta el botón).
 - Marcar un settlement sugerido como "ya pagado" (persistirlo).
 - Split no igualitario.
-- Enlace con `events.group_id` para una futura sección de estadísticas
-  de costo por evento (ver `specs/003-eventos.md`, sección 7).
+- ~~Enlace con `events.group_id` para una futura sección de estadísticas~~
+  — implementado en `specs/004-eventos-gastos-y-fotos.md` (todo evento
+  crea y usa su propio grupo de gastos). La sección de estadísticas en sí
+  (costo por evento/persona) sigue sin construirse.
 
 ## 8. Changelog
 
+- 2026-08-18: `specs/004-eventos-gastos-y-fotos.md` relajó el SELECT de
+  `groups`/`group_members`/`expenses`/`expense_shares` para grupos
+  enlazados a un evento (visible a cualquier logueado, no solo miembros).
+  INSERT/UPDATE/DELETE no cambiaron.
 - 2026-08-18: spec retroactiva creada, feature ya implementada en
   commit `046bbf1`, con el endurecimiento de `is_group_member` sumado en
   commit `1d5b5ea`.

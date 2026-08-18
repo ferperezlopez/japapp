@@ -266,6 +266,45 @@ export interface Database {
           },
         ];
       };
+      event_media: {
+        Row: {
+          id: string;
+          event_id: string;
+          uploaded_by: string;
+          storage_path: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          uploaded_by: string;
+          storage_path: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          uploaded_by?: string;
+          storage_path?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_media_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_media_uploaded_by_fkey";
+            columns: ["uploaded_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
   };
 }

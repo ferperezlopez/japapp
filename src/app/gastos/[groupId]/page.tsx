@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
 import { AddMemberForm } from "./AddMemberForm";
-import { AddExpenseForm } from "./AddExpenseForm";
-import { DeleteExpenseButton } from "./DeleteExpenseButton";
+import { AddExpenseForm } from "@/components/gastos/AddExpenseForm";
+import { DeleteExpenseButton } from "@/components/gastos/DeleteExpenseButton";
 
 export default async function GroupPage({
   params,

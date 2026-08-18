@@ -2,7 +2,9 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/eventos`, `/eventos/[eventId]`
-- **Migraciones relacionadas:** `supabase/migrations/0002_events.sql`
+- **Migraciones relacionadas:** `supabase/migrations/0002_events.sql`,
+  `supabase/migrations/0004_event_groups_and_media.sql` (le da a
+  `group_id` su primer uso real — ver `specs/004-eventos-gastos-y-fotos.md`)
 - **Última actualización:** 2026-08-18
 
 ## 1. Resumen
@@ -95,11 +97,18 @@ Puntos que el SQL no explica por sí solo:
 
 - Sección de estadísticas: asistencia histórica + costo por evento/persona,
   usando `events.group_id` para cruzar `event_rsvps` con `expenses` del
-  grupo de gastos enlazado. Explícitamente pospuesta por el usuario.
-- UI para setear `group_id` al crear/editar un evento.
+  grupo de gastos enlazado. `specs/004-eventos-gastos-y-fotos.md` ya deja
+  los gastos enlazados y visibles en la página del evento; la sección de
+  estadísticas en sí sigue pospuesta.
+- ~~UI para setear `group_id` al crear/editar un evento~~ — ya no aplica:
+  desde `004` todo evento nuevo consigue su `group_id` automáticamente vía
+  trigger, no hace falta setearlo a mano.
 - Edición de evento.
 
 ## 8. Changelog
 
+- 2026-08-18: `specs/004-eventos-gastos-y-fotos.md` le dio uso real a
+  `group_id` (trigger que crea el grupo automáticamente) y agregó fotos
+  del evento (`event_media` + Storage).
 - 2026-08-18: spec retroactiva creada, feature ya implementada en
   commit `ec5dbc5` ("Add Eventos: crear juntadas y confirmar asistencia").
