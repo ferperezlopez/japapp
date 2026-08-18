@@ -15,15 +15,24 @@ compartidos estilo Splitwise/Tricount.
 - **Eventos** (`/eventos`): crear juntadas (ej. "JAPA del viernes") con
   fecha, lugar y notas. Cualquier usuario logueado puede confirmar su
   asistencia (Voy / Tal vez / No voy) y ver quién más confirmó.
+  Ver [`specs/003-eventos.md`](specs/003-eventos.md).
 - **Calculadoras** (`/calculadoras`): asado y empanadas. Calculan cantidades
   de compra a partir de la cantidad de participantes/docenas, con la misma
   lógica que las planillas de Google Sheets originales del grupo.
+  Ver [`specs/001-calculadoras.md`](specs/001-calculadoras.md).
 - **Gastos** (`/gastos`): grupos de gastos compartidos. Cada grupo tiene
   miembros, gastos (con quién pagó y entre quiénes se divide) y calcula
   balances + sugerencias de transferencias para saldar cuentas con el
-  mínimo de pagos posible.
+  mínimo de pagos posible. Ver [`specs/002-gastos.md`](specs/002-gastos.md).
 
 Todas las secciones requieren estar logueado con Google.
+
+## Specs
+
+El proyecto se desarrolla con Spec Driven Development: cada feature se
+especifica en `specs/` antes de programarse, y esa spec es la fuente de
+verdad de su comportamiento esperado. Ver [`specs/README.md`](specs/README.md)
+para la convención.
 
 ### Roadmap: estadísticas
 
