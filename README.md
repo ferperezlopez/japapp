@@ -30,6 +30,11 @@ compartidos estilo Splitwise/Tricount.
 
 Todas las secciones requieren estar logueado con Google.
 
+La app está pensada mobile-first (navegación por barra inferior) y es una
+PWA instalable: desde el navegador del celular, "Agregar a pantalla de
+inicio" la abre a pantalla completa como una app nativa. Ver
+[`specs/005-diseno-visual-y-pwa.md`](specs/005-diseno-visual-y-pwa.md).
+
 ## Specs
 
 El proyecto se desarrolla con Spec Driven Development: cada feature se

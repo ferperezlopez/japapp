@@ -1,6 +1,7 @@
 "use client";
 
 import { CalculatorForm } from "@/components/CalculatorForm";
+import { Card } from "@/components/ui/Card";
 import { calcularAsado, CRIOLLA_BASE } from "@/lib/calculators/asado";
 
 export default function AsadoPage() {
@@ -20,8 +21,8 @@ export default function AsadoPage() {
         />
       </div>
 
-      <div className="mt-8 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold">
+      <Card className="mt-8 p-4">
+        <h2 className="text-sm font-medium">
           Ensalada criolla (receta base, ~8-10 personas)
         </h2>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
@@ -32,7 +33,7 @@ export default function AsadoPage() {
             <li key={ingrediente}>{ingrediente}</li>
           ))}
         </ul>
-      </div>
+      </Card>
     </div>
   );
 }

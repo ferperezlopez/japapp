@@ -1,48 +1,26 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import type { User } from "@supabase/supabase-js";
 import { signOut } from "@/app/actions/auth";
 
-export async function Header() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export function Header({ user }: { user: User | null }) {
   return (
-    <header className="border-b border-black/10 dark:border-white/10">
+    <header className="border-b border-coral-mid/40 dark:border-coral/20">
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
+        <Link
+          href="/"
+          className="text-lg font-medium tracking-tight text-coral-ink dark:text-coral-mid"
+        >
           JAPapp
         </Link>
         {user && (
-          <nav className="flex items-center gap-1 text-sm">
-            <Link
-              href="/eventos"
-              className="rounded-full px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="rounded-full px-3 py-1.5 text-sm font-medium text-zinc-500 transition-colors duration-200 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
-              Eventos
-            </Link>
-            <Link
-              href="/calculadoras/asado"
-              className="rounded-full px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Calculadoras
-            </Link>
-            <Link
-              href="/gastos"
-              className="rounded-full px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Gastos
-            </Link>
-            <form action={signOut} className="ml-2">
-              <button
-                type="submit"
-                className="rounded-full px-3 py-1.5 font-medium text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              >
-                Salir
-              </button>
-            </form>
-          </nav>
+              Salir
+            </button>
+          </form>
         )}
       </div>
     </header>

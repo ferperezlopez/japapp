@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createEvent } from "./actions";
+import { Button } from "@/components/ui/Button";
 
 export function CreateEventForm() {
   const [error, setError] = useState<string | null>(null);
@@ -11,14 +12,7 @@ export function CreateEventForm() {
   const router = useRouter();
 
   if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-      >
-        + Nuevo evento
-      </button>
-    );
+    return <Button onClick={() => setOpen(true)}>+ Nuevo evento</Button>;
   }
 
   return (
@@ -34,7 +28,7 @@ export function CreateEventForm() {
           }
         });
       }}
-      className="space-y-3 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"
+      className="space-y-3 rounded-xl border border-coral-mid/50 bg-white p-4 dark:border-coral/25 dark:bg-zinc-900"
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
@@ -83,17 +77,13 @@ export function CreateEventForm() {
       </div>
 
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-        >
+        <Button type="submit" disabled={pending}>
           {pending ? "Creando..." : "Crear evento"}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 transition-colors duration-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
           Cancelar
         </button>
