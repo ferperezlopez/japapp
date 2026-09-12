@@ -30,7 +30,7 @@ export function AppIconMark({
           justifyContent: "center",
           width: size * (1 - paddingRatio),
           height: size * (1 - paddingRatio),
-          fontSize: size * 0.55,
+          fontSize: size * (1 - paddingRatio) * 0.55,
           fontWeight: 500,
           color: "#ffffff",
           fontFamily: "sans-serif",
