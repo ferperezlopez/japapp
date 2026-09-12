@@ -1,6 +1,7 @@
 "use client";
 
 import { CalculatorForm } from "@/components/CalculatorForm";
+import { Card } from "@/components/ui/Card";
 import {
   calcularEmpanadas,
   EMPANADA_A_GUSTO,
@@ -28,14 +29,14 @@ export default function EmpanadasPage() {
         </p>
       </div>
 
-      <div className="mt-8 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
-        <h2 className="text-sm font-semibold">Receta</h2>
+      <Card className="mt-8 p-4">
+        <h2 className="text-sm font-medium">Receta</h2>
         <ol className="mt-3 list-inside list-decimal space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
           {EMPANADA_RECETA.map((paso, i) => (
             <li key={i}>{paso}</li>
           ))}
         </ol>
-      </div>
+      </Card>
     </div>
   );
 }

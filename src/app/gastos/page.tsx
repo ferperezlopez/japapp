@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { Card } from "@/components/ui/Card";
 import { CreateGroupForm } from "./CreateGroupForm";
 
 export default async function GastosPage() {
@@ -20,7 +21,9 @@ export default async function GastosPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Gastos</h1>
+      <h1 className="text-2xl font-medium tracking-tight text-coral-ink dark:text-coral-mid">
+        Gastos
+      </h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Grupos para dividir gastos con amigos, estilo Splitwise.
       </p>
@@ -32,11 +35,10 @@ export default async function GastosPage() {
       <ul className="mt-8 space-y-2">
         {groups.map((group) => (
           <li key={group.id}>
-            <Link
-              href={`/gastos/${group.id}`}
-              className="block rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-medium hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-            >
-              {group.name}
+            <Link href={`/gastos/${group.id}`} className="block">
+              <Card className="px-4 py-3 text-sm font-medium transition-colors duration-200 hover:bg-coral-soft dark:hover:bg-zinc-800">
+                {group.name}
+              </Card>
             </Link>
           </li>
         ))}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { Card } from "@/components/ui/Card";
 import { CreateEventForm } from "./CreateEventForm";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
@@ -58,36 +59,36 @@ export default async function EventosPage() {
     }
 
     return (
-      <Link
-        key={event.id}
-        href={`/eventos/${event.id}`}
-        className="block rounded-xl border border-black/10 bg-white px-4 py-3 hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="font-medium">{event.name}</p>
-            <p className="text-xs text-zinc-500">
-              {dateFormatter.format(new Date(event.event_date))}
-              {event.location ? ` · ${event.location}` : ""}
-            </p>
+      <Link key={event.id} href={`/eventos/${event.id}`} className="block">
+        <Card className="px-4 py-3 transition-colors duration-200 hover:bg-coral-soft dark:hover:bg-zinc-800">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="font-medium">{event.name}</p>
+              <p className="text-xs text-zinc-500">
+                {dateFormatter.format(new Date(event.event_date))}
+                {event.location ? ` · ${event.location}` : ""}
+              </p>
+            </div>
+            {myStatus && (
+              <span className="text-lg" title="Tu respuesta">
+                {STATUS_EMOJI[myStatus]}
+              </span>
+            )}
           </div>
-          {myStatus && (
-            <span className="text-lg" title="Tu respuesta">
-              {STATUS_EMOJI[myStatus]}
-            </span>
-          )}
-        </div>
-        <p className="mt-2 text-xs text-zinc-500">
-          {STATUS_EMOJI.yes} {counts.yes} · {STATUS_EMOJI.maybe} {counts.maybe} ·{" "}
-          {STATUS_EMOJI.no} {counts.no}
-        </p>
+          <p className="mt-2 text-xs text-zinc-500">
+            {STATUS_EMOJI.yes} {counts.yes} · {STATUS_EMOJI.maybe}{" "}
+            {counts.maybe} · {STATUS_EMOJI.no} {counts.no}
+          </p>
+        </Card>
       </Link>
     );
   };
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Eventos</h1>
+      <h1 className="text-2xl font-medium tracking-tight text-coral-ink dark:text-coral-mid">
+        Eventos
+      </h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Organizá juntadas y confirmá tu asistencia.
       </p>
@@ -97,7 +98,7 @@ export default async function EventosPage() {
       </div>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-zinc-500">Próximos</h2>
+        <h2 className="text-sm font-medium text-zinc-500">Próximos</h2>
         <div className="mt-2 space-y-2">
           {upcoming.map(renderEvent)}
           {upcoming.length === 0 && (
@@ -108,7 +109,7 @@ export default async function EventosPage() {
 
       {past.length > 0 && (
         <section className="mt-8">
-          <h2 className="text-sm font-semibold text-zinc-500">Pasados</h2>
+          <h2 className="text-sm font-medium text-zinc-500">Pasados</h2>
           <div className="mt-2 space-y-2">{past.map(renderEvent)}</div>
         </section>
       )}

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { addExpense } from "@/app/gastos/actions";
+import { Button } from "@/components/ui/Button";
 
 interface Member {
   id: string;
@@ -9,26 +10,12 @@ interface Member {
   email: string;
 }
 
-const CONTAINER_VARIANT = {
-  neutral:
-    "border-black/10 bg-white dark:border-white/10 dark:bg-zinc-900",
-  coral: "border-coral-mid/60 bg-white dark:border-coral/30 dark:bg-zinc-900",
-};
-
-const BUTTON_VARIANT = {
-  neutral:
-    "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200",
-  coral: "bg-coral text-white hover:bg-coral-hover",
-};
-
 export function AddExpenseForm({
   groupId,
   members,
-  variant = "neutral",
 }: {
   groupId: string;
   members: Member[];
-  variant?: "neutral" | "coral";
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -43,7 +30,7 @@ export function AddExpenseForm({
           if (result.error) setError(result.error);
         });
       }}
-      className={`space-y-3 rounded-xl border p-4 ${CONTAINER_VARIANT[variant]}`}
+      className="space-y-3 rounded-xl border border-coral-mid/50 bg-white p-4 dark:border-coral/25 dark:bg-zinc-900"
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
@@ -121,13 +108,9 @@ export function AddExpenseForm({
         </div>
       </div>
 
-      <button
-        type="submit"
-        disabled={pending}
-        className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-200 disabled:opacity-60 ${BUTTON_VARIANT[variant]}`}
-      >
+      <Button type="submit" disabled={pending}>
         {pending ? "Guardando..." : "Agregar gasto"}
-      </button>
+      </Button>
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}

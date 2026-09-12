@@ -167,6 +167,10 @@ completo (triggers, policies, bucket). Lo que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-08-26: `specs/005-diseno-visual-y-pwa.md` extendió la paleta
+  coral/amber/teal a toda la app (esta spec la había limitado a
+  `/eventos/[eventId]` a propósito) y sacó el prop `variant` de
+  `AddExpenseForm`/`DeleteExpenseButton` porque ya no hace falta bifurcar.
 - 2026-08-18: creada e implementada. Ver `specs/002-gastos.md` y
   `specs/003-eventos.md` para el changelog cruzado de cómo esta feature
   afecta esas dos.

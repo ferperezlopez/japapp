@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
+import { Card } from "@/components/ui/Card";
 import { AddMemberForm } from "./AddMemberForm";
 import { AddExpenseForm } from "@/components/gastos/AddExpenseForm";
 import { DeleteExpenseButton } from "@/components/gastos/DeleteExpenseButton";
@@ -64,37 +65,43 @@ export default async function GroupPage({
       <Link href="/gastos" className="text-sm text-zinc-500 hover:underline">
         ← Gastos
       </Link>
-      <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+      <h1 className="mt-1 text-2xl font-medium tracking-tight text-coral-ink dark:text-coral-mid">
         {group.name}
       </h1>
 
       <section className="mt-6">
-        <h2 className="text-sm font-semibold">Balances</h2>
+        <h2 className="text-sm font-medium text-zinc-500">Balances</h2>
         <ul className="mt-2 space-y-1">
           {balances.map((b) => (
-            <li key={b.userId} className="flex justify-between text-sm">
+            <li
+              key={b.userId}
+              className="flex items-center justify-between text-sm"
+            >
               <span className="text-zinc-700 dark:text-zinc-300">
                 {memberName(b.userId)}
               </span>
-              <span
-                className={`font-medium tabular-nums ${
-                  b.balance > 0
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : b.balance < 0
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-zinc-500"
-                }`}
-              >
-                {b.balance > 0 ? "+" : ""}
-                {b.balance.toFixed(2)}
-              </span>
+              {b.balance > 0 ? (
+                <span className="rounded-full bg-teal-soft px-2.5 py-0.5 text-xs font-medium text-teal-ink">
+                  +${b.balance.toFixed(2)}
+                </span>
+              ) : b.balance < 0 ? (
+                <span className="rounded-full bg-amber-soft px-2.5 py-0.5 text-xs font-medium text-amber-ink">
+                  ${b.balance.toFixed(2)}
+                </span>
+              ) : (
+                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">
+                  $0.00
+                </span>
+              )}
             </li>
           ))}
         </ul>
 
         {settlements.length > 0 && (
-          <div className="mt-4 rounded-xl border border-black/10 bg-white p-4 text-sm dark:border-white/10 dark:bg-zinc-900">
-            <h3 className="font-semibold">Para saldar cuentas</h3>
+          <Card className="mt-4 border-coral-mid/60 bg-coral-soft/60 p-4 text-sm dark:bg-zinc-900">
+            <h3 className="font-medium text-coral-ink dark:text-coral-mid">
+              Para saldar cuentas
+            </h3>
             <ul className="mt-2 space-y-1 text-zinc-700 dark:text-zinc-300">
               {settlements.map((s, i) => (
                 <li key={i}>
@@ -106,12 +113,12 @@ export default async function GroupPage({
                 </li>
               ))}
             </ul>
-          </div>
+          </Card>
         )}
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold">Miembros</h2>
+        <h2 className="text-sm font-medium text-zinc-500">Miembros</h2>
         <ul className="mt-2 flex flex-wrap gap-2">
           {members.map((m) => (
             <li
@@ -128,14 +135,14 @@ export default async function GroupPage({
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold">Agregar gasto</h2>
+        <h2 className="text-sm font-medium text-zinc-500">Agregar gasto</h2>
         <div className="mt-2">
           <AddExpenseForm groupId={groupId} members={members} />
         </div>
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold">Gastos</h2>
+        <h2 className="text-sm font-medium text-zinc-500">Gastos</h2>
         <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
           {(expenses ?? []).map((e) => (
             <li key={e.id} className="flex items-center justify-between py-2 text-sm">

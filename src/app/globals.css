@@ -11,10 +11,9 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Design system de la feature de eventos (specs/004): paleta coral
-     (acción primaria), amber (dinero/deuda), teal (confirmado/a favor).
-     Aditivo — no reemplaza --background/--foreground, así que no afecta
-     al resto de la app (calculadoras, login, gastos standalone, home). */
+  /* Design system de la app (specs/005): paleta coral (acción primaria/
+     marca), amber (dinero pendiente/deuda), teal (confirmado/balance a
+     favor). Ver overrides de dark mode más abajo. */
   --color-coral-soft: #faece7;
   --color-coral-mid: #f5c4b3;
   --color-coral: #d85a30;
@@ -32,11 +31,26 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    /* Misma paleta, tonos invertidos: soft/mid pasan a ser superficies
+       oscuras y los "ink" pasan a ser el texto claro que va sobre ellas. */
+    --color-coral-soft: #2b1710;
+    --color-coral-mid: #4a2818;
+    --color-coral: #e8814f;
+    --color-coral-hover: #f2996b;
+    --color-coral-ink: #f5d9c9;
+    --color-amber-soft: #3a2a05;
+    --color-amber: #f5b23f;
+    --color-amber-ink: #fbe6b8;
+    --color-teal-soft: #06332a;
+    --color-teal: #2dbb8d;
+    --color-teal-ink: #bdf0dd;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family:
+    var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
 }

@@ -104,11 +104,7 @@ export function GastosEmbed({
                 ${e.amount.toFixed(2)}
               </span>
               {e.created_by === currentUserId && (
-                <DeleteExpenseButton
-                  groupId={groupId}
-                  expenseId={e.id}
-                  variant="coral"
-                />
+                <DeleteExpenseButton groupId={groupId} expenseId={e.id} />
               )}
             </div>
           </li>
@@ -121,7 +117,7 @@ export function GastosEmbed({
       </ul>
 
       {canAddExpense ? (
-        <AddExpenseForm groupId={groupId} members={members} variant="coral" />
+        <AddExpenseForm groupId={groupId} members={members} />
       ) : (
         <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700">
           Confirmá &quot;Voy&quot; para poder cargar gastos de esta juntada.

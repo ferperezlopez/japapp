@@ -34,7 +34,7 @@ export function PhotoGrid({
       {photos.map((photo) => (
         <div
           key={photo.id}
-          className="group relative h-28 w-28 overflow-hidden rounded-lg border border-black/10 bg-zinc-100 shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:border-white/10 dark:bg-zinc-800"
+          className="group relative h-28 w-28 overflow-hidden rounded-lg border border-coral-mid/50 bg-zinc-100 shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:border-coral/25 dark:bg-zinc-800"
           style={{ transform: `rotate(${rotationFor(photo.id)}deg)` }}
         >
           {photo.url ? (

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Card } from "@/components/ui/Card";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
@@ -25,8 +26,10 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-1 items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-black/10 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-zinc-900">
-        <h1 className="text-2xl font-semibold tracking-tight">JAPapp</h1>
+      <Card className="w-full max-w-sm p-8 text-center">
+        <h1 className="text-2xl font-medium tracking-tight text-coral-ink dark:text-coral-mid">
+          JAPapp
+        </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Eventos, calculadoras de asado y empanadas, y gastos compartidos
           entre amigos.
@@ -34,7 +37,7 @@ export default function LoginPage() {
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="mt-8 flex w-full items-center justify-center gap-3 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+          className="mt-8 flex w-full items-center justify-center gap-3 rounded-lg border border-black/10 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition-colors duration-200 hover:bg-zinc-50 disabled:opacity-60 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
             <path
@@ -61,7 +64,7 @@ export default function LoginPage() {
             {error}
           </p>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
