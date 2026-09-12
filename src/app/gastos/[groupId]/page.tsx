@@ -62,22 +62,22 @@ export default async function GroupPage({
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-      <Link href="/gastos" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/gastos" className="text-sm text-foreground/50 hover:underline">
         ← Gastos
       </Link>
-      <h1 className="mt-1 text-2xl font-medium tracking-tight text-coral-ink dark:text-coral-mid">
+      <h1 className="mt-1 font-serif text-2xl text-foreground">
         {group.name}
       </h1>
 
       <section className="mt-6">
-        <h2 className="text-sm font-medium text-zinc-500">Balances</h2>
+        <h2 className="text-sm font-medium text-foreground/50">Balances</h2>
         <ul className="mt-2 space-y-1">
           {balances.map((b) => (
             <li
               key={b.userId}
               className="flex items-center justify-between text-sm"
             >
-              <span className="text-zinc-700 dark:text-zinc-300">
+              <span className="text-foreground/80">
                 {memberName(b.userId)}
               </span>
               {b.balance > 0 ? (
@@ -89,7 +89,7 @@ export default async function GroupPage({
                   ${b.balance.toFixed(2)}
                 </span>
               ) : (
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">
+                <span className="rounded-full bg-surface px-2.5 py-0.5 text-xs font-medium text-foreground/50">
                   $0.00
                 </span>
               )}
@@ -98,11 +98,11 @@ export default async function GroupPage({
         </ul>
 
         {settlements.length > 0 && (
-          <Card className="mt-4 border-coral-mid/60 bg-coral-soft/60 p-4 text-sm dark:bg-zinc-900">
+          <Card className="mt-4 bg-coral-soft/60 p-4 text-sm">
             <h3 className="font-medium text-coral-ink dark:text-coral-mid">
               Para saldar cuentas
             </h3>
-            <ul className="mt-2 space-y-1 text-zinc-700 dark:text-zinc-300">
+            <ul className="mt-2 space-y-1 text-foreground/80">
               {settlements.map((s, i) => (
                 <li key={i}>
                   {memberName(s.from)} le paga{" "}
@@ -118,12 +118,12 @@ export default async function GroupPage({
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-zinc-500">Miembros</h2>
+        <h2 className="text-sm font-medium text-foreground/50">Miembros</h2>
         <ul className="mt-2 flex flex-wrap gap-2">
           {members.map((m) => (
             <li
               key={m.id}
-              className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+              className="rounded-full bg-surface px-3 py-1 text-xs text-foreground/80"
             >
               {m.name ?? m.email}
             </li>
@@ -135,20 +135,20 @@ export default async function GroupPage({
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-zinc-500">Agregar gasto</h2>
+        <h2 className="text-sm font-medium text-foreground/50">Agregar gasto</h2>
         <div className="mt-2">
           <AddExpenseForm groupId={groupId} members={members} />
         </div>
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-zinc-500">Gastos</h2>
-        <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+        <h2 className="text-sm font-medium text-foreground/50">Gastos</h2>
+        <ul className="mt-2 divide-y divide-surface-border">
           {(expenses ?? []).map((e) => (
             <li key={e.id} className="flex items-center justify-between py-2 text-sm">
               <div>
                 <p className="font-medium">{e.description}</p>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-foreground/50">
                   {e.expense_date} · pagó {memberName(e.paid_by)}
                 </p>
               </div>
@@ -163,7 +163,7 @@ export default async function GroupPage({
             </li>
           ))}
           {(expenses ?? []).length === 0 && (
-            <p className="py-2 text-sm text-zinc-500">
+            <p className="py-2 text-sm text-foreground/50">
               Todavía no hay gastos cargados.
             </p>
           )}

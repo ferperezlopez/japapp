@@ -1,15 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Light: "papel" cálido en vez de blanco puro. */
+  --background: #fbf5ee;
+  --foreground: #2a1d14;
+  --surface: #ffffff;
+  --surface-border: rgba(42, 29, 20, 0.08);
 
   /* Design system de la app (specs/005): paleta coral (acción primaria/
      marca), amber (dinero pendiente/deuda), teal (confirmado/balance a
@@ -27,20 +23,45 @@
   --color-teal-ink: #04342c;
 }
 
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-border: var(--surface-border);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-display);
+
+  --color-coral-soft: var(--color-coral-soft);
+  --color-coral-mid: var(--color-coral-mid);
+  --color-coral: var(--color-coral);
+  --color-coral-hover: var(--color-coral-hover);
+  --color-coral-ink: var(--color-coral-ink);
+  --color-amber-soft: var(--color-amber-soft);
+  --color-amber: var(--color-amber);
+  --color-amber-ink: var(--color-amber-ink);
+  --color-teal-soft: var(--color-teal-soft);
+  --color-teal: var(--color-teal);
+  --color-teal-ink: var(--color-teal-ink);
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Dark: el look editorial cálido de la referencia (mammamia.rest). */
+    --background: #16110d;
+    --foreground: #f2e9e0;
+    --surface: #1f1812;
+    --surface-border: rgba(242, 233, 224, 0.08);
 
     /* Misma paleta, tonos invertidos: soft/mid pasan a ser superficies
        oscuras y los "ink" pasan a ser el texto claro que va sobre ellas. */
     --color-coral-soft: #2b1710;
     --color-coral-mid: #4a2818;
-    --color-coral: #e8814f;
+    --color-coral: #d8703f;
     --color-coral-hover: #f2996b;
     --color-coral-ink: #f5d9c9;
     --color-amber-soft: #3a2a05;
-    --color-amber: #f5b23f;
+    --color-amber: #f0b23f;
     --color-amber-ink: #fbe6b8;
     --color-teal-soft: #06332a;
     --color-teal: #2dbb8d;
