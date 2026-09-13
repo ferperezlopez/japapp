@@ -153,7 +153,7 @@ export default async function EventoPage({
         ← Eventos
       </Link>
 
-      <div className="mt-3 rounded-2xl border border-surface-border bg-surface p-5">
+      <div className="animate-reveal mt-3 rounded-2xl border border-surface-border bg-surface p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
           Próximo evento
         </p>
@@ -187,10 +187,11 @@ export default async function EventoPage({
                 {group.label} ({people.length})
               </h3>
               <ul className="mt-1 flex flex-wrap gap-2">
-                {people.map((p) => (
+                {people.map((p, index) => (
                   <li
                     key={p.userId}
-                    className="rounded-full bg-surface px-3 py-1 text-xs text-foreground/80"
+                    className="animate-reveal rounded-full bg-surface px-3 py-1 text-xs text-foreground/80"
+                    style={{ animationDelay: `${index * 40}ms` }}
                   >
                     {p.name}
                   </li>

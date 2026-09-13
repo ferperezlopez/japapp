@@ -20,7 +20,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`rounded-lg px-4 py-2 text-sm transition-colors duration-200 disabled:opacity-60 ${VARIANT_CLASSES[variant]} ${className}`}
+      className={`rounded-lg px-4 py-2 text-sm transition duration-200 active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 ${VARIANT_CLASSES[variant]} ${className}`}
       {...props}
     />
   );

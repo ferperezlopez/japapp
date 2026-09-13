@@ -49,7 +49,10 @@ export default async function EventosPage() {
     .filter((e) => new Date(e.event_date).getTime() < now)
     .reverse();
 
-  const renderEvent = (event: { id: string; name: string; event_date: string; location: string | null }) => {
+  const renderEvent = (
+    event: { id: string; name: string; event_date: string; location: string | null },
+    index: number,
+  ) => {
     const eventRsvps = rsvpsByEvent.get(event.id) ?? [];
     const counts = { yes: 0, maybe: 0, no: 0 };
     let myStatus: string | undefined;
@@ -60,7 +63,10 @@ export default async function EventosPage() {
 
     return (
       <Link key={event.id} href={`/eventos/${event.id}`} className="block">
-        <Card className="px-4 py-3 transition-colors duration-200 hover:bg-coral-soft">
+        <Card
+          className="animate-reveal px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:bg-coral-soft hover:shadow-md"
+          style={{ animationDelay: `${index * 60}ms` }}
+        >
           <div className="flex items-start justify-between">
             <div>
               <p className="font-medium">{event.name}</p>

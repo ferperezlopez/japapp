@@ -75,3 +75,23 @@ body {
   font-family:
     var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
+
+/* Reveal al montar (sin JS: funciona en server components vía className +
+   animation-delay inline). Progressive enhancement: sin prefers-reduced-
+   motion "no-preference" el contenido ya se ve normal, sin animar. */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-reveal {
+    animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}

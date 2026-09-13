@@ -77,7 +77,7 @@ export default async function Home() {
             : undefined
         }
       >
-        <div className="mx-auto w-full max-w-2xl">
+        <div className="animate-reveal mx-auto w-full max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
             {user ? "Bienvenido de vuelta" : "JAPapp"}
           </p>
@@ -95,9 +95,12 @@ export default async function Home() {
       <div className="mx-auto w-full max-w-2xl px-4 pb-8">
         {user ? (
           <div className="mt-2 flex flex-col gap-3">
-            {FEATURES.map((feature) => (
+            {FEATURES.map((feature, index) => (
               <Link key={feature.href} href={feature.href}>
-                <Card className="flex items-center gap-4 p-4 transition-colors duration-200 active:bg-coral-soft">
+                <Card
+                  className="animate-reveal flex items-center gap-4 p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md active:bg-coral-soft"
+                  style={{ animationDelay: `${100 + index * 60}ms` }}
+                >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-coral-soft text-coral">
                     <svg
                       viewBox="0 0 24 24"
