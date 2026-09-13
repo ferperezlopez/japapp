@@ -7,11 +7,13 @@ interface Photo {
   uploadedBy: string;
 }
 
-// Rotación leve determinística (efecto "polaroid"), no random en cada
-// render: se deriva del id de la foto para que sea estable.
-function rotationFor(id: string) {
-  const hash = Array.from(id).reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return (hash % 9) - 4;
+// Mosaico tipo galería editorial: una foto "grande" cada 5, una "ancha"
+// cada 5, el resto en tiles parejos. grid-flow-row-dense acomoda el resto
+// alrededor sin dejar huecos.
+const SPAN_PATTERN = ["col-span-2 row-span-2", "", "", "col-span-2", ""];
+
+function spanFor(index: number) {
+  return SPAN_PATTERN[index % SPAN_PATTERN.length];
 }
 
 export function PhotoGrid({
@@ -30,12 +32,12 @@ export function PhotoGrid({
   }
 
   return (
-    <div className="flex flex-wrap gap-4 pt-2">
-      {photos.map((photo) => (
+    <div className="grid grid-flow-row-dense grid-cols-3 auto-rows-[5.5rem] gap-2 pt-2 sm:auto-rows-[6.5rem]">
+      {photos.map((photo, index) => (
         <div
           key={photo.id}
-          className="group relative h-28 w-28 overflow-hidden rounded-lg border border-surface-border bg-surface shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
-          style={{ transform: `rotate(${rotationFor(photo.id)}deg)` }}
+          className={`animate-reveal group relative overflow-hidden rounded-lg border border-surface-border bg-surface ${spanFor(index)}`}
+          style={{ animationDelay: `${index * 40}ms` }}
         >
           {photo.url ? (
             // eslint-disable-next-line @next/next/no-img-element -- fotos de usuario via URL firmada de Supabase Storage, no vale el pipeline de next/image para esto

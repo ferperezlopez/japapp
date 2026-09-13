@@ -21,6 +21,8 @@
   --color-teal-soft: #e1f5ee;
   --color-teal: #1d9e75;
   --color-teal-ink: #04342c;
+
+  --grain-dot: rgba(42, 29, 20, 0.05);
 }
 
 @theme inline {
@@ -66,6 +68,8 @@
     --color-teal-soft: #06332a;
     --color-teal: #2dbb8d;
     --color-teal-ink: #bdf0dd;
+
+    --grain-dot: rgba(242, 233, 224, 0.05);
   }
 }
 
@@ -94,4 +98,13 @@ body {
   .animate-reveal {
     animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+}
+
+/* Grano sutil para superficies planas sin foto (hero sin imagen, etc.):
+   un poco de textura en vez de un color liso, sin pesar un asset. Usa una
+   variable propia (no --foreground) para no arrastrar herencia de "color"
+   sobre el texto hijo. */
+.bg-grain {
+  background-image: radial-gradient(var(--grain-dot) 1px, transparent 1px);
+  background-size: 14px 14px;
 }

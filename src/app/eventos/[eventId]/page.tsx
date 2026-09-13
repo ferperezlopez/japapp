@@ -153,7 +153,7 @@ export default async function EventoPage({
         ← Eventos
       </Link>
 
-      <div className="animate-reveal mt-3 rounded-2xl border border-surface-border bg-surface p-5">
+      <div className="animate-reveal bg-grain mt-3 rounded-2xl border border-surface-border bg-surface p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
           Próximo evento
         </p>
