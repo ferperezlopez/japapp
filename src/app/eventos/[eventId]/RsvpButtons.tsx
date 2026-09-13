@@ -45,10 +45,10 @@ export function RsvpButtons({
                   if (result.error) setError(result.error);
                 });
               }}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200 disabled:opacity-60 ${
+              className={`rounded-full px-4 py-2 text-sm font-medium transition duration-200 active:scale-[0.96] disabled:opacity-60 disabled:active:scale-100 ${
                 active
                   ? option.activeClass
-                  : "border border-surface-border text-foreground/70 hover:bg-surface"
+                  : "border border-surface-border text-foreground/70 hover:scale-[1.03] hover:bg-surface"
               }`}
             >
               {option.label}

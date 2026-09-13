@@ -26,7 +26,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-1 items-center justify-center px-4">
-      <Card className="w-full max-w-sm p-8 text-center">
+      <Card className="animate-reveal w-full max-w-sm p-8 text-center">
         <h1 className="font-serif text-3xl italic text-coral-ink dark:text-coral-mid">
           JAPapp
         </h1>
@@ -37,7 +37,7 @@ export default function LoginPage() {
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="mt-8 flex w-full items-center justify-center gap-3 rounded-lg border border-surface-border bg-background px-5 py-3 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-surface disabled:opacity-60"
+          className="mt-8 flex w-full items-center justify-center gap-3 rounded-lg border border-surface-border bg-background px-5 py-3 text-sm font-medium text-foreground transition duration-200 hover:bg-surface active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
             <path

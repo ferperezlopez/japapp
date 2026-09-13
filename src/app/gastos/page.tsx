@@ -34,10 +34,13 @@ export default async function GastosPage() {
       </div>
 
       <ul className="mt-8 space-y-2">
-        {groups.map((group) => (
+        {groups.map((group, index) => (
           <li key={group.id}>
             <Link href={`/gastos/${group.id}`} className="block">
-              <Card className="px-4 py-3 text-sm font-medium transition-colors duration-200 hover:bg-coral-soft">
+              <Card
+                className="animate-reveal px-4 py-3 text-sm font-medium transition duration-200 hover:-translate-y-0.5 hover:bg-coral-soft hover:shadow-md"
+                style={{ animationDelay: `${index * 60}ms` }}
+              >
                 {group.name}
               </Card>
             </Link>
