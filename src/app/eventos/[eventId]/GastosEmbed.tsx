@@ -48,7 +48,7 @@ export function GastosEmbed({
             key={b.userId}
             className="flex items-center justify-between text-sm"
           >
-            <span className="text-zinc-700 dark:text-zinc-300">
+            <span className="text-foreground/80">
               {memberName(b.userId)}
             </span>
             {b.balance > 0 ? (
@@ -60,7 +60,7 @@ export function GastosEmbed({
                 ${b.balance.toFixed(2)}
               </span>
             ) : (
-              <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800">
+              <span className="rounded-full bg-surface px-2.5 py-0.5 text-xs font-medium text-foreground/50">
                 $0.00
               </span>
             )}
@@ -69,11 +69,11 @@ export function GastosEmbed({
       </ul>
 
       {settlements.length > 0 && (
-        <div className="rounded-xl border border-coral-mid/60 bg-coral-soft/60 p-4 text-sm dark:border-coral/30 dark:bg-zinc-900">
+        <div className="rounded-xl border border-surface-border bg-coral-soft/60 p-4 text-sm">
           <h3 className="font-medium text-coral-ink dark:text-coral-mid">
             Para saldar cuentas
           </h3>
-          <ul className="mt-2 space-y-1 text-zinc-700 dark:text-zinc-300">
+          <ul className="mt-2 space-y-1 text-foreground/80">
             {settlements.map((s, i) => (
               <li key={i}>
                 {memberName(s.from)} le paga{" "}
@@ -87,7 +87,7 @@ export function GastosEmbed({
         </div>
       )}
 
-      <ul className="divide-y divide-black/5 dark:divide-white/5">
+      <ul className="divide-y divide-surface-border">
         {expenses.map((e) => (
           <li
             key={e.id}
@@ -95,7 +95,7 @@ export function GastosEmbed({
           >
             <div>
               <p className="font-medium">{e.description}</p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-foreground/50">
                 {e.expense_date} · pagó {memberName(e.paid_by)}
               </p>
             </div>
@@ -110,7 +110,7 @@ export function GastosEmbed({
           </li>
         ))}
         {expenses.length === 0 && (
-          <p className="py-2 text-sm text-zinc-500">
+          <p className="py-2 text-sm text-foreground/50">
             Todavía no hay gastos cargados.
           </p>
         )}
@@ -119,14 +119,14 @@ export function GastosEmbed({
       {canAddExpense ? (
         <AddExpenseForm groupId={groupId} members={members} />
       ) : (
-        <p className="rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700">
+        <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
           Confirmá &quot;Voy&quot; para poder cargar gastos de esta juntada.
         </p>
       )}
 
       <Link
         href={`/gastos/${groupId}`}
-        className="inline-block text-xs text-zinc-500 hover:underline"
+        className="inline-block text-xs text-foreground/50 hover:underline"
       >
         Ver este grupo en Gastos →
       </Link>

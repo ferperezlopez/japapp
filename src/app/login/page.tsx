@@ -27,17 +27,17 @@ export default function LoginPage() {
   return (
     <div className="flex flex-1 items-center justify-center px-4">
       <Card className="w-full max-w-sm p-8 text-center">
-        <h1 className="text-2xl font-medium tracking-tight text-coral-ink dark:text-coral-mid">
+        <h1 className="font-serif text-3xl italic text-coral-ink dark:text-coral-mid">
           JAPapp
         </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-sm text-foreground/60">
           Eventos, calculadoras de asado y empanadas, y gastos compartidos
           entre amigos.
         </p>
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="mt-8 flex w-full items-center justify-center gap-3 rounded-lg border border-black/10 bg-white px-5 py-3 text-sm font-medium text-zinc-800 transition-colors duration-200 hover:bg-zinc-50 disabled:opacity-60 dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+          className="mt-8 flex w-full items-center justify-center gap-3 rounded-lg border border-surface-border bg-background px-5 py-3 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-surface disabled:opacity-60"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
             <path

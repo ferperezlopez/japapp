@@ -45,50 +45,89 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return (
-    <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-      <h1 className="text-2xl font-medium tracking-tight text-coral-ink dark:text-coral-mid">
-        Hola{user ? "" : ", bienvenido a JAPapp"}
-      </h1>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Organizá juntadas, calculá cantidades de asado y empanadas, y dividí
-        los gastos entre amigos.
-      </p>
+  let heroPhotoUrl: string | null = null;
+  if (user) {
+    const { data: media } = await supabase
+      .from("event_media")
+      .select("storage_path")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      {user ? (
-        <div className="mt-6 flex flex-col gap-3">
-          {FEATURES.map((feature) => (
-            <Link key={feature.href} href={feature.href}>
-              <Card className="flex items-center gap-4 p-4 transition-colors duration-200 active:bg-coral-soft dark:active:bg-zinc-800">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-coral-soft text-coral dark:bg-zinc-800 dark:text-coral-mid">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.75}
-                    className="h-6 w-6"
-                    aria-hidden="true"
-                  >
-                    {feature.icon}
-                  </svg>
-                </span>
-                <span>
-                  <span className="block font-medium">{feature.title}</span>
-                  <span className="block text-sm text-zinc-500 dark:text-zinc-400">
-                    {feature.description}
+    if (media) {
+      const { data: signed } = await supabase.storage
+        .from("event-photos")
+        .createSignedUrl(media.storage_path, 3600);
+      heroPhotoUrl = signed?.signedUrl ?? null;
+    }
+  }
+
+  return (
+    <div className="flex-1">
+      <div
+        className="relative flex flex-col justify-end px-4 py-12"
+        style={
+          heroPhotoUrl
+            ? {
+                backgroundImage: `linear-gradient(to top, var(--background) 5%, transparent 60%), url(${heroPhotoUrl})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                minHeight: "18rem",
+              }
+            : undefined
+        }
+      >
+        <div className="mx-auto w-full max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
+            {user ? "Bienvenido de vuelta" : "JAPapp"}
+          </p>
+          <h1 className="mt-1 font-serif text-4xl text-foreground">
+            Hola{user ? "" : ", bienvenido a "}
+            {!user && <i className="italic text-coral-ink">JAPapp</i>}
+          </h1>
+          <p className="mt-3 max-w-md text-sm text-foreground/60">
+            Organizá juntadas, calculá cantidades de asado y empanadas, y
+            dividí los gastos entre amigos.
+          </p>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-2xl px-4 pb-8">
+        {user ? (
+          <div className="mt-2 flex flex-col gap-3">
+            {FEATURES.map((feature) => (
+              <Link key={feature.href} href={feature.href}>
+                <Card className="flex items-center gap-4 p-4 transition-colors duration-200 active:bg-coral-soft">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-coral-soft text-coral">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.75}
+                      className="h-6 w-6"
+                      aria-hidden="true"
+                    >
+                      {feature.icon}
+                    </svg>
                   </span>
-                </span>
-              </Card>
+                  <span>
+                    <span className="block font-medium">{feature.title}</span>
+                    <span className="block text-sm text-foreground/60">
+                      {feature.description}
+                    </span>
+                  </span>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-2">
+            <Link href="/login">
+              <Button>Iniciar sesión con Google</Button>
             </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-8">
-          <Link href="/login">
-            <Button>Iniciar sesión con Google</Button>
-          </Link>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

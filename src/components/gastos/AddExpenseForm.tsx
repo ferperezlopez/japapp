@@ -30,22 +30,22 @@ export function AddExpenseForm({
           if (result.error) setError(result.error);
         });
       }}
-      className="space-y-3 rounded-xl border border-coral-mid/50 bg-white p-4 dark:border-coral/25 dark:bg-zinc-900"
+      className="space-y-3 rounded-xl border border-surface-border bg-surface p-4"
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="block text-xs font-medium text-zinc-500">
+          <label className="block text-xs font-medium text-foreground/50">
             Descripción
           </label>
           <input
             type="text"
             name="description"
             required
-            className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-950"
+            className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-500">
+          <label className="block text-xs font-medium text-foreground/50">
             Monto
           </label>
           <input
@@ -54,17 +54,17 @@ export function AddExpenseForm({
             min="0.01"
             step="0.01"
             required
-            className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-950"
+            className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-500">
+          <label className="block text-xs font-medium text-foreground/50">
             Pagó
           </label>
           <select
             name="paidBy"
             required
-            className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-950"
+            className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           >
             {members.map((m) => (
               <option key={m.id} value={m.id}>
@@ -74,27 +74,27 @@ export function AddExpenseForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-500">
+          <label className="block text-xs font-medium text-foreground/50">
             Fecha
           </label>
           <input
             type="date"
             name="date"
             defaultValue={today}
-            className="mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-zinc-950"
+            className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-zinc-500">
+        <label className="block text-xs font-medium text-foreground/50">
           Se divide entre
         </label>
         <div className="mt-2 flex flex-wrap gap-3">
           {members.map((m) => (
             <label
               key={m.id}
-              className="flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-300"
+              className="flex items-center gap-1.5 text-sm text-foreground/80"
             >
               <input
                 type="checkbox"

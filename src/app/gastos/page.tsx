@@ -21,10 +21,11 @@ export default async function GastosPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-      <h1 className="text-2xl font-medium tracking-tight text-coral-ink dark:text-coral-mid">
-        Gastos
-      </h1>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
+        Dividí
+      </p>
+      <h1 className="mt-1 font-serif text-3xl text-foreground">Gastos</h1>
+      <p className="mt-2 text-sm text-foreground/60">
         Grupos para dividir gastos con amigos, estilo Splitwise.
       </p>
 
@@ -36,14 +37,14 @@ export default async function GastosPage() {
         {groups.map((group) => (
           <li key={group.id}>
             <Link href={`/gastos/${group.id}`} className="block">
-              <Card className="px-4 py-3 text-sm font-medium transition-colors duration-200 hover:bg-coral-soft dark:hover:bg-zinc-800">
+              <Card className="px-4 py-3 text-sm font-medium transition-colors duration-200 hover:bg-coral-soft">
                 {group.name}
               </Card>
             </Link>
           </li>
         ))}
         {groups.length === 0 && (
-          <p className="text-sm text-zinc-500">Todavía no tenés grupos.</p>
+          <p className="text-sm text-foreground/50">Todavía no tenés grupos.</p>
         )}
       </ul>
     </div>

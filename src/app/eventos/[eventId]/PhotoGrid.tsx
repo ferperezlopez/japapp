@@ -26,7 +26,7 @@ export function PhotoGrid({
   eventCreatorId: string;
 }) {
   if (photos.length === 0) {
-    return <p className="text-sm text-zinc-500">Todavía no hay fotos.</p>;
+    return <p className="text-sm text-foreground/50">Todavía no hay fotos.</p>;
   }
 
   return (
@@ -34,14 +34,14 @@ export function PhotoGrid({
       {photos.map((photo) => (
         <div
           key={photo.id}
-          className="group relative h-28 w-28 overflow-hidden rounded-lg border border-coral-mid/50 bg-zinc-100 shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:border-coral/25 dark:bg-zinc-800"
+          className="group relative h-28 w-28 overflow-hidden rounded-lg border border-surface-border bg-surface shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
           style={{ transform: `rotate(${rotationFor(photo.id)}deg)` }}
         >
           {photo.url ? (
             // eslint-disable-next-line @next/next/no-img-element -- fotos de usuario via URL firmada de Supabase Storage, no vale el pipeline de next/image para esto
             <img src={photo.url} alt="" className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
+            <div className="flex h-full w-full items-center justify-center text-xs text-foreground/40">
               Sin vista previa
             </div>
           )}

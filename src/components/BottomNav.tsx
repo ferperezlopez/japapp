@@ -52,7 +52,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-10 border-t border-coral-mid/40 bg-white/95 backdrop-blur dark:border-coral/20 dark:bg-zinc-950/95"
+      className="fixed inset-x-0 bottom-0 z-10 border-t border-surface-border bg-surface/95 backdrop-blur"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="mx-auto flex max-w-4xl">
@@ -69,7 +69,7 @@ export function BottomNav() {
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors duration-200 ${
                 active
                   ? "text-coral"
-                  : "text-zinc-500 dark:text-zinc-400"
+                  : "text-foreground/50"
               }`}
             >
               <svg

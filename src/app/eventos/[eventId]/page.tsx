@@ -149,20 +149,23 @@ export default async function EventoPage({
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-      <Link href="/eventos" className="text-sm text-zinc-500 hover:underline">
+      <Link href="/eventos" className="text-sm text-foreground/50 hover:underline">
         ← Eventos
       </Link>
 
-      <div className="mt-3 rounded-2xl border border-coral-mid/50 bg-coral-soft p-5 dark:border-coral/30 dark:bg-zinc-900">
-        <h1 className="text-xl font-medium tracking-tight text-coral-ink dark:text-zinc-50">
+      <div className="mt-3 rounded-2xl border border-surface-border bg-surface p-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
+          Próximo evento
+        </p>
+        <h1 className="mt-1 font-serif text-2xl text-foreground">
           {event.name}
         </h1>
-        <p className="mt-1 text-sm text-coral-ink/70 dark:text-zinc-400">
+        <p className="mt-1 text-sm text-foreground/60">
           {dateFormatter.format(new Date(event.event_date))}
           {event.location ? ` · ${event.location}` : ""}
         </p>
         {event.description && (
-          <p className="mt-2 text-sm text-coral-ink/90 dark:text-zinc-300">
+          <p className="mt-2 text-sm text-foreground/80">
             {event.description}
           </p>
         )}
@@ -180,20 +183,20 @@ export default async function EventoPage({
           const people = attendees.filter((a) => a.status === group.status);
           return (
             <div key={group.status}>
-              <h3 className="text-sm font-medium text-zinc-500">
+              <h3 className="text-sm font-medium text-foreground/50">
                 {group.label} ({people.length})
               </h3>
               <ul className="mt-1 flex flex-wrap gap-2">
                 {people.map((p) => (
                   <li
                     key={p.userId}
-                    className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    className="rounded-full bg-surface px-3 py-1 text-xs text-foreground/80"
                   >
                     {p.name}
                   </li>
                 ))}
                 {people.length === 0 && (
-                  <li className="text-xs text-zinc-400">Nadie por ahora</li>
+                  <li className="text-xs text-foreground/40">Nadie por ahora</li>
                 )}
               </ul>
             </div>
@@ -215,7 +218,7 @@ export default async function EventoPage({
               canAddExpense={canAddExpense}
             />
           ) : (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-foreground/50">
               Este evento todavía no tiene un grupo de gastos enlazado.
             </p>
           )}
