@@ -65,7 +65,7 @@ export default async function Home() {
   return (
     <div className="flex-1">
       <div
-        className="relative flex flex-col justify-end px-4 py-12"
+        className={`relative flex flex-col justify-end px-4 py-12 ${heroPhotoUrl ? "" : "bg-grain"}`}
         style={
           heroPhotoUrl
             ? {
