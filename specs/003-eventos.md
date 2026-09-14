@@ -83,6 +83,12 @@ Puntos que el SQL no explica por sí solo:
       inmediatamente en el grupo correspondiente de la vista.
 - [x] Los 3 grupos (Van/Tal vez/No van) muestran contador correcto y
       "Nadie por ahora" cuando están vacíos.
+- [x] Encima de esa lista, una barra apilada muestra qué porcentaje del
+      total de gente registrada en la app confirmó "Voy" (u otro estado),
+      no solo un desglose entre quienes ya respondieron.
+- [x] Al confirmar, el botón elegido nunca queda pintado como "confirmado"
+      hasta que el servidor lo confirma de verdad — mientras se guarda,
+      muestra un spinner en vez de dar por hecho que va a salir bien.
 - [x] El botón de borrar evento solo aparece si `created_by === user.id`.
 - [x] Todas las rutas de `/eventos` requieren login.
 
@@ -109,6 +115,15 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-14: se sacó el estado optimista de `RsvpButtons` (pintaba el
+  botón elegido como confirmado antes de que el servidor respondiera) por
+  pedido explícito del usuario: si alguien clickeaba y se iba rápido de la
+  página, podía quedarle la sensación de haber confirmado algo que en
+  realidad falló. Ahora el botón elegido muestra un spinner mientras se
+  guarda y solo toma su color final cuando `currentStatus` (la respuesta
+  real) lo refleja. También se agregó una barra de resumen (`%` de
+  asistencia sobre el total de gente registrada) arriba de cada lista de
+  confirmación.
 - 2026-09-14: `specs/006-evento-futbol.md` agregó `events.has_futbol` y
   una columna `kind` a `event_rsvps` (PK ahora `(event_id, user_id,
   kind)`), para poder tener una confirmación de fútbol separada de la
