@@ -7,7 +7,7 @@
   (endurecimiento de `is_group_member`), `supabase/migrations/0004_event_groups_and_media.sql`
   (relaja el SELECT de este esquema para grupos enlazados a un evento — ver
   `specs/004-eventos-gastos-y-fotos.md`)
-- **Última actualización:** 2026-08-18
+- **Última actualización:** 2026-09-14
 
 ## 1. Resumen
 
@@ -72,7 +72,10 @@ Puntos que el SQL no explica por sí solo:
    pagó y al menos un participante; inserta en `expenses` y luego en
    `expense_shares` usando `splitEqual(amount, participantIds)`
    (reparte en centavos, sobrante va a los primeros N participantes en
-   orden de la lista).
+   orden de la lista). El formulario (`AddExpenseForm`) solo se muestra si
+   `canAddExpense` (el usuario logueado es miembro del grupo) — si no, un
+   mensaje invita a sumarse. Igual que en `deleteExpense`, la barrera real
+   es la policy RLS de insert; esto es UX, no la única protección.
 4. En `/gastos/[groupId]`, `calcularBalances()` y `simplificarDeudas()`
    (`src/lib/gastos/balances.ts`) corren en cada render del server
    component sobre los `expenses`/`expense_shares` traídos de Supabase —
@@ -105,6 +108,9 @@ Puntos que el SQL no explica por sí solo:
       las policies SELECT). Desde `specs/004-eventos-gastos-y-fotos.md`,
       esto ya NO aplica a grupos enlazados a un evento — ver esa spec.
 - [x] Todas las rutas de `/gastos` requieren login.
+- [x] El formulario de carga de gasto no se muestra a un usuario logueado
+      que no es miembro del grupo (aplica sobre todo a grupos enlazados a
+      un evento, visibles a cualquiera desde `004`).
 
 ## 6. Decisiones y tradeoffs
 
@@ -130,6 +136,15 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-14: `/gastos/[groupId]` gatea el formulario de carga de gasto por
+  `canAddExpense` (ser miembro del grupo) — antes se mostraba siempre, sin
+  condición. Se agregó al sacar el widget de gastos embebido de
+  `/eventos/[eventId]` (que sí tenía ese gate) y reemplazarlo por un link
+  directo a esta página: sin el gate acá, cualquier logueado que llegara
+  por ese link a un grupo enlazado a un evento (visible a cualquiera desde
+  `004`) vería un formulario que de todos modos iba a fallar por RLS si no
+  era miembro real. Ver `specs/004-eventos-gastos-y-fotos.md` para el
+  detalle completo del cambio.
 - 2026-08-18: `specs/004-eventos-gastos-y-fotos.md` relajó el SELECT de
   `groups`/`group_members`/`expenses`/`expense_shares` para grupos
   enlazados a un evento (visible a cualquier logueado, no solo miembros).

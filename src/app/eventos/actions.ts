@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 export async function createEvent(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const eventDate = String(formData.get("eventDate") ?? "");
-  const location = String(formData.get("location") ?? "").trim();
+  const venueSelection = String(formData.get("venue") ?? "");
+  const newVenueName = String(formData.get("newVenueName") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const hasFutbol = formData.get("hasFutbol") === "on";
 
@@ -19,12 +20,30 @@ export async function createEvent(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  // "venue" viene del <select> de lugares predefinidos; "__new__" indica que
+  // se tipeó un lugar nuevo en newVenueName, que además se guarda en
+  // `venues` para que quede disponible como opción la próxima vez.
+  let location: string | null = null;
+  if (venueSelection === "__new__") {
+    if (newVenueName) {
+      location = newVenueName;
+      await supabase
+        .from("venues")
+        .upsert(
+          { name: newVenueName, created_by: user.id },
+          { onConflict: "name", ignoreDuplicates: true },
+        );
+    }
+  } else if (venueSelection) {
+    location = venueSelection;
+  }
+
   const { data: event, error } = await supabase
     .from("events")
     .insert({
       name,
       event_date: new Date(eventDate).toISOString(),
-      location: location || null,
+      location,
       description: description || null,
       created_by: user.id,
       has_futbol: hasFutbol,

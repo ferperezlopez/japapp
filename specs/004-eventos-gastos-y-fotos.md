@@ -3,14 +3,20 @@
 - **Estado:** Implemented
 - **Rutas:** `/eventos/[eventId]` (extendida, misma ruta de `003-eventos.md`)
 - **Migraciones relacionadas:** `supabase/migrations/0004_event_groups_and_media.sql`
-- **Última actualización:** 2026-08-18
+- **Última actualización:** 2026-09-14
 
 ## 1. Resumen
 
 Como miembro del grupo, quiero que la página de un evento sea el lugar único
-donde ver fecha/lugar, confirmar asistencia, ver y cargar los gastos de esa
-juntada, y ver/subir fotos — sin tener que saltar a `/gastos` por separado ni
-depender de un mecanismo manual de "vincular grupo".
+donde ver fecha/lugar, confirmar asistencia, y ver/subir fotos, con un link
+directo a los gastos de esa juntada — sin depender de un mecanismo manual de
+"vincular grupo".
+
+> **Nota (2026-09-14):** la parte de gastos originalmente descripta acá (ver
+> y cargar gastos embebidos en la propia página del evento) se sacó a pedido
+> explícito del usuario ("confunde y mezcla todo"). Ver el changelog al
+> final: ahora es un link a `/gastos/[groupId]`, sin formulario ni listado
+> embebido.
 
 ## 2. Alcance
 
@@ -20,10 +26,14 @@ depender de un mecanismo manual de "vincular grupo".
   (mismo nombre, sin acción manual).
 - Confirmar "Voy" suma automáticamente a esa persona como miembro del grupo
   de gastos del evento.
-- Ver gastos, balances y sugerencias de saldo: **abierto a cualquier usuario
-  logueado**, haya o no confirmado asistencia.
-- Cargar un gasto nuevo: **solo quien confirmó "Voy" o es el creador** del
-  evento.
+- Link directo desde el evento a `/gastos/[groupId]` (sin gastos ni
+  formulario embebidos en la página del evento — ver nota de 2026-09-14).
+- Ver gastos, balances y sugerencias de saldo en `/gastos/[groupId]`:
+  **abierto a cualquier usuario logueado**, haya o no confirmado asistencia
+  (esto no cambió, solo cambió *dónde* se ve).
+- Cargar un gasto nuevo: **solo quien es miembro real del grupo** — para un
+  grupo enlazado a un evento, eso equivale a haber confirmado "Voy" o ser el
+  creador (ambos quedan en `group_members` vía trigger).
 - Subir fotos del evento: abierto a cualquier usuario logueado, sin
   restricción de asistencia.
 - Borrar una foto: quien la subió, o el creador del evento.
@@ -86,15 +96,15 @@ completo (triggers, policies, bucket). Lo que el SQL no explica por sí solo:
 2. Alguien confirma "Voy" → trigger lo suma a `group_members` del grupo del
    evento (si ya tenía "no"/"maybe" antes, el UPDATE dispara el trigger
    igual).
-3. `/eventos/[eventId]` trae `group_members`, `expenses`+`expense_shares`
-   del `event.group_id`, calcula `calcularBalances`/`simplificarDeudas`
-   (mismas funciones que `/gastos/[groupId]`, sin duplicar lógica) y los
-   pasa ya resueltos a `<GastosEmbed>`.
-4. `GastosEmbed` muestra balances con badges (teal = a favor, amber = debe),
-   sugerencias de saldo, lista de gastos, y el formulario de carga
-   (`AddExpenseForm` con `variant="coral"`) **solo si** `canAddExpense` es
-   true (RSVP "yes" o creador) — si no, un mensaje invitando a confirmar
-   asistencia.
+3. `/eventos/[eventId]` solo muestra un link ("Ver gastos de este evento →")
+   a `/gastos/[groupId]` — no trae ni calcula nada de gastos/balances en la
+   página del evento (ver nota de 2026-09-14).
+4. `/gastos/[groupId]` (la misma página que usan los grupos standalone de
+   `002-gastos.md`) es quien trae `group_members`, `expenses` +
+   `expense_shares`, calcula `calcularBalances`/`simplificarDeudas`, y
+   muestra balances, sugerencias de saldo, lista de gastos, y el formulario
+   de carga (`AddExpenseForm`) **solo si** `canAddExpense` es true (ser
+   miembro real del grupo) — si no, un mensaje invitando a sumarse.
 
 **Fotos:**
 1. `UploadPhotoForm` (client) valida tipo/tamaño en el browser, sube el
@@ -124,10 +134,14 @@ completo (triggers, policies, bucket). Lo que el SQL no explica por sí solo:
       intervención manual.
 - [x] Confirmar "Voy" suma a esa persona a `group_members` del grupo del
       evento; confirmar "Voy" de nuevo tras haber puesto "no" también.
-- [x] Cualquier usuario logueado ve gastos/balances/settlements del evento,
-      aunque no haya confirmado asistencia.
-- [x] Solo quien confirmó "Voy" o es el creador puede cargar un gasto nuevo
-      (el formulario ni siquiera se muestra a los demás).
+- [x] Cualquier usuario logueado ve gastos/balances/settlements del grupo de
+      un evento en `/gastos/[groupId]`, aunque no haya confirmado asistencia.
+- [x] Solo quien es miembro real del grupo (RSVP "Voy" o creador, para un
+      grupo enlazado a un evento) puede cargar un gasto nuevo — el
+      formulario ni siquiera se muestra a los demás, sin importar si
+      llegaron ahí desde el link del evento o desde `/gastos`.
+- [x] La página del evento no trae ni muestra gastos/balances — solo un link
+      a `/gastos/[groupId]`.
 - [x] Cualquier usuario logueado puede subir una foto a cualquier evento.
 - [x] Solo el uploader o el creador del evento pueden borrar una foto.
 - [x] Borrar un evento borra también sus fotos en Storage (verificado que no
@@ -167,6 +181,15 @@ completo (triggers, policies, bucket). Lo que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-14: se sacaron los gastos embebidos de `/eventos/[eventId]`
+  (`GastosEmbed` borrado) a pedido explícito del usuario ("debería haber un
+  link a la lista de gastos, pero no un formulario para cargarlos ahí,
+  confunde y mezcla todo"). Ahora es un link a `/gastos/[groupId]`. Como
+  consecuencia, se agregó a `/gastos/[groupId]` (que antes mostraba el
+  formulario de carga sin ninguna restricción) el mismo gate
+  `canAddExpense` que tenía `GastosEmbed`, para que no aparezca un
+  formulario que de todos modos iba a fallar por RLS si quien entra no es
+  miembro del grupo.
 - 2026-08-26: `specs/005-diseno-visual-y-pwa.md` extendió la paleta
   coral/amber/teal a toda la app (esta spec la había limitado a
   `/eventos/[eventId]` a propósito) y sacó el prop `variant` de
