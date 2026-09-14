@@ -3,6 +3,7 @@ import { Fredoka, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
+import { NavigationProgress } from "@/components/NavigationProgress";
 import { createClient } from "@/lib/supabase/server";
 
 const geistSans = Geist({
@@ -46,6 +47,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
+        <NavigationProgress />
         <Header user={user} />
         <div className={`flex flex-1 flex-col ${user ? "pb-16" : ""}`}>
           {children}

@@ -137,6 +137,34 @@ body {
   }
 }
 
+/* Barra de progreso de navegación: franja que recorre el ancho de la
+   pantalla en loop mientras se espera el cambio de ruta. Con reduced-motion
+   queda una franja fija en vez de animada, para no perder la señal. */
+@keyframes progress-bar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.animate-progress-bar {
+  width: 40%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-progress-bar {
+    animation: progress-bar 1.1s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-progress-bar {
+    width: 100%;
+  }
+}
+
 /* Grano sutil para superficies planas sin foto (hero sin imagen, etc.):
    un poco de textura en vez de un color liso, sin pesar un asset. Usa una
    variable propia (no --foreground) para no arrastrar herencia de "color"
