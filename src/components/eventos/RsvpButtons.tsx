@@ -30,27 +30,45 @@ export function RsvpButtons({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Optimista: pinta el botón elegido al instante en vez de esperar el
+  // round-trip del server action + revalidatePath (varios segundos
+  // percibidos). Se resincroniza con el status real del servidor cuando
+  // cambia el prop (ej. otra pestaña) ajustando el estado durante el
+  // render, según el patrón documentado de React para esto — un efecto
+  // haría un segundo render en cascada innecesario.
+  const [optimisticStatus, setOptimisticStatus] = useState(currentStatus);
+  const [prevCurrentStatus, setPrevCurrentStatus] = useState(currentStatus);
+
+  if (currentStatus !== prevCurrentStatus) {
+    setPrevCurrentStatus(currentStatus);
+    setOptimisticStatus(currentStatus);
+  }
 
   return (
     <div>
       <div className="flex gap-2">
         {OPTIONS.map((option) => {
-          const active = currentStatus === option.status;
+          const active = optimisticStatus === option.status;
           return (
             <button
               key={option.status}
               disabled={pending}
               onClick={() => {
                 setError(null);
+                const previousStatus = optimisticStatus;
+                setOptimisticStatus(option.status);
                 startTransition(async () => {
                   const result = await setRsvp(eventId, option.status, kind);
-                  if (result.error) setError(result.error);
+                  if (result.error) {
+                    setError(result.error);
+                    setOptimisticStatus(previousStatus);
+                  }
                 });
               }}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition duration-200 active:scale-[0.96] disabled:opacity-60 disabled:active:scale-100 ${
+              className={`rounded-full px-4 py-2 text-sm font-medium transition duration-200 active:scale-[0.96] disabled:active:scale-100 ${
                 active
-                  ? option.activeClass
-                  : "border border-surface-border text-foreground/70 hover:scale-[1.03] hover:bg-surface"
+                  ? `${option.activeClass} ${pending ? "opacity-70" : ""}`
+                  : "border border-surface-border text-foreground/70 hover:scale-[1.03] hover:bg-surface disabled:opacity-60"
               }`}
             >
               {option.label}

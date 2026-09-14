@@ -5,10 +5,24 @@ import { useRouter } from "next/navigation";
 import { createEvent } from "./actions";
 import { Button } from "@/components/ui/Button";
 
-export function CreateEventForm() {
+const weekdayFormatter = new Intl.DateTimeFormat("es-AR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+
+const NEW_VENUE_VALUE = "__new__";
+
+export function CreateEventForm({
+  venues,
+}: {
+  venues: { id: string; name: string }[];
+}) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [eventDateValue, setEventDateValue] = useState("");
+  const [venueSelection, setVenueSelection] = useState("");
   const router = useRouter();
 
   if (!open) {
@@ -51,18 +65,45 @@ export function CreateEventForm() {
             type="datetime-local"
             name="eventDate"
             required
+            value={eventDateValue}
+            onChange={(e) => setEventDateValue(e.target.value)}
             className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           />
+          {/* El picker nativo de datetime-local no muestra el día de la
+              semana en ningún browser: lo mostramos calculado nosotros. */}
+          {eventDateValue && (
+            <p className="mt-1 text-xs capitalize text-foreground/50">
+              {weekdayFormatter.format(new Date(eventDateValue))}
+            </p>
+          )}
         </div>
         <div>
           <label className="block text-xs font-medium text-foreground/50">
             Lugar (opcional)
           </label>
-          <input
-            type="text"
-            name="location"
+          <select
+            name="venue"
+            value={venueSelection}
+            onChange={(e) => setVenueSelection(e.target.value)}
             className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
-          />
+          >
+            <option value="">Sin lugar</option>
+            {venues.map((venue) => (
+              <option key={venue.id} value={venue.name}>
+                {venue.name}
+              </option>
+            ))}
+            <option value={NEW_VENUE_VALUE}>+ Nuevo lugar…</option>
+          </select>
+          {venueSelection === NEW_VENUE_VALUE && (
+            <input
+              type="text"
+              name="newVenueName"
+              placeholder="Nombre del lugar nuevo"
+              required
+              className="mt-1.5 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+            />
+          )}
         </div>
         <div>
           <label className="block text-xs font-medium text-foreground/50">

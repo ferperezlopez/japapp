@@ -60,6 +60,13 @@ export default async function GroupPage({
   );
   const settlements = simplificarDeudas(balances);
 
+  // Igual que antes en el evento (ver specs/004-eventos-gastos-y-fotos.md):
+  // cargar un gasto requiere ser miembro real del grupo. Para un grupo
+  // enlazado a un evento, "miembro" ya incluye tanto al creador como a
+  // quien confirmó "Voy" (los suma el trigger on_rsvp_upsert), así que no
+  // hace falta ninguna otra condición acá.
+  const canAddExpense = !!user && members.some((m) => m.id === user.id);
+
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
       <Link href="/gastos" className="text-sm text-foreground/50 hover:underline">
@@ -137,7 +144,13 @@ export default async function GroupPage({
       <section className="mt-8">
         <h2 className="text-sm font-medium text-foreground/50">Agregar gasto</h2>
         <div className="mt-2">
-          <AddExpenseForm groupId={groupId} members={members} />
+          {canAddExpense ? (
+            <AddExpenseForm groupId={groupId} members={members} />
+          ) : (
+            <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
+              Necesitás ser parte de este grupo para cargar un gasto.
+            </p>
+          )}
         </div>
       </section>
 

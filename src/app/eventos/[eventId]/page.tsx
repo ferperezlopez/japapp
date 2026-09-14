@@ -2,10 +2,8 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
 import { RsvpButtons } from "@/components/eventos/RsvpButtons";
 import { DeleteEventButton } from "./DeleteEventButton";
-import { GastosEmbed } from "./GastosEmbed";
 import { UploadPhotoForm } from "./UploadPhotoForm";
 import { PhotoGrid } from "./PhotoGrid";
 
@@ -144,74 +142,6 @@ export default async function EventoPage({
       | "maybe"
       | undefined) ?? null;
 
-  // Gastos del evento: solo si el evento tiene un grupo enlazado (siempre
-  // debería tenerlo via el trigger private.handle_new_event, pero se
-  // contempla el caso defensivo de que no lo tenga todavía).
-  let groupMembers: { id: string; name: string | null; email: string }[] = [];
-  let expenses: {
-    id: string;
-    description: string;
-    amount: number;
-    expense_date: string;
-    paid_by: string;
-    created_by: string;
-  }[] = [];
-  let canAddExpense = false;
-  let expensesForBalance: {
-    paidBy: string;
-    shares: { userId: string; amount: number }[];
-  }[] = [];
-
-  if (event.group_id) {
-    const { data: membershipRows } = await supabase
-      .from("group_members")
-      .select("user_id, profiles(id, name, email)")
-      .eq("group_id", event.group_id);
-
-    groupMembers = (membershipRows ?? [])
-      .map((row) => row.profiles)
-      .filter(
-        (p): p is { id: string; name: string | null; email: string } => !!p,
-      );
-
-    const { data: expenseRows } = await supabase
-      .from("expenses")
-      .select(
-        "id, description, amount, expense_date, paid_by, created_by, expense_shares(user_id, share_amount)",
-      )
-      .eq("group_id", event.group_id)
-      .order("expense_date", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    expenses = (expenseRows ?? []).map((e) => ({
-      id: e.id,
-      description: e.description,
-      amount: Number(e.amount),
-      expense_date: e.expense_date,
-      paid_by: e.paid_by,
-      created_by: e.created_by,
-    }));
-
-    canAddExpense =
-      !!user &&
-      (groupMembers.some((m) => m.id === user.id) ||
-        event.created_by === user.id);
-
-    expensesForBalance = (expenseRows ?? []).map((e) => ({
-      paidBy: e.paid_by,
-      shares: e.expense_shares.map((s) => ({
-        userId: s.user_id,
-        amount: Number(s.share_amount),
-      })),
-    }));
-  }
-
-  const balances = calcularBalances(
-    groupMembers.map((m) => m.id),
-    expensesForBalance,
-  );
-  const settlements = simplificarDeudas(balances);
-
   // Fotos: URLs firmadas en batch, expiran en 1h.
   const { data: mediaRows } = await supabase
     .from("event_media")
@@ -290,15 +220,12 @@ export default async function EventoPage({
         <h2 className="text-sm font-medium">Gastos</h2>
         <div className="mt-2">
           {event.group_id ? (
-            <GastosEmbed
-              groupId={event.group_id}
-              members={groupMembers}
-              expenses={expenses}
-              balances={balances}
-              settlements={settlements}
-              currentUserId={user?.id}
-              canAddExpense={canAddExpense}
-            />
+            <Link
+              href={`/gastos/${event.group_id}`}
+              className="inline-flex items-center gap-2 rounded-lg border border-surface-border px-4 py-2 text-sm font-medium text-gastos transition duration-200 hover:bg-gastos-soft active:scale-[0.98]"
+            >
+              Ver gastos de este evento →
+            </Link>
           ) : (
             <p className="text-sm text-foreground/50">
               Este evento todavía no tiene un grupo de gastos enlazado.
