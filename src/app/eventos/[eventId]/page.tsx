@@ -154,10 +154,10 @@ export default async function EventoPage({
       </Link>
 
       <div className="animate-reveal bg-grain mt-3 rounded-2xl border border-surface-border bg-surface p-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-eventos">
           Próximo evento
         </p>
-        <h1 className="mt-1 font-serif text-2xl text-foreground">
+        <h1 className="mt-1 font-heading text-2xl font-semibold text-foreground">
           {event.name}
         </h1>
         <p className="mt-1 text-sm text-foreground/60">

@@ -2,7 +2,7 @@ import { type ButtonHTMLAttributes } from "react";
 
 const VARIANT_CLASSES = {
   primary:
-    "bg-coral text-white uppercase tracking-wide font-semibold hover:bg-coral-hover",
+    "bg-brand text-white uppercase tracking-wide font-semibold hover:bg-brand-hover",
   secondary:
     "border border-surface-border text-foreground/70 font-medium hover:bg-surface",
   danger:

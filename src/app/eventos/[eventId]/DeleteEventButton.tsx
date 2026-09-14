@@ -17,7 +17,7 @@ export function DeleteEventButton({ eventId }: { eventId: string }) {
         })
       }
       disabled={pending}
-      className="text-xs text-coral-ink/50 transition-colors duration-200 hover:text-red-600 disabled:opacity-60 dark:text-coral-mid/60 dark:hover:text-red-400"
+      className="text-xs text-foreground/50 transition-colors duration-200 hover:text-red-600 disabled:opacity-60 dark:hover:text-red-400"
     >
       Borrar evento
     </button>
