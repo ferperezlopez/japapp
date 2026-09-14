@@ -30,47 +30,67 @@ export function RsvpButtons({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  // Optimista: pinta el botón elegido al instante en vez de esperar el
-  // round-trip del server action + revalidatePath (varios segundos
-  // percibidos). Se resincroniza con el status real del servidor cuando
-  // cambia el prop (ej. otra pestaña) ajustando el estado durante el
-  // render, según el patrón documentado de React para esto — un efecto
-  // haría un segundo render en cascada innecesario.
-  const [optimisticStatus, setOptimisticStatus] = useState(currentStatus);
-  const [prevCurrentStatus, setPrevCurrentStatus] = useState(currentStatus);
-
-  if (currentStatus !== prevCurrentStatus) {
-    setPrevCurrentStatus(currentStatus);
-    setOptimisticStatus(currentStatus);
-  }
+  // Nada de pintar "confirmado" antes de tiempo: si alguien clickea y se va
+  // enseguida, no debería quedarle la sensación de que confirmó algo que en
+  // realidad falló. El botón elegido muestra un spinner mientras se guarda,
+  // y solo pasa a su color final cuando currentStatus (la respuesta real
+  // del servidor) lo refleja.
+  const [submittingStatus, setSubmittingStatus] = useState<Status | null>(
+    null,
+  );
 
   return (
     <div>
       <div className="flex gap-2">
         {OPTIONS.map((option) => {
-          const active = optimisticStatus === option.status;
+          const active = currentStatus === option.status;
+          const isSubmitting = pending && submittingStatus === option.status;
           return (
             <button
               key={option.status}
               disabled={pending}
               onClick={() => {
                 setError(null);
-                const previousStatus = optimisticStatus;
-                setOptimisticStatus(option.status);
+                setSubmittingStatus(option.status);
                 startTransition(async () => {
                   const result = await setRsvp(eventId, option.status, kind);
-                  if (result.error) {
-                    setError(result.error);
-                    setOptimisticStatus(previousStatus);
-                  }
+                  if (result.error) setError(result.error);
+                  setSubmittingStatus(null);
                 });
               }}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition duration-200 active:scale-[0.96] disabled:active:scale-100 ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition duration-200 active:scale-[0.96] disabled:active:scale-100 ${
                 active
-                  ? `${option.activeClass} ${pending ? "opacity-70" : ""}`
-                  : "border border-surface-border text-foreground/70 hover:scale-[1.03] hover:bg-surface disabled:opacity-60"
+                  ? option.activeClass
+                  : `border text-foreground/70 disabled:opacity-60 ${
+                      isSubmitting
+                        ? "border-brand text-brand"
+                        : "border-surface-border hover:scale-[1.03] hover:bg-surface"
+                    }`
               }`}
             >
+              {isSubmitting && (
+                <svg
+                  className="h-3.5 w-3.5 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="9"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeOpacity="0.25"
+                  />
+                  <path
+                    d="M21 12a9 9 0 0 0-9-9"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
               {option.label}
             </button>
           );

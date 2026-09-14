@@ -23,6 +23,51 @@ const GROUPS: { status: "yes" | "maybe" | "no"; label: string }[] = [
 
 type Attendee = { userId: string; status: string; name: string };
 
+// Barra apilada Van/Tal vez/No van sobre el total de amigos registrados en
+// la app (no solo sobre quienes ya respondieron) — da una noción real de
+// "cuánta gente del grupo va" de un vistazo, no solo un desglose de
+// respuestas.
+function AttendanceSummary({
+  attendees,
+  totalPeople,
+}: {
+  attendees: Attendee[];
+  totalPeople: number;
+}) {
+  const counts = { yes: 0, maybe: 0, no: 0 };
+  for (const a of attendees) {
+    if (a.status in counts) counts[a.status as keyof typeof counts]++;
+  }
+  const responded = counts.yes + counts.maybe + counts.no;
+  const pct = (n: number) => (totalPeople > 0 ? (n / totalPeople) * 100 : 0);
+
+  if (totalPeople === 0) return null;
+
+  return (
+    <div className="mt-3">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-surface">
+        <div
+          className="bg-eventos transition-[width] duration-300"
+          style={{ width: `${pct(counts.yes)}%` }}
+        />
+        <div
+          className="bg-amber transition-[width] duration-300"
+          style={{ width: `${pct(counts.maybe)}%` }}
+        />
+        <div
+          className="bg-foreground/25 transition-[width] duration-300"
+          style={{ width: `${pct(counts.no)}%` }}
+        />
+      </div>
+      <p className="mt-1.5 text-xs text-foreground/50">
+        {counts.yes} de {totalPeople} confirmaron
+        {totalPeople > 0 ? ` (${Math.round(pct(counts.yes))}%)` : ""} ·{" "}
+        {responded}/{totalPeople} respondieron
+      </p>
+    </div>
+  );
+}
+
 // Confirmación + lista de asistentes de un tipo (juntada o fútbol): las dos
 // se ven en el mismo lugar (la página del evento), cada una con su propio
 // estado y su propia lista de Van/Tal vez/No van.
@@ -32,17 +77,20 @@ function RsvpSection({
   kind,
   myStatus,
   attendees,
+  totalPeople,
 }: {
   title: string;
   eventId: string;
   kind: "juntada" | "futbol";
   myStatus: "yes" | "no" | "maybe" | null;
   attendees: Attendee[];
+  totalPeople: number;
 }) {
   return (
     <section className="mt-8">
       <h2 className="text-sm font-medium">{title}</h2>
-      <div className="mt-2">
+      <AttendanceSummary attendees={attendees} totalPeople={totalPeople} />
+      <div className="mt-3">
         <RsvpButtons eventId={eventId} kind={kind} currentStatus={myStatus} />
       </div>
       <div className="mt-4 space-y-4">
@@ -114,10 +162,13 @@ export default async function EventoPage({
     .join("\n");
   const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
-  const { data: rsvps } = await supabase
-    .from("event_rsvps")
-    .select("user_id, status, kind, profiles(name, email)")
-    .eq("event_id", eventId);
+  const [{ data: rsvps }, { count: totalPeople }] = await Promise.all([
+    supabase
+      .from("event_rsvps")
+      .select("user_id, status, kind, profiles(name, email)")
+      .eq("event_id", eventId),
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
+  ]);
 
   const allAttendees = (rsvps ?? []).map((r) => ({
     userId: r.user_id,
@@ -204,6 +255,7 @@ export default async function EventoPage({
         kind="juntada"
         myStatus={myStatus}
         attendees={attendeesJuntada}
+        totalPeople={totalPeople ?? 0}
       />
 
       {event.has_futbol && (
@@ -213,6 +265,7 @@ export default async function EventoPage({
           kind="futbol"
           myStatus={myFutbolStatus}
           attendees={attendeesFutbol}
+          totalPeople={totalPeople ?? 0}
         />
       )}
 
