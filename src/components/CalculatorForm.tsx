@@ -26,8 +26,8 @@ export function CalculatorForm({
   defaultValue = 10,
   calcular,
 }: CalculatorFormProps) {
-  const [value, setValue] = useState(defaultValue);
-  const rows = calcular(value);
+  const [rawValue, setRawValue] = useState(String(defaultValue));
+  const rows = calcular(Number(rawValue));
 
   return (
     <div>
@@ -38,10 +38,16 @@ export function CalculatorForm({
         type="number"
         min={min}
         step={step}
-        value={value}
-        onChange={(e) => setValue(Number(e.target.value))}
+        value={rawValue}
+        onChange={(e) => setRawValue(e.target.value)}
         className="mt-1.5 w-32 rounded-lg border border-surface-border bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand"
       />
+
+      {rows.length === 0 && (
+        <p className="mt-6 text-sm text-foreground/50">
+          Ingresá un número mayor a cero para ver el cálculo.
+        </p>
+      )}
 
       <table className="mt-6 w-full text-sm">
         <tbody className="divide-y divide-surface-border">

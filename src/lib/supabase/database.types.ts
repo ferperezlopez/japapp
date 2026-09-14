@@ -192,6 +192,7 @@ export interface Database {
           group_id: string | null;
           created_by: string;
           created_at: string;
+          has_futbol: boolean;
         };
         Insert: {
           id?: string;
@@ -202,6 +203,7 @@ export interface Database {
           group_id?: string | null;
           created_by: string;
           created_at?: string;
+          has_futbol?: boolean;
         };
         Update: {
           id?: string;
@@ -212,6 +214,7 @@ export interface Database {
           group_id?: string | null;
           created_by?: string;
           created_at?: string;
+          has_futbol?: boolean;
         };
         Relationships: [
           {
@@ -236,18 +239,21 @@ export interface Database {
           user_id: string;
           status: "yes" | "no" | "maybe";
           responded_at: string;
+          kind: "juntada" | "futbol";
         };
         Insert: {
           event_id: string;
           user_id: string;
           status: "yes" | "no" | "maybe";
           responded_at?: string;
+          kind?: "juntada" | "futbol";
         };
         Update: {
           event_id?: string;
           user_id?: string;
           status?: "yes" | "no" | "maybe";
           responded_at?: string;
+          kind?: "juntada" | "futbol";
         };
         Relationships: [
           {

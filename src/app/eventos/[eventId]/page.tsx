@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
-import { RsvpButtons } from "./RsvpButtons";
+import { RsvpButtons } from "@/components/eventos/RsvpButtons";
 import { DeleteEventButton } from "./DeleteEventButton";
 import { GastosEmbed } from "./GastosEmbed";
 import { UploadPhotoForm } from "./UploadPhotoForm";
@@ -23,6 +23,60 @@ const GROUPS: { status: "yes" | "maybe" | "no"; label: string }[] = [
   { status: "no", label: "No van" },
 ];
 
+type Attendee = { userId: string; status: string; name: string };
+
+// Confirmación + lista de asistentes de un tipo (juntada o fútbol): las dos
+// se ven en el mismo lugar (la página del evento), cada una con su propio
+// estado y su propia lista de Van/Tal vez/No van.
+function RsvpSection({
+  title,
+  eventId,
+  kind,
+  myStatus,
+  attendees,
+}: {
+  title: string;
+  eventId: string;
+  kind: "juntada" | "futbol";
+  myStatus: "yes" | "no" | "maybe" | null;
+  attendees: Attendee[];
+}) {
+  return (
+    <section className="mt-8">
+      <h2 className="text-sm font-medium">{title}</h2>
+      <div className="mt-2">
+        <RsvpButtons eventId={eventId} kind={kind} currentStatus={myStatus} />
+      </div>
+      <div className="mt-4 space-y-4">
+        {GROUPS.map((group) => {
+          const people = attendees.filter((a) => a.status === group.status);
+          return (
+            <div key={group.status}>
+              <h3 className="text-sm font-medium text-foreground/50">
+                {group.label} ({people.length})
+              </h3>
+              <ul className="mt-1 flex flex-wrap gap-2">
+                {people.map((p, index) => (
+                  <li
+                    key={p.userId}
+                    className="animate-reveal rounded-full bg-surface px-3 py-1 text-xs text-foreground/80"
+                    style={{ animationDelay: `${index * 40}ms` }}
+                  >
+                    {p.name}
+                  </li>
+                ))}
+                {people.length === 0 && (
+                  <li className="text-xs text-foreground/40">Nadie por ahora</li>
+                )}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default async function EventoPage({
   params,
 }: PageProps<"/eventos/[eventId]">) {
@@ -35,7 +89,9 @@ export default async function EventoPage({
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, name, event_date, location, description, created_by, group_id")
+    .select(
+      "id, name, event_date, location, description, created_by, group_id, has_futbol",
+    )
     .eq("id", eventId)
     .maybeSingle();
 
@@ -62,17 +118,27 @@ export default async function EventoPage({
 
   const { data: rsvps } = await supabase
     .from("event_rsvps")
-    .select("user_id, status, profiles(name, email)")
+    .select("user_id, status, kind, profiles(name, email)")
     .eq("event_id", eventId);
 
-  const attendees = (rsvps ?? []).map((r) => ({
+  const allAttendees = (rsvps ?? []).map((r) => ({
     userId: r.user_id,
     status: r.status,
+    kind: r.kind,
     name: r.profiles?.name ?? r.profiles?.email ?? "Desconocido",
   }));
 
+  const attendeesJuntada = allAttendees.filter((a) => a.kind === "juntada");
+  const attendeesFutbol = allAttendees.filter((a) => a.kind === "futbol");
+
   const myStatus =
-    (attendees.find((a) => a.userId === user?.id)?.status as
+    (attendeesJuntada.find((a) => a.userId === user?.id)?.status as
+      | "yes"
+      | "no"
+      | "maybe"
+      | undefined) ?? null;
+  const myFutbolStatus =
+    (attendeesFutbol.find((a) => a.userId === user?.id)?.status as
       | "yes"
       | "no"
       | "maybe"
@@ -202,39 +268,23 @@ export default async function EventoPage({
         </a>
       </div>
 
-      <section className="mt-6">
-        <h2 className="text-sm font-medium">¿Vas?</h2>
-        <div className="mt-2">
-          <RsvpButtons eventId={eventId} currentStatus={myStatus} />
-        </div>
-      </section>
+      <RsvpSection
+        title="¿Vas a la juntada?"
+        eventId={eventId}
+        kind="juntada"
+        myStatus={myStatus}
+        attendees={attendeesJuntada}
+      />
 
-      <section className="mt-8 space-y-4">
-        {GROUPS.map((group) => {
-          const people = attendees.filter((a) => a.status === group.status);
-          return (
-            <div key={group.status}>
-              <h3 className="text-sm font-medium text-foreground/50">
-                {group.label} ({people.length})
-              </h3>
-              <ul className="mt-1 flex flex-wrap gap-2">
-                {people.map((p, index) => (
-                  <li
-                    key={p.userId}
-                    className="animate-reveal rounded-full bg-surface px-3 py-1 text-xs text-foreground/80"
-                    style={{ animationDelay: `${index * 40}ms` }}
-                  >
-                    {p.name}
-                  </li>
-                ))}
-                {people.length === 0 && (
-                  <li className="text-xs text-foreground/40">Nadie por ahora</li>
-                )}
-              </ul>
-            </div>
-          );
-        })}
-      </section>
+      {event.has_futbol && (
+        <RsvpSection
+          title="⚽ ¿Jugás al fútbol?"
+          eventId={eventId}
+          kind="futbol"
+          myStatus={myFutbolStatus}
+          attendees={attendeesFutbol}
+        />
+      )}
 
       <section className="mt-8">
         <h2 className="text-sm font-medium">Gastos</h2>

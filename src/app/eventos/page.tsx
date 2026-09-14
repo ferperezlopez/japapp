@@ -26,7 +26,7 @@ export default async function EventosPage() {
   const [{ data: events }, { data: rsvps }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, name, event_date, location")
+      .select("id, name, event_date, location, has_futbol")
       .order("event_date", { ascending: true }),
     supabase.from("event_rsvps").select("event_id, user_id, status"),
   ]);
@@ -50,7 +50,13 @@ export default async function EventosPage() {
     .reverse();
 
   const renderEvent = (
-    event: { id: string; name: string; event_date: string; location: string | null },
+    event: {
+      id: string;
+      name: string;
+      event_date: string;
+      location: string | null;
+      has_futbol: boolean;
+    },
     index: number,
   ) => {
     const eventRsvps = rsvpsByEvent.get(event.id) ?? [];
@@ -69,7 +75,9 @@ export default async function EventosPage() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="font-medium">{event.name}</p>
+              <p className="font-medium">
+                {event.name} {event.has_futbol && <span title="Con fútbol">⚽</span>}
+              </p>
               <p className="text-xs text-foreground/50">
                 {dateFormatter.format(new Date(event.event_date))}
                 {event.location ? ` · ${event.location}` : ""}

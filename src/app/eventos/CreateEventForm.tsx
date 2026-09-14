@@ -76,6 +76,15 @@ export function CreateEventForm() {
         </div>
       </div>
 
+      <label className="flex items-center gap-2 text-sm text-foreground/70">
+        <input
+          type="checkbox"
+          name="hasFutbol"
+          className="h-4 w-4 rounded border-surface-border text-eventos focus:ring-eventos"
+        />
+        ¿Hay fútbol además de la juntada?
+      </label>
+
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={pending}>
           {pending ? "Creando..." : "Crear evento"}
