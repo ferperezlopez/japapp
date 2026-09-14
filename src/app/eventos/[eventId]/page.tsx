@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
@@ -39,6 +40,25 @@ export default async function EventoPage({
     .maybeSingle();
 
   if (!event) notFound();
+
+  // Compartir por WhatsApp: la API oficial de WhatsApp no permite postear a
+  // un grupo existente (solo crear grupos nuevos de hasta 8 miembros, con
+  // cuenta de negocio verificada) — un link wa.me con el texto ya armado,
+  // para que quien lo comparta elija el grupo real y lo mande con un toque,
+  // es la única vía que no viola los términos de uso.
+  const requestHeaders = await headers();
+  const origin = `https://${requestHeaders.get("host")}`;
+  const eventUrl = `${origin}/eventos/${eventId}`;
+  const shareText = [
+    `🎉 *${event.name}*`,
+    `📅 ${dateFormatter.format(new Date(event.event_date))}`,
+    event.location ? `📍 ${event.location}` : null,
+    event.description ? `\n${event.description}` : null,
+    `\nConfirmá tu asistencia acá: ${eventUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
   const { data: rsvps } = await supabase
     .from("event_rsvps")
@@ -169,6 +189,17 @@ export default async function EventoPage({
             {event.description}
           </p>
         )}
+        <a
+          href={whatsappShareUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg border border-surface-border px-4 py-2 text-sm font-medium text-foreground/70 transition duration-200 hover:bg-surface active:scale-[0.98]"
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+            <path d="M12.04 2c-5.5 0-9.96 4.46-9.96 9.96 0 1.76.46 3.48 1.33 5l-1.41 5.15 5.28-1.38a9.9 9.9 0 0 0 4.76 1.21h.01c5.5 0 9.96-4.46 9.96-9.96C22 6.46 17.54 2 12.04 2Zm5.83 14.24c-.25.7-1.24 1.28-1.99 1.44-.53.11-1.22.2-3.55-.76-2.98-1.23-4.9-4.26-5.05-4.46-.15-.2-1.2-1.6-1.2-3.06s.75-2.16 1.02-2.46c.25-.28.55-.35.73-.35.19 0 .37 0 .53.01.17.01.4-.06.62.48.25.6.85 2.06.92 2.21.07.15.12.32.02.52-.09.2-.14.32-.28.49-.14.17-.29.38-.42.51-.14.14-.28.29-.12.57.16.28.72 1.19 1.55 1.93 1.06.95 1.96 1.24 2.24 1.38.28.14.44.12.6-.07.17-.19.71-.83.9-1.11.19-.28.37-.24.63-.14.25.09 1.6.75 1.87.89.28.14.46.21.53.32.07.12.07.65-.18 1.35Z" />
+          </svg>
+          Compartir en WhatsApp
+        </a>
       </div>
 
       <section className="mt-6">
