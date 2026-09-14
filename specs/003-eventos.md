@@ -4,8 +4,10 @@
 - **Rutas:** `/eventos`, `/eventos/[eventId]`
 - **Migraciones relacionadas:** `supabase/migrations/0002_events.sql`,
   `supabase/migrations/0004_event_groups_and_media.sql` (le da a
-  `group_id` su primer uso real — ver `specs/004-eventos-gastos-y-fotos.md`)
-- **Última actualización:** 2026-08-18
+  `group_id` su primer uso real — ver `specs/004-eventos-gastos-y-fotos.md`),
+  `supabase/migrations/0005_evento_futbol.sql` (agrega `has_futbol` y
+  `kind` — ver `specs/006-evento-futbol.md`)
+- **Última actualización:** 2026-09-14
 
 ## 1. Resumen
 
@@ -107,6 +109,10 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-14: `specs/006-evento-futbol.md` agregó `events.has_futbol` y
+  una columna `kind` a `event_rsvps` (PK ahora `(event_id, user_id,
+  kind)`), para poder tener una confirmación de fútbol separada de la
+  de la juntada en el mismo evento.
 - 2026-08-18: `specs/004-eventos-gastos-y-fotos.md` le dio uso real a
   `group_id` (trigger que crea el grupo automáticamente) y agregó fotos
   del evento (`event_media` + Storage).

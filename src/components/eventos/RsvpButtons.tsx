@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setRsvp } from "../actions";
+import { setRsvp } from "@/app/eventos/actions";
 
 type Status = "yes" | "no" | "maybe";
 
@@ -22,9 +22,11 @@ const OPTIONS: { status: Status; label: string; activeClass: string }[] = [
 export function RsvpButtons({
   eventId,
   currentStatus,
+  kind = "juntada",
 }: {
   eventId: string;
   currentStatus: Status | null;
+  kind?: "juntada" | "futbol";
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export function RsvpButtons({
               onClick={() => {
                 setError(null);
                 startTransition(async () => {
-                  const result = await setRsvp(eventId, option.status);
+                  const result = await setRsvp(eventId, option.status, kind);
                   if (result.error) setError(result.error);
                 });
               }}
