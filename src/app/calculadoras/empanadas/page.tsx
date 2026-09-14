@@ -10,7 +10,7 @@ import {
 
 export default function EmpanadasPage() {
   return (
-    <div>
+    <div className="animate-reveal">
       <p className="text-sm text-foreground/60">
         Indicá la cantidad de docenas para calcular el relleno.
       </p>

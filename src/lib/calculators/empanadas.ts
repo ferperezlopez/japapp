@@ -3,27 +3,29 @@ export interface EmpanadaItem {
   label: string;
   porDocena: number;
   unit: string;
+  icon: string;
   indent?: boolean;
 }
 
 // Factores por docena extraídos de la planilla "Empanada Calculator".
 export const EMPANADA_ITEMS: EmpanadaItem[] = [
-  { key: "bolaDeLomo", label: "Bola de lomo", porDocena: 750, unit: "gr" },
-  { key: "cebolla", label: "Cebolla", porDocena: 250, unit: "gr" },
-  { key: "verdeo", label: "Verdeo", porDocena: 80, unit: "gr" },
-  { key: "morron", label: "Morrón", porDocena: 0.5, unit: "u" },
-  { key: "chardonay", label: "Chardonay", porDocena: 125, unit: "cc" },
-  { key: "manteca", label: "Manteca", porDocena: 25, unit: "gr" },
-  { key: "calditos", label: "Calditos de verdura", porDocena: 1, unit: "u" },
+  { key: "bolaDeLomo", label: "Bola de lomo", porDocena: 750, unit: "gr", icon: "🥩" },
+  { key: "cebolla", label: "Cebolla", porDocena: 250, unit: "gr", icon: "🧅" },
+  { key: "verdeo", label: "Verdeo", porDocena: 80, unit: "gr", icon: "🌿" },
+  { key: "morron", label: "Morrón", porDocena: 0.5, unit: "u", icon: "🫑" },
+  { key: "chardonay", label: "Chardonay", porDocena: 125, unit: "cc", icon: "🍷" },
+  { key: "manteca", label: "Manteca", porDocena: 25, unit: "gr", icon: "🧈" },
+  { key: "calditos", label: "Calditos de verdura", porDocena: 1, unit: "u", icon: "🧂" },
   {
     key: "aguaCalditos",
     label: "Agua para calditos",
     porDocena: 225,
     unit: "cc",
+    icon: "💧",
     indent: true,
   },
-  { key: "huevos", label: "Huevos", porDocena: 2.5, unit: "u" },
-  { key: "aceitunas", label: "Aceitunas", porDocena: 27, unit: "gr" },
+  { key: "huevos", label: "Huevos", porDocena: 2.5, unit: "u", icon: "🥚" },
+  { key: "aceitunas", label: "Aceitunas", porDocena: 27, unit: "gr", icon: "🫒" },
 ];
 
 // Estos condimentos se agregan "a gusto" (c/n = cantidad necesaria),
