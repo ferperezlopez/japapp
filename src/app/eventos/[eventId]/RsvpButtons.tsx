@@ -6,7 +6,7 @@ import { setRsvp } from "../actions";
 type Status = "yes" | "no" | "maybe";
 
 const OPTIONS: { status: Status; label: string; activeClass: string }[] = [
-  { status: "yes", label: "Voy", activeClass: "bg-teal text-white" },
+  { status: "yes", label: "Voy", activeClass: "bg-eventos text-white" },
   {
     status: "maybe",
     label: "Tal vez",

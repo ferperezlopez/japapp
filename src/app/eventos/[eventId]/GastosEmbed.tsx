@@ -52,11 +52,11 @@ export function GastosEmbed({
               {memberName(b.userId)}
             </span>
             {b.balance > 0 ? (
-              <span className="rounded-full bg-teal-soft px-2.5 py-0.5 text-xs font-medium text-teal-ink">
+              <span className="rounded-full bg-eventos-soft px-2.5 py-0.5 text-xs font-medium text-eventos-ink">
                 +${b.balance.toFixed(2)}
               </span>
             ) : b.balance < 0 ? (
-              <span className="rounded-full bg-amber-soft px-2.5 py-0.5 text-xs font-medium text-amber-ink">
+              <span className="rounded-full bg-gastos-soft px-2.5 py-0.5 text-xs font-medium text-gastos-ink">
                 ${b.balance.toFixed(2)}
               </span>
             ) : (
@@ -69,8 +69,8 @@ export function GastosEmbed({
       </ul>
 
       {settlements.length > 0 && (
-        <div className="rounded-xl border border-surface-border bg-coral-soft/60 p-4 text-sm">
-          <h3 className="font-medium text-coral-ink dark:text-coral-mid">
+        <div className="rounded-xl border border-surface-border bg-gastos-soft/60 p-4 text-sm">
+          <h3 className="font-medium text-gastos-ink dark:text-gastos-mid">
             Para saldar cuentas
           </h3>
           <ul className="mt-2 space-y-1 text-foreground/80">

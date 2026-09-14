@@ -30,7 +30,7 @@ export function CreateGroupForm() {
           name="name"
           placeholder="Nombre del grupo (ej: Asado 10/8)"
           required
-          className="flex-1 rounded-lg border border-surface-border bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral"
+          className="flex-1 rounded-lg border border-surface-border bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-gastos"
         />
         <Button type="submit" disabled={pending}>
           {pending ? "Creando..." : "Crear grupo"}

@@ -1,28 +1,41 @@
 @import "tailwindcss";
 
 :root {
-  /* Light: "papel" cálido en vez de blanco puro. */
-  --background: #fbf5ee;
-  --foreground: #2a1d14;
+  /* Light: crema cálido de la identidad nueva. */
+  --background: #f5f1e8;
+  --foreground: #0b1f2a;
   --surface: #ffffff;
-  --surface-border: rgba(42, 29, 20, 0.08);
+  --surface-border: rgba(11, 31, 42, 0.08);
 
-  /* Design system de la app (specs/005): paleta coral (acción primaria/
-     marca), amber (dinero pendiente/deuda), teal (confirmado/balance a
-     favor). Ver overrides de dark mode más abajo. */
-  --color-coral-soft: #faece7;
-  --color-coral-mid: #f5c4b3;
-  --color-coral: #d85a30;
-  --color-coral-hover: #993c1d;
-  --color-coral-ink: #4a1b0c;
-  --color-amber-soft: #faeeda;
-  --color-amber: #ef9f27;
-  --color-amber-ink: #412402;
-  --color-teal-soft: #e1f5ee;
-  --color-teal: #1d9e75;
-  --color-teal-ink: #04342c;
+  /* Rebrand (lámina de marca): un color por sección en vez de un único
+     "brand" — navy = Eventos (y "confirmado"/RSVP "voy"), rojo = Gastos
+     (y deuda), naranja = marca general/Calculadoras, amber = pendiente/
+     acento secundario ("tal vez", avisos). Overrides de dark mode abajo. */
+  --color-eventos-soft: #e6edf1;
+  --color-eventos-mid: #a7c1cf;
+  --color-eventos: #1f4e6b;
+  --color-eventos-hover: #163a52;
+  --color-eventos-ink: #0f2e40;
 
-  --grain-dot: rgba(42, 29, 20, 0.05);
+  --color-gastos-soft: #fbeaea;
+  --color-gastos-mid: #eeb9ba;
+  --color-gastos: #b22234;
+  --color-gastos-hover: #8c1b29;
+  --color-gastos-ink: #4a0e14;
+
+  --color-brand-soft: #fff1e2;
+  --color-brand-mid: #ffd1a3;
+  --color-brand: #ff8c2a;
+  --color-brand-hover: #cc6f1f;
+  --color-brand-ink: #5c3210;
+
+  --color-amber-soft: #fff8e1;
+  --color-amber-mid: #ffe58a;
+  --color-amber: #ffc107;
+  --color-amber-hover: #cc9a06;
+  --color-amber-ink: #4d3900;
+
+  --grain-dot: rgba(11, 31, 42, 0.05);
 }
 
 @theme inline {
@@ -32,44 +45,68 @@
   --color-surface-border: var(--surface-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-display);
+  --font-heading: var(--font-display);
 
-  --color-coral-soft: var(--color-coral-soft);
-  --color-coral-mid: var(--color-coral-mid);
-  --color-coral: var(--color-coral);
-  --color-coral-hover: var(--color-coral-hover);
-  --color-coral-ink: var(--color-coral-ink);
+  --color-eventos-soft: var(--color-eventos-soft);
+  --color-eventos-mid: var(--color-eventos-mid);
+  --color-eventos: var(--color-eventos);
+  --color-eventos-hover: var(--color-eventos-hover);
+  --color-eventos-ink: var(--color-eventos-ink);
+  --color-gastos-soft: var(--color-gastos-soft);
+  --color-gastos-mid: var(--color-gastos-mid);
+  --color-gastos: var(--color-gastos);
+  --color-gastos-hover: var(--color-gastos-hover);
+  --color-gastos-ink: var(--color-gastos-ink);
+  --color-brand-soft: var(--color-brand-soft);
+  --color-brand-mid: var(--color-brand-mid);
+  --color-brand: var(--color-brand);
+  --color-brand-hover: var(--color-brand-hover);
+  --color-brand-ink: var(--color-brand-ink);
   --color-amber-soft: var(--color-amber-soft);
+  --color-amber-mid: var(--color-amber-mid);
   --color-amber: var(--color-amber);
+  --color-amber-hover: var(--color-amber-hover);
   --color-amber-ink: var(--color-amber-ink);
-  --color-teal-soft: var(--color-teal-soft);
-  --color-teal: var(--color-teal);
-  --color-teal-ink: var(--color-teal-ink);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Dark: el look editorial cálido de la referencia (mammamia.rest). */
-    --background: #16110d;
-    --foreground: #f2e9e0;
-    --surface: #1f1812;
-    --surface-border: rgba(242, 233, 224, 0.08);
+    /* Dark: navy profundo de la identidad nueva en vez del carbón cálido
+       anterior. */
+    --background: #0b1f2a;
+    --foreground: #f5f1e8;
+    --surface: #142a37;
+    --surface-border: rgba(245, 241, 232, 0.08);
 
     /* Misma paleta, tonos invertidos: soft/mid pasan a ser superficies
-       oscuras y los "ink" pasan a ser el texto claro que va sobre ellas. */
-    --color-coral-soft: #2b1710;
-    --color-coral-mid: #4a2818;
-    --color-coral: #d8703f;
-    --color-coral-hover: #f2996b;
-    --color-coral-ink: #f5d9c9;
-    --color-amber-soft: #3a2a05;
-    --color-amber: #f0b23f;
-    --color-amber-ink: #fbe6b8;
-    --color-teal-soft: #06332a;
-    --color-teal: #2dbb8d;
-    --color-teal-ink: #bdf0dd;
+       oscuras y los "ink" pasan a ser el texto claro que va sobre ellas.
+       "eventos" se aclara bastante en dark porque su base (navy) es casi
+       el mismo tono que el fondo — sin aclarar, desaparecería. */
+    --color-eventos-soft: #16303e;
+    --color-eventos-mid: #2c4f61;
+    --color-eventos: #6fa3bd;
+    --color-eventos-hover: #8fbdd4;
+    --color-eventos-ink: #d7e7ee;
 
-    --grain-dot: rgba(242, 233, 224, 0.05);
+    --color-gastos-soft: #3a1216;
+    --color-gastos-mid: #5c1e24;
+    --color-gastos: #e05c67;
+    --color-gastos-hover: #ea828b;
+    --color-gastos-ink: #f9dcdd;
+
+    --color-brand-soft: #3d2410;
+    --color-brand-mid: #6b3f18;
+    --color-brand: #ff9c47;
+    --color-brand-hover: #ffb46e;
+    --color-brand-ink: #ffe3c2;
+
+    --color-amber-soft: #332800;
+    --color-amber-mid: #5c4700;
+    --color-amber: #ffd54a;
+    --color-amber-hover: #ffe085;
+    --color-amber-ink: #fff3c9;
+
+    --grain-dot: rgba(245, 241, 232, 0.05);
   }
 }
 

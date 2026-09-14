@@ -7,6 +7,7 @@ const ITEMS = [
   {
     href: "/",
     label: "Inicio",
+    activeClass: "text-brand",
     icon: (
       <path
         strokeLinecap="round"
@@ -18,6 +19,7 @@ const ITEMS = [
   {
     href: "/eventos",
     label: "Eventos",
+    activeClass: "text-eventos",
     icon: (
       <>
         <rect x="3.75" y="5" width="16.5" height="15" rx="2" strokeLinejoin="round" />
@@ -28,6 +30,7 @@ const ITEMS = [
   {
     href: "/calculadoras/asado",
     label: "Calculadoras",
+    activeClass: "text-brand",
     icon: (
       <>
         <rect x="4.5" y="3" width="15" height="18" rx="2" strokeLinejoin="round" />
@@ -38,6 +41,7 @@ const ITEMS = [
   {
     href: "/gastos",
     label: "Gastos",
+    activeClass: "text-gastos",
     icon: (
       <>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 7.5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v11a2 2 0 0 1-2 2h-13a1 1 0 0 1-1-1v-11Z" />
@@ -67,9 +71,7 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors duration-200 ${
-                active
-                  ? "text-coral"
-                  : "text-foreground/50"
+                active ? item.activeClass : "text-foreground/50"
               }`}
             >
               <svg

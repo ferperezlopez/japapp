@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Asado, empanadas y gastos compartidos entre amigos.",
     start_url: "/",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#d85a30",
+    background_color: "#f5f1e8",
+    theme_color: "#ff8c2a",
     icons: [
       {
         src: "/icon-192",

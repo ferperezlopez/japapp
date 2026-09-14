@@ -9,9 +9,9 @@ export function Header({ user }: { user: User | null }) {
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
         <Link
           href="/"
-          className="font-serif text-lg italic tracking-tight text-coral-ink dark:text-coral-mid"
+          className="font-heading text-lg font-semibold tracking-tight text-foreground"
         >
-          JAPapp
+          JAP<span className="text-brand">app</span>
         </Link>
         <div className="flex items-center gap-1">
           <Link

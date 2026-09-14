@@ -8,6 +8,7 @@ const FEATURES = [
     href: "/eventos",
     title: "Eventos",
     description: "Organizá juntadas y confirmá quién va.",
+    colorClasses: "bg-eventos-soft text-eventos",
     icon: (
       <>
         <rect x="3.75" y="5" width="16.5" height="15" rx="2" strokeLinejoin="round" />
@@ -19,6 +20,7 @@ const FEATURES = [
     href: "/calculadoras/asado",
     title: "Calculadoras",
     description: "Cuánto asado o cuántas empanadas comprar.",
+    colorClasses: "bg-brand-soft text-brand",
     icon: (
       <>
         <rect x="4.5" y="3" width="15" height="18" rx="2" strokeLinejoin="round" />
@@ -30,6 +32,7 @@ const FEATURES = [
     href: "/gastos",
     title: "Gastos",
     description: "Dividí los gastos compartidos entre amigos.",
+    colorClasses: "bg-gastos-soft text-gastos",
     icon: (
       <>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 7.5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v11a2 2 0 0 1-2 2h-13a1 1 0 0 1-1-1v-11Z" />
@@ -78,12 +81,12 @@ export default async function Home() {
         }
       >
         <div className="animate-reveal mx-auto w-full max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
             {user ? "Bienvenido de vuelta" : "JAPapp"}
           </p>
-          <h1 className="mt-1 font-serif text-4xl text-foreground">
+          <h1 className="mt-1 font-heading text-4xl font-semibold text-foreground">
             Hola{user ? "" : ", bienvenido a "}
-            {!user && <i className="italic text-coral-ink">JAPapp</i>}
+            {!user && <span className="text-brand">JAPapp</span>}
           </h1>
           <p className="mt-3 max-w-md text-sm text-foreground/60">
             Organizá juntadas, calculá cantidades de asado y empanadas, y
@@ -98,10 +101,12 @@ export default async function Home() {
             {FEATURES.map((feature, index) => (
               <Link key={feature.href} href={feature.href}>
                 <Card
-                  className="animate-reveal flex items-center gap-4 p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md active:bg-coral-soft"
+                  className="animate-reveal flex items-center gap-4 p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md active:bg-background"
                   style={{ animationDelay: `${100 + index * 60}ms` }}
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-coral-soft text-coral">
+                  <span
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${feature.colorClasses}`}
+                  >
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"

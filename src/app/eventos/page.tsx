@@ -64,7 +64,7 @@ export default async function EventosPage() {
     return (
       <Link key={event.id} href={`/eventos/${event.id}`} className="block">
         <Card
-          className="animate-reveal px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:bg-coral-soft hover:shadow-md"
+          className="animate-reveal px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:bg-eventos-soft hover:shadow-md"
           style={{ animationDelay: `${index * 60}ms` }}
         >
           <div className="flex items-start justify-between">
@@ -92,10 +92,10 @@ export default async function EventosPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-coral">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-eventos">
         Organizá
       </p>
-      <h1 className="mt-1 font-serif text-3xl text-foreground">Eventos</h1>
+      <h1 className="mt-1 font-heading text-3xl font-semibold text-foreground">Eventos</h1>
       <p className="mt-2 text-sm text-foreground/60">
         Organizá juntadas y confirmá tu asistencia.
       </p>
