@@ -6,7 +6,7 @@ import { calcularAsado, CRIOLLA_BASE } from "@/lib/calculators/asado";
 
 export default function AsadoPage() {
   return (
-    <div>
+    <div className="animate-reveal">
       <p className="text-sm text-foreground/60">
         Indicá la cantidad de participantes para calcular cuánto comprar.
       </p>

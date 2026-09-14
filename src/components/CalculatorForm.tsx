@@ -7,6 +7,7 @@ export interface CalculatorRow {
   label: string;
   cantidad: number;
   unit: string;
+  icon?: string;
   indent?: boolean;
 }
 
@@ -44,14 +45,23 @@ export function CalculatorForm({
 
       <table className="mt-6 w-full text-sm">
         <tbody className="divide-y divide-surface-border">
-          {rows.map((row) => (
-            <tr key={row.key}>
+          {rows.map((row, index) => (
+            <tr
+              key={row.key}
+              className="animate-reveal"
+              style={{ animationDelay: `${index * 30}ms` }}
+            >
               <td
-                className={`py-2 text-foreground/80 ${row.indent ? "pl-6 text-foreground/50" : ""}`}
+                className={`py-2.5 text-foreground/80 ${row.indent ? "pl-8 text-foreground/50" : ""}`}
               >
+                {row.icon && (
+                  <span className="mr-2 text-base" aria-hidden="true">
+                    {row.icon}
+                  </span>
+                )}
                 {row.label}
               </td>
-              <td className="py-2 text-right font-medium tabular-nums">
+              <td className="py-2.5 text-right font-semibold tabular-nums text-brand">
                 {row.cantidad} {row.unit}
               </td>
             </tr>

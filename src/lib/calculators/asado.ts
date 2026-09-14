@@ -3,20 +3,21 @@ export interface AsadoItem {
   label: string;
   perPersona: number;
   unit: string;
+  icon: string;
 }
 
 // Factores per cápita extraídos de la planilla de Google Sheets del grupo.
 export const ASADO_ITEMS: AsadoItem[] = [
-  { key: "carneSinHueso", label: "Carne sin hueso", perPersona: 0.5, unit: "kg" },
-  { key: "carneConHueso", label: "Carne con hueso", perPersona: 0.75, unit: "kg" },
-  { key: "chori", label: "Chorizos", perPersona: 0.5, unit: "u" },
-  { key: "vino", label: "Vino", perPersona: 0.4, unit: "botellas" },
-  { key: "cerveza", label: "Cerveza", perPersona: 0.75, unit: "L" },
-  { key: "gaseosa", label: "Gaseosa", perPersona: 0.4, unit: "L" },
-  { key: "pan", label: "Pan", perPersona: 0.15, unit: "kg" },
-  { key: "carbon", label: "Carbón", perPersona: 0.75, unit: "kg" },
-  { key: "picada", label: "Picada", perPersona: 0.1, unit: "kg" },
-  { key: "papasFritas", label: "Papas fritas", perPersona: 0.15, unit: "kg" },
+  { key: "carneSinHueso", label: "Carne sin hueso", perPersona: 0.5, unit: "kg", icon: "🥩" },
+  { key: "carneConHueso", label: "Carne con hueso", perPersona: 0.75, unit: "kg", icon: "🍖" },
+  { key: "chori", label: "Chorizos", perPersona: 0.5, unit: "u", icon: "🌭" },
+  { key: "vino", label: "Vino", perPersona: 0.4, unit: "botellas", icon: "🍷" },
+  { key: "cerveza", label: "Cerveza", perPersona: 0.75, unit: "L", icon: "🍺" },
+  { key: "gaseosa", label: "Gaseosa", perPersona: 0.4, unit: "L", icon: "🥤" },
+  { key: "pan", label: "Pan", perPersona: 0.15, unit: "kg", icon: "🍞" },
+  { key: "carbon", label: "Carbón", perPersona: 0.75, unit: "kg", icon: "🔥" },
+  { key: "picada", label: "Picada", perPersona: 0.1, unit: "kg", icon: "🧀" },
+  { key: "papasFritas", label: "Papas fritas", perPersona: 0.15, unit: "kg", icon: "🍟" },
 ];
 
 // Receta base de ensalada criolla, no escala 1:1 con la cantidad de gente:
