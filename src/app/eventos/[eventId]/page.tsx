@@ -225,11 +225,14 @@ export default async function EventoPage({
       | "maybe"
       | undefined) ?? null;
 
-  // Fotos: URLs firmadas en batch, expiran en 1h.
+  // Fotos: URLs firmadas en batch, expiran en 1h. Las "legacy" (ver
+  // specs/011-fotos-legacy-y-carrusel.md) quedan fuera de la galería del
+  // evento, aunque siguen contando para el pool general de la landing.
   const { data: mediaRows } = await supabase
     .from("event_media")
     .select("id, storage_path, uploaded_by")
     .eq("event_id", eventId)
+    .eq("legacy", false)
     .order("created_at", { ascending: false });
 
   const paths = (mediaRows ?? []).map((m) => m.storage_path);

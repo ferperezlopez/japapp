@@ -25,19 +25,54 @@ export default async function GroupPage({
 
   if (!group) notFound();
 
-  const [{ data: membershipRows }, { data: allProfiles }] = await Promise.all([
-    supabase
-      .from("group_members")
-      .select("user_id, profiles(id, name, email)")
-      .eq("group_id", groupId),
-    supabase.from("profiles").select("id, name, email, alias").order("name"),
-  ]);
+  // Si este grupo está enlazado a un evento (ver
+  // specs/004-eventos-gastos-y-fotos.md), "pagó"/"se divide entre" debe
+  // restringirse a quien confirmó "Voy" al evento (kind "juntada"), no a
+  // cualquier profile de la app — pedido explícito del usuario,
+  // revirtiendo el criterio de "cualquiera" de 2026-09-15. El creador del
+  // evento NO queda incluido automáticamente: también necesita su propio
+  // RSVP status="yes" para ser elegible.
+  const { data: linkedEvent } = await supabase
+    .from("events")
+    .select("id")
+    .eq("group_id", groupId)
+    .maybeSingle();
+
+  const [{ data: membershipRows }, { data: allProfiles }, { data: rsvpRows }] =
+    await Promise.all([
+      supabase
+        .from("group_members")
+        .select("user_id, profiles(id, name, email)")
+        .eq("group_id", groupId),
+      supabase.from("profiles").select("id, name, email, alias").order("name"),
+      linkedEvent
+        ? supabase
+            .from("event_rsvps")
+            .select("user_id, status")
+            .eq("event_id", linkedEvent.id)
+            .eq("kind", "juntada")
+        : Promise.resolve({ data: null }),
+    ]);
 
   const members = (membershipRows ?? [])
     .map((row) => row.profiles)
     .filter((p): p is { id: string; name: string | null; email: string } => !!p);
 
   const profiles = allProfiles ?? [];
+
+  // Grupo standalone (sin evento enlazado): no hay "confirmados" de qué
+  // hablar, se mantiene el criterio de "cualquier persona de la app" para
+  // pagó/participantes. Si hay evento, se restringe a quien confirmó "Voy"
+  // a la juntada (status='yes', kind='juntada').
+  const confirmedIds = new Set(
+    (rsvpRows ?? []).filter((r) => r.status === "yes").map((r) => r.user_id),
+  );
+  const payerOptions = linkedEvent
+    ? profiles.filter((p) => confirmedIds.has(p.id))
+    : profiles;
+  const expenseParticipantDefaults = linkedEvent
+    ? payerOptions.map((p) => p.id)
+    : members.map((m) => m.id);
 
   const memberName = (id: string) =>
     profiles.find((p) => p.id === id)?.name ??
@@ -83,11 +118,10 @@ export default async function GroupPage({
   );
   const settlements = simplificarDeudas(balances);
 
-  // Igual que antes en el evento (ver specs/004-eventos-gastos-y-fotos.md):
-  // cargar un gasto requiere ser miembro real del grupo. Para un grupo
-  // enlazado a un evento, "miembro" ya incluye tanto al creador como a
-  // quien confirmó "Voy" (los suma el trigger on_rsvp_upsert), así que no
-  // hace falta ninguna otra condición acá.
+  // Quién puede *cargar* un gasto (member real, group_members histórico) es
+  // un concepto distinto de qué opciones ofrece el selector de "pagó"/"se
+  // divide entre" (payerOptions, arriba, basado en confirmación en vivo) —
+  // ver specs/004-eventos-gastos-y-fotos.md.
   const canAddExpense = !!user && members.some((m) => m.id === user.id);
 
   return (
@@ -173,16 +207,21 @@ export default async function GroupPage({
       <section className="mt-8">
         <h2 className="text-sm font-medium text-foreground/50">Agregar gasto</h2>
         <div className="mt-2">
-          {canAddExpense ? (
-            <AddExpenseForm
-              groupId={groupId}
-              people={profiles}
-              defaultParticipantIds={members.map((m) => m.id)}
-            />
-          ) : (
+          {!canAddExpense ? (
             <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
               Necesitás ser parte de este grupo para cargar un gasto.
             </p>
+          ) : payerOptions.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
+              Todavía nadie confirmó asistencia a este evento, no hay entre
+              quién elegir.
+            </p>
+          ) : (
+            <AddExpenseForm
+              groupId={groupId}
+              people={payerOptions}
+              defaultParticipantIds={expenseParticipantDefaults}
+            />
           )}
         </div>
       </section>

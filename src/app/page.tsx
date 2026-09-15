@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RsvpButtons } from "@/components/eventos/RsvpButtons";
+import { PhotoCarousel } from "@/components/PhotoCarousel";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "short",
@@ -57,7 +58,7 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let heroPhotoUrl: string | null = null;
+  let heroPhotoUrls: string[] = [];
   let upcomingEvent: {
     id: string;
     name: string;
@@ -69,18 +70,27 @@ export default async function Home() {
   let myFutbolStatus: "yes" | "no" | "maybe" | null = null;
 
   if (user) {
-    const { data: media } = await supabase
+    // Pool general de fotos (ver specs/011-fotos-legacy-y-carrusel.md):
+    // todas las fotos de todos los eventos, sin filtrar por evento ni por
+    // "legacy" — las legacy también cuentan acá, solo se ocultan de la
+    // galería de su propio evento. Se trae un tope razonable y se
+    // mezclan en JS para no depender de random() a nivel SQL.
+    const { data: mediaRows } = await supabase
       .from("event_media")
       .select("storage_path")
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(60);
 
-    if (media) {
-      const { data: signed } = await supabase.storage
+    if (mediaRows && mediaRows.length > 0) {
+      // eslint-disable-next-line react-hooks/purity -- ruta ya forzada dinámica por el auth.getUser() de arriba
+      const shuffled = [...mediaRows].sort(() => Math.random() - 0.5);
+      const paths = shuffled.slice(0, 8).map((m) => m.storage_path);
+      const { data: signedUrls } = await supabase.storage
         .from("event-photos")
-        .createSignedUrl(media.storage_path, 3600);
-      heroPhotoUrl = signed?.signedUrl ?? null;
+        .createSignedUrls(paths, 3600);
+      heroPhotoUrls = (signedUrls ?? [])
+        .map((s) => s.signedUrl)
+        .filter((url): url is string => !!url);
     }
 
     // "Evento en curso": el próximo evento agendado, para poder confirmar
@@ -121,19 +131,24 @@ export default async function Home() {
   return (
     <div className="flex-1">
       <div
-        className={`relative flex flex-col justify-end px-4 py-12 ${heroPhotoUrl ? "" : "bg-grain"}`}
-        style={
-          heroPhotoUrl
-            ? {
-                backgroundImage: `linear-gradient(to top, var(--background) 5%, transparent 60%), url(${heroPhotoUrl})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                minHeight: "18rem",
-              }
-            : undefined
-        }
+        className="relative flex flex-col justify-end overflow-hidden px-4 py-12"
+        style={{ minHeight: "18rem" }}
       >
-        <div className="animate-reveal mx-auto w-full max-w-2xl">
+        {heroPhotoUrls.length > 0 ? (
+          <>
+            <PhotoCarousel photoUrls={heroPhotoUrls} />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  "linear-gradient(to top, var(--background) 5%, transparent 60%)",
+              }}
+            />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-grain" />
+        )}
+        <div className="animate-reveal relative mx-auto w-full max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
             {user ? "Bienvenido de vuelta" : "JAPapp"}
           </p>

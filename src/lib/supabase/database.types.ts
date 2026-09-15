@@ -367,6 +367,7 @@ export interface Database {
           uploaded_by: string;
           storage_path: string;
           created_at: string;
+          legacy: boolean;
         };
         Insert: {
           id?: string;
@@ -374,6 +375,7 @@ export interface Database {
           uploaded_by: string;
           storage_path: string;
           created_at?: string;
+          legacy?: boolean;
         };
         Update: {
           id?: string;
@@ -381,6 +383,7 @@ export interface Database {
           uploaded_by?: string;
           storage_path?: string;
           created_at?: string;
+          legacy?: boolean;
         };
         Relationships: [
           {
