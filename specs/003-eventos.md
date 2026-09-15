@@ -24,12 +24,13 @@ para el asado/empanadas.
 - Confirmar asistencia propia en 3 estados: `yes` / `no` / `maybe`,
   modificable en cualquier momento (upsert).
 - Ver la lista de quién confirmó qué, agrupada por estado, con contador.
+- Editar un evento ya creado (solo quien lo creó): nombre, fecha/hora,
+  lugar, notas y si tiene fútbol.
 - Borrar un evento (solo quien lo creó).
 - Los eventos son visibles para **cualquier usuario logueado de la app**,
   no están scopeados a un "grupo de gastos" como en `002-gastos.md`.
 
 ### No incluye (por ahora)
-- Editar un evento ya creado (solo alta y baja).
 - Vincular un evento a un grupo de gastos desde la UI (la columna
   `group_id` existe en DB pero no hay formulario que la use).
 - Sección de estadísticas (asistencia histórica, costo por evento/persona).
@@ -69,6 +70,17 @@ Puntos que el SQL no explica por sí solo:
    `on delete cascade`); igual que en gastos, la autorización real es la
    policy RLS `"Quien creo el evento lo puede borrar"` — la action no
    revalida `created_by` antes del delete, solo la UI oculta el botón.
+5. `updateEvent(eventId, formData)` (mismo criterio de autorización: la
+   policy RLS `"Quien creo el evento lo puede editar"`, ya existía desde
+   `0002_events.sql` sin usarse hasta ahora) reescribe nombre, fecha,
+   lugar, notas y `has_futbol`. La UI (`EditEventForm`, en
+   `/eventos/[eventId]`) solo se muestra si `created_by === user.id`, y
+   reusa los mismos campos que el alta (`EventFormFields`, factorizado de
+   `CreateEventForm` para no duplicar el select de lugares ni el cálculo
+   de día de la semana). El formulario de edición precarga la fecha
+   tomando los primeros 16 caracteres del ISO guardado (`"YYYY-MM-
+   DDTHH:mm"`), sin pasar por getters de `Date` — ver la nota de zona
+   horaria en la sección 6.
 
 ## 5. Criterios de aceptación
 
@@ -90,6 +102,9 @@ Puntos que el SQL no explica por sí solo:
       hasta que el servidor lo confirma de verdad — mientras se guarda,
       muestra un spinner en vez de dar por hecho que va a salir bien.
 - [x] El botón de borrar evento solo aparece si `created_by === user.id`.
+- [x] El formulario de edición solo aparece si `created_by === user.id`,
+      viene precargado con los datos actuales del evento, y guardar
+      cambios los refleja sin duplicar el evento.
 - [x] Todas las rutas de `/eventos` requieren login.
 
 ## 6. Decisiones y tradeoffs
@@ -99,7 +114,8 @@ Puntos que el SQL no explica por sí solo:
 | Eventos visibles a cualquier usuario logueado, no scopeados a un grupo | Requerir pertenecer a un `group` para ver/crear eventos | Se asume que cualquiera con cuenta en JAPapp es del mismo grupo de amigos (acceso ya está cerrado por invitación a la app); scopear a grupos de gastos agregaría fricción sin beneficio real hoy. |
 | `group_id` nullable agregado ya en esta migración, sin UI que lo use | Agregar la columna recién cuando se construya estadísticas | Evita una migración de schema futura solo para agregar un FK; el costo de tenerla ociosa es mínimo (una columna nullable). |
 | RSVP como upsert sin historial de cambios | Tabla de historial de respuestas | Solo importa el estado actual para contar gente; historizar respuestas no tiene caso de uso pedido. |
-| Sin edición de evento tras creado | Formulario de edición | Mismo criterio que en gastos: alta/baja cubre el uso real (si se equivocan, borran y recrean); se agrega edición si se vuelve fricción real. |
+| Edición de evento agregada reusando la policy RLS de `update` que ya existía sin usarse desde `0002` | Requerir borrar y recrear el evento para corregir un dato | Pedido explícito del usuario; la policy de autorización ya estaba lista, solo faltaba la action y la UI. |
+| Fecha del formulario de edición precargada cortando el ISO string (`slice(0, 16)`) en vez de usar getters de `Date` | `new Date(event_date).getHours()`/`getMinutes()`/etc. | Esos getters devuelven la hora en la zona horaria del proceso que corre el código (el servidor), no la del navegador de quien creó el evento originalmente — como `createEvent` tampoco hace conversión real de zona horaria (guarda tal cual lo que tipeó el navegador), cortar el string a mano es lo único que reproduce exactamente el valor original sin depender de en qué zona horaria corra el servidor. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -111,10 +127,14 @@ Puntos que el SQL no explica por sí solo:
 - ~~UI para setear `group_id` al crear/editar un evento~~ — ya no aplica:
   desde `004` todo evento nuevo consigue su `group_id` automáticamente vía
   trigger, no hace falta setearlo a mano.
-- Edición de evento.
+- ~~Edición de evento~~ — implementada, ver changelog.
 
 ## 8. Changelog
 
+- 2026-09-14: agregada la edición de evento (`updateEvent` + `EditEventForm`),
+  a pedido explícito del usuario ("el owner de un evento debería poder
+  modificarlo"). Se factorizaron los campos del formulario a
+  `EventFormFields`, compartido entre alta y edición.
 - 2026-09-14: se sacó el estado optimista de `RsvpButtons` (pintaba el
   botón elegido como confirmado antes de que el servidor respondiera) por
   pedido explícito del usuario: si alguien clickeaba y se iba rápido de la

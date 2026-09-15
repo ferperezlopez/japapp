@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { CreateGroupForm } from "./CreateGroupForm";
+import { getGroupsWithEventDates } from "@/lib/gastos/groups";
 
 export default async function GastosPage() {
   const supabase = await createClient();
@@ -9,15 +10,17 @@ export default async function GastosPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: memberships } = await supabase
-    .from("group_members")
-    .select("groups(id, name, created_at)")
-    .eq("user_id", user!.id);
+  const allGroups = await getGroupsWithEventDates(supabase, user!.id);
 
-  const groups = (memberships ?? [])
-    .map((m) => m.groups)
-    .filter((g): g is { id: string; name: string; created_at: string } => !!g)
+  // Histórico = grupo enlazado a un evento cuya fecha ya pasó. Un grupo
+  // standalone (sin evento) o enlazado a un evento futuro/vigente se queda
+  // en la lista principal — ver specs/009-historicos-de-gastos.md.
+  // eslint-disable-next-line react-hooks/purity -- ruta ya forzada dinámica por el auth.getUser() de arriba
+  const now = Date.now();
+  const groups = allGroups
+    .filter((g) => !g.eventDate || new Date(g.eventDate).getTime() >= now)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const historicosCount = allGroups.length - groups.length;
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
@@ -50,6 +53,15 @@ export default async function GastosPage() {
           <p className="text-sm text-foreground/50">Todavía no tenés grupos.</p>
         )}
       </ul>
+
+      {historicosCount > 0 && (
+        <Link
+          href="/gastos/historicos"
+          className="mt-6 inline-block text-sm text-foreground/50 hover:underline"
+        >
+          Ver históricos ({historicosCount}) →
+        </Link>
+      )}
     </div>
   );
 }

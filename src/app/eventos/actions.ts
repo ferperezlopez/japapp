@@ -2,12 +2,38 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
+
+// "venue" viene del <select> de lugares predefinidos; "__new__" indica que
+// se tipeó un lugar nuevo en newVenueName, que además se guarda en
+// `venues` para que quede disponible como opción la próxima vez. Usado
+// tanto por createEvent como por updateEvent.
+async function resolveVenueLocation(
+  supabase: SupabaseClient<Database>,
+  formData: FormData,
+  userId: string,
+) {
+  const venueSelection = String(formData.get("venue") ?? "");
+  const newVenueName = String(formData.get("newVenueName") ?? "").trim();
+
+  if (venueSelection === "__new__") {
+    if (!newVenueName) return null;
+    await supabase
+      .from("venues")
+      .upsert(
+        { name: newVenueName, created_by: userId },
+        { onConflict: "name", ignoreDuplicates: true },
+      );
+    return newVenueName;
+  }
+
+  return venueSelection || null;
+}
 
 export async function createEvent(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const eventDate = String(formData.get("eventDate") ?? "");
-  const venueSelection = String(formData.get("venue") ?? "");
-  const newVenueName = String(formData.get("newVenueName") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const hasFutbol = formData.get("hasFutbol") === "on";
 
@@ -20,23 +46,7 @@ export async function createEvent(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
-  // "venue" viene del <select> de lugares predefinidos; "__new__" indica que
-  // se tipeó un lugar nuevo en newVenueName, que además se guarda en
-  // `venues` para que quede disponible como opción la próxima vez.
-  let location: string | null = null;
-  if (venueSelection === "__new__") {
-    if (newVenueName) {
-      location = newVenueName;
-      await supabase
-        .from("venues")
-        .upsert(
-          { name: newVenueName, created_by: user.id },
-          { onConflict: "name", ignoreDuplicates: true },
-        );
-    }
-  } else if (venueSelection) {
-    location = venueSelection;
-  }
+  const location = await resolveVenueLocation(supabase, formData, user.id);
 
   const { data: event, error } = await supabase
     .from("events")
@@ -55,6 +65,46 @@ export async function createEvent(formData: FormData) {
 
   revalidatePath("/eventos");
   return { eventId: event.id as string };
+}
+
+export async function updateEvent(eventId: string, formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const eventDate = String(formData.get("eventDate") ?? "");
+  const description = String(formData.get("description") ?? "").trim();
+  const hasFutbol = formData.get("hasFutbol") === "on";
+
+  if (!name) return { error: "Poné un nombre para el evento." };
+  if (!eventDate) return { error: "Elegí fecha y hora." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const location = await resolveVenueLocation(supabase, formData, user.id);
+
+  // La policy RLS "Quien creo el evento lo puede editar" (using created_by
+  // = auth.uid()) es la barrera real acá — igual que en deleteEvent, no se
+  // re-valida la autoría en la action, solo se oculta el formulario en la
+  // UI a quien no es el creador.
+  const { error } = await supabase
+    .from("events")
+    .update({
+      name,
+      event_date: new Date(eventDate).toISOString(),
+      location,
+      description: description || null,
+      has_futbol: hasFutbol,
+    })
+    .eq("id", eventId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  revalidatePath("/eventos");
+  revalidatePath("/");
+  return { ok: true };
 }
 
 export async function setRsvp(
@@ -165,6 +215,38 @@ export async function addEventMedia(eventId: string, storagePath: string) {
     uploaded_by: user.id,
     storage_path: storagePath,
   });
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+export async function upsertFutbolStats(eventId: string, formData: FormData) {
+  const resultado = String(formData.get("resultado") ?? "").trim();
+  const mvpUserId = String(formData.get("mvpUserId") ?? "").trim();
+  const goleadorUserId = String(formData.get("goleadorUserId") ?? "").trim();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  // Cualquier logueado puede cargar/corregir el resultado (policy RLS
+  // "using (true)" en el update) — mismo criterio de confianza total que
+  // el resto de la app, no solo el creador del evento.
+  const { error } = await supabase.from("futbol_stats").upsert(
+    {
+      event_id: eventId,
+      resultado: resultado || null,
+      mvp_user_id: mvpUserId || null,
+      goleador_user_id: goleadorUserId || null,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "event_id" },
+  );
 
   if (error) return { error: error.message };
 

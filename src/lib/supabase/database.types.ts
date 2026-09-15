@@ -15,6 +15,7 @@ export interface Database {
           name: string | null;
           avatar_url: string | null;
           created_at: string;
+          alias: string | null;
         };
         Insert: {
           id: string;
@@ -22,6 +23,7 @@ export interface Database {
           name?: string | null;
           avatar_url?: string | null;
           created_at?: string;
+          alias?: string | null;
         };
         Update: {
           id?: string;
@@ -29,6 +31,7 @@ export interface Database {
           name?: string | null;
           avatar_url?: string | null;
           created_at?: string;
+          alias?: string | null;
         };
         Relationships: [];
       };
@@ -295,6 +298,62 @@ export interface Database {
           {
             foreignKeyName: "venues_created_by_fkey";
             columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      futbol_stats: {
+        Row: {
+          event_id: string;
+          resultado: string | null;
+          mvp_user_id: string | null;
+          goleador_user_id: string | null;
+          updated_by: string;
+          updated_at: string;
+        };
+        Insert: {
+          event_id: string;
+          resultado?: string | null;
+          mvp_user_id?: string | null;
+          goleador_user_id?: string | null;
+          updated_by: string;
+          updated_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          resultado?: string | null;
+          mvp_user_id?: string | null;
+          goleador_user_id?: string | null;
+          updated_by?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "futbol_stats_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: true;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "futbol_stats_mvp_user_id_fkey";
+            columns: ["mvp_user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "futbol_stats_goleador_user_id_fkey";
+            columns: ["goleador_user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "futbol_stats_updated_by_fkey";
+            columns: ["updated_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];

@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { RsvpButtons } from "@/components/eventos/RsvpButtons";
 import { DeleteEventButton } from "./DeleteEventButton";
+import { EditEventForm } from "./EditEventForm";
+import { FutbolStatsForm } from "./FutbolStatsForm";
 import { UploadPhotoForm } from "./UploadPhotoForm";
 import { PhotoGrid } from "./PhotoGrid";
 
@@ -162,13 +164,15 @@ export default async function EventoPage({
     .join("\n");
   const whatsappShareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
-  const [{ data: rsvps }, { count: totalPeople }] = await Promise.all([
-    supabase
-      .from("event_rsvps")
-      .select("user_id, status, kind, profiles(name, email)")
-      .eq("event_id", eventId),
-    supabase.from("profiles").select("id", { count: "exact", head: true }),
-  ]);
+  const [{ data: rsvps }, { count: totalPeople }, { data: venues }] =
+    await Promise.all([
+      supabase
+        .from("event_rsvps")
+        .select("user_id, status, kind, profiles(name, email)")
+        .eq("event_id", eventId),
+      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      supabase.from("venues").select("id, name").order("name"),
+    ]);
 
   const allAttendees = (rsvps ?? []).map((r) => ({
     userId: r.user_id,
@@ -179,6 +183,34 @@ export default async function EventoPage({
 
   const attendeesJuntada = allAttendees.filter((a) => a.kind === "juntada");
   const attendeesFutbol = allAttendees.filter((a) => a.kind === "futbol");
+
+  // Estadísticas del partido: solo si el evento tiene fútbol. MVP y
+  // goleador se eligen entre quienes confirmaron "Voy" al fútbol.
+  let futbolStats: {
+    resultado: string | null;
+    mvpUserId: string | null;
+    goleadorUserId: string | null;
+  } | null = null;
+
+  if (event.has_futbol) {
+    const { data: statsRow } = await supabase
+      .from("futbol_stats")
+      .select("resultado, mvp_user_id, goleador_user_id")
+      .eq("event_id", eventId)
+      .maybeSingle();
+
+    if (statsRow) {
+      futbolStats = {
+        resultado: statsRow.resultado,
+        mvpUserId: statsRow.mvp_user_id,
+        goleadorUserId: statsRow.goleador_user_id,
+      };
+    }
+  }
+
+  const futbolCandidates = attendeesFutbol
+    .filter((a) => a.status === "yes")
+    .map((a) => ({ userId: a.userId, name: a.name }));
 
   const myStatus =
     (attendeesJuntada.find((a) => a.userId === user?.id)?.status as
@@ -214,6 +246,26 @@ export default async function EventoPage({
       signedUrls?.find((s) => s.path === m.storage_path)?.signedUrl ?? null,
   }));
 
+  const eventSummary = (
+    <>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-eventos">
+        Próximo evento
+      </p>
+      <h1 className="mt-1 font-heading text-2xl font-semibold text-foreground">
+        {event.name}
+      </h1>
+      <p className="mt-1 text-sm text-foreground/60">
+        {dateFormatter.format(new Date(event.event_date))}
+        {event.location ? ` · ${event.location}` : ""}
+      </p>
+      {event.description && (
+        <p className="mt-2 text-sm text-foreground/80">
+          {event.description}
+        </p>
+      )}
+    </>
+  );
+
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
       <Link href="/eventos" className="text-sm text-foreground/50 hover:underline">
@@ -221,20 +273,29 @@ export default async function EventoPage({
       </Link>
 
       <div className="animate-reveal bg-grain mt-3 rounded-2xl border border-surface-border bg-surface p-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-eventos">
-          Próximo evento
-        </p>
-        <h1 className="mt-1 font-heading text-2xl font-semibold text-foreground">
-          {event.name}
-        </h1>
-        <p className="mt-1 text-sm text-foreground/60">
-          {dateFormatter.format(new Date(event.event_date))}
-          {event.location ? ` · ${event.location}` : ""}
-        </p>
-        {event.description && (
-          <p className="mt-2 text-sm text-foreground/80">
-            {event.description}
-          </p>
+        {event.created_by === user?.id ? (
+          <EditEventForm
+            eventId={eventId}
+            venues={venues ?? []}
+            event={{
+              name: event.name,
+              // event_date es un ISO timestamp; los primeros 16 caracteres
+              // ("YYYY-MM-DDTHH:mm") son exactamente el formato que espera
+              // un <input type="datetime-local">. No se pasa por getters
+              // de Date porque esos dependen de la zona horaria del
+              // proceso que corre el código, y acá no hace falta: los
+              // dígitos guardados ya son los que se tipearon al crear el
+              // evento (ver decisión de zona horaria en specs/003-eventos.md).
+              eventDateLocal: event.event_date.slice(0, 16),
+              location: event.location,
+              description: event.description,
+              hasFutbol: event.has_futbol,
+            }}
+          >
+            {eventSummary}
+          </EditEventForm>
+        ) : (
+          eventSummary
         )}
         <a
           href={whatsappShareUrl}
@@ -259,14 +320,21 @@ export default async function EventoPage({
       />
 
       {event.has_futbol && (
-        <RsvpSection
-          title="⚽ ¿Jugás al fútbol?"
-          eventId={eventId}
-          kind="futbol"
-          myStatus={myFutbolStatus}
-          attendees={attendeesFutbol}
-          totalPeople={totalPeople ?? 0}
-        />
+        <>
+          <RsvpSection
+            title="⚽ ¿Jugás al fútbol?"
+            eventId={eventId}
+            kind="futbol"
+            myStatus={myFutbolStatus}
+            attendees={attendeesFutbol}
+            totalPeople={totalPeople ?? 0}
+          />
+          <FutbolStatsForm
+            eventId={eventId}
+            stats={futbolStats}
+            candidates={futbolCandidates}
+          />
+        </>
       )}
 
       <section className="mt-8">
