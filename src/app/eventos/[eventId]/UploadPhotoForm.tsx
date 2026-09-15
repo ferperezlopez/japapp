@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { addEventMedia } from "../actions";
+import { Spinner } from "@/components/ui/Spinner";
+import { resizeImage } from "@/lib/images/resizeImage";
 
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -34,13 +36,17 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
     }
 
     startTransition(async () => {
+      // Estas fotos alimentan la galería del evento y el carrusel de la
+      // landing — bajarlas a 1600px de lado más largo alcanza de sobra
+      // para pantalla y corta el peso de fotos de celular de varios MB.
+      const resized = await resizeImage(file, { maxDimension: 1600, quality: 0.82 });
       const supabase = createClient();
-      const ext = file.name.split(".").pop() || "jpg";
+      const ext = resized.name.split(".").pop() || "jpg";
       const path = `${eventId}/${crypto.randomUUID()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("event-photos")
-        .upload(path, file, { contentType: file.type });
+        .upload(path, resized, { contentType: resized.type });
 
       if (uploadError) {
         setError("No se pudo subir la foto.");
@@ -59,6 +65,7 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
           pending ? "pointer-events-none opacity-60" : ""
         }`}
       >
+        {pending && <Spinner />}
         {pending ? "Subiendo..." : "+ Subir foto"}
         <input
           type="file"

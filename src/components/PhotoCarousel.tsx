@@ -26,7 +26,7 @@ export function PhotoCarousel({ photoUrls }: { photoUrls: string[] }) {
       {photoUrls.map((url, i) => (
         <div
           key={url}
-          className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000"
+          className="absolute inset-0 bg-cover bg-center transition-opacity duration-[2200ms]"
           style={{ backgroundImage: `url(${url})`, opacity: i === index ? 1 : 0 }}
         />
       ))}

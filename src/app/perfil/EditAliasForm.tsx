@@ -38,7 +38,7 @@ export function EditAliasForm({ defaultAlias }: { defaultAlias: string }) {
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" loading={pending}>
           {pending ? "Guardando..." : "Guardar"}
         </Button>
         {saved && <p className="text-sm text-eventos">Guardado.</p>}

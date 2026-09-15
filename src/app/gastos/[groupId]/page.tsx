@@ -157,10 +157,13 @@ export default async function GroupPage({
               key={b.userId}
               className="flex items-center justify-between text-sm"
             >
-              <span className="flex items-center gap-1.5 text-foreground/80">
+              <Link
+                href={`/perfil/${b.userId}`}
+                className="flex items-center gap-1.5 text-foreground/80 hover:underline"
+              >
                 <Avatar src={memberAvatar(b.userId)} name={memberName(b.userId)} size="sm" />
                 {memberName(b.userId)}
-              </span>
+              </Link>
               {b.balance > 0 ? (
                 <span className="rounded-full bg-eventos-soft px-2.5 py-0.5 text-xs font-medium text-eventos-ink">
                   +${b.balance.toFixed(2)}
@@ -185,14 +188,26 @@ export default async function GroupPage({
             </h3>
             <ul className="mt-2 space-y-1 text-foreground/80">
               {settlements.map((s, i) => (
-                <li key={i} className="flex items-center gap-1.5">
-                  <Avatar src={memberAvatar(s.from)} name={memberName(s.from)} size="sm" />
-                  {memberName(s.from)} le paga{" "}
+                <li key={i} className="flex flex-wrap items-center gap-1.5">
+                  <Link
+                    href={`/perfil/${s.from}`}
+                    className="inline-flex items-center gap-1.5 hover:underline"
+                  >
+                    <Avatar src={memberAvatar(s.from)} name={memberName(s.from)} size="sm" />
+                    {memberName(s.from)}
+                  </Link>{" "}
+                  le paga{" "}
                   <span className="font-medium tabular-nums">
                     ${s.amount.toFixed(2)}
                   </span>{" "}
-                  a <Avatar src={memberAvatar(s.to)} name={memberName(s.to)} size="sm" />
-                  {memberName(s.to)}
+                  a{" "}
+                  <Link
+                    href={`/perfil/${s.to}`}
+                    className="inline-flex items-center gap-1.5 hover:underline"
+                  >
+                    <Avatar src={memberAvatar(s.to)} name={memberName(s.to)} size="sm" />
+                    {memberName(s.to)}
+                  </Link>
                   {memberAlias(s.to) && (
                     <span className="text-foreground/50">
                       {" "}
@@ -210,12 +225,14 @@ export default async function GroupPage({
         <h2 className="text-sm font-medium text-foreground/50">Miembros</h2>
         <ul className="mt-2 flex flex-wrap gap-2">
           {members.map((m) => (
-            <li
-              key={m.id}
-              className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
-            >
-              <Avatar src={m.avatar_url} name={m.name ?? m.email} size="sm" />
-              {m.name ?? m.email}
+            <li key={m.id}>
+              <Link
+                href={`/perfil/${m.id}`}
+                className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80 transition-colors duration-200 hover:bg-surface-border"
+              >
+                <Avatar src={m.avatar_url} name={m.name ?? m.email} size="sm" />
+                {m.name ?? m.email}
+              </Link>
             </li>
           ))}
         </ul>
