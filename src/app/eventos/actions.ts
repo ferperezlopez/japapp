@@ -222,6 +222,38 @@ export async function addEventMedia(eventId: string, storagePath: string) {
   return { ok: true };
 }
 
+export async function upsertFutbolStats(eventId: string, formData: FormData) {
+  const resultado = String(formData.get("resultado") ?? "").trim();
+  const mvpUserId = String(formData.get("mvpUserId") ?? "").trim();
+  const goleadorUserId = String(formData.get("goleadorUserId") ?? "").trim();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  // Cualquier logueado puede cargar/corregir el resultado (policy RLS
+  // "using (true)" en el update) — mismo criterio de confianza total que
+  // el resto de la app, no solo el creador del evento.
+  const { error } = await supabase.from("futbol_stats").upsert(
+    {
+      event_id: eventId,
+      resultado: resultado || null,
+      mvp_user_id: mvpUserId || null,
+      goleador_user_id: goleadorUserId || null,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "event_id" },
+  );
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
 export async function deleteEventMedia(
   eventId: string,
   mediaId: string,

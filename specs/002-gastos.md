@@ -7,7 +7,7 @@
   (endurecimiento de `is_group_member`), `supabase/migrations/0004_event_groups_and_media.sql`
   (relaja el SELECT de este esquema para grupos enlazados a un evento — ver
   `specs/004-eventos-gastos-y-fotos.md`)
-- **Última actualización:** 2026-09-14
+- **Última actualización:** 2026-09-15
 
 ## 1. Resumen
 
@@ -23,7 +23,10 @@ transferencias posible.
 - Agregar miembros a un grupo por email, solo si esa persona ya inició
   sesión al menos una vez en JAPapp (existe su `profiles` row).
 - Cargar un gasto: descripción, monto, quién pagó, fecha, entre quiénes
-  se divide.
+  se divide. Quién pagó y entre quiénes se divide puede ser **cualquier
+  persona registrada en la app**, no solo miembros formales del grupo
+  (ver changelog 2026-09-15) — quien *carga* el gasto sí sigue
+  necesitando ser miembro real.
 - División **igualitaria** entre los participantes elegidos, repartiendo
   el resto de centavos (por redondeo) entre los primeros N participantes.
 - Cálculo de balances por miembro (cuánto puso vs. cuánto le corresponde).
@@ -75,11 +78,20 @@ Puntos que el SQL no explica por sí solo:
    orden de la lista). El formulario (`AddExpenseForm`) solo se muestra si
    `canAddExpense` (el usuario logueado es miembro del grupo) — si no, un
    mensaje invita a sumarse. Igual que en `deleteExpense`, la barrera real
-   es la policy RLS de insert; esto es UX, no la única protección.
+   es la policy RLS de insert; esto es UX, no la única protección. Ni la
+   policy de insert de `expenses` ni la action restringen `paid_by` o los
+   `participants` a miembros formales — nunca lo hicieron —, así que
+   ampliar esos selectores en la UI (2026-09-15) no necesitó ningún
+   cambio de RLS.
 4. En `/gastos/[groupId]`, `calcularBalances()` y `simplificarDeudas()`
    (`src/lib/gastos/balances.ts`) corren en cada render del server
    component sobre los `expenses`/`expense_shares` traídos de Supabase —
-   no hay balance persistido ni cacheado.
+   no hay balance persistido ni cacheado. El "universo" que se le pasa a
+   `calcularBalances()` es la unión de los miembros formales del grupo y
+   cualquier `user_id` que ya aparezca pagando o participando en un gasto
+   de ese grupo — necesario porque la función solo devuelve balance para
+   los ids que se le pasan, y ahora un gasto puede involucrar a alguien
+   que no es miembro formal.
 5. `deleteExpense(groupId, expenseId)` borra el gasto; la autorización
    ("solo quien lo creó") a nivel aplicación NO se re-valida en la server
    action — se apoya enteramente en la policy RLS `"Quien creo el gasto
@@ -111,6 +123,13 @@ Puntos que el SQL no explica por sí solo:
 - [x] El formulario de carga de gasto no se muestra a un usuario logueado
       que no es miembro del grupo (aplica sobre todo a grupos enlazados a
       un evento, visibles a cualquiera desde `004`).
+- [x] Los selectores de "pagó" y "se divide entre" listan a cualquier
+      persona registrada en la app, no solo a los miembros formales del
+      grupo; los miembros formales vienen pre-tildados en "se divide
+      entre", el resto no.
+- [x] Un gasto pagado o dividido con alguien que no es miembro formal
+      igual aparece correctamente en Balances y en "Para saldar cuentas"
+      (no se pierde esa plata del cálculo).
 
 ## 6. Decisiones y tradeoffs
 
@@ -121,6 +140,7 @@ Puntos que el SQL no explica por sí solo:
 | Autorización de borrado enforced solo vía RLS, sin re-chequeo en la server action | Validar `created_by === user.id` también en `deleteExpense()` antes del delete | RLS es la fuente de verdad única; duplicar el chequeo en la action es redundante y puede desincronizarse de la policy real. Tradeoff aceptado: si la policy tuviera un bug, la action no sería una segunda barrera. |
 | `is_group_member()` movida a schema `private`, no `public` | Dejarla en `public` con `revoke execute from anon` | `private` la saca por completo del surface de PostgREST/RPC en vez de solo restringir permisos, siguiendo la recomendación del linter de seguridad de Supabase. |
 | Balances y simplificación de deudas calculados en TypeScript en cada request, no persistidos | Vista materializada o columna `balance` mantenida por trigger | Dataset chico (grupo de amigos), sin problema de performance; evita mantener estado derivado sincronizado con cada insert/delete de gasto. |
+| "Pagó"/"se divide entre" abiertos a cualquier persona de la app, no solo miembros formales | Restringir esos selectores a `group_members`, igual que antes | Pedido explícito del usuario ("para que cualquiera pueda cargar gastos de cualquiera"); quien *carga* el gasto sigue necesitando ser miembro real, mismo criterio de confianza total que ya usa Eventos. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -136,6 +156,13 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-15: `AddExpenseForm` amplió "pagó" y "se divide entre" de
+  `members` (miembros formales del grupo) a `people` (cualquier
+  `profiles` de la app), a pedido explícito del usuario. Ningún cambio de
+  RLS: la policy de insert de `expenses`/`expense_shares` nunca restringió
+  esos valores, solo la UI lo hacía. `/gastos/[groupId]` ajustó el
+  universo de `calcularBalances()` para no perder el balance de alguien
+  que participa en un gasto sin ser miembro formal.
 - 2026-09-14: `/gastos/[groupId]` gatea el formulario de carga de gasto por
   `canAddExpense` (ser miembro del grupo) — antes se mostraba siempre, sin
   condición. Se agregó al sacar el widget de gastos embebido de

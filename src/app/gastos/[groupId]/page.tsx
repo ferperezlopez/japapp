@@ -25,19 +25,26 @@ export default async function GroupPage({
 
   if (!group) notFound();
 
-  const { data: membershipRows } = await supabase
-    .from("group_members")
-    .select("user_id, profiles(id, name, email)")
-    .eq("group_id", groupId);
+  const [{ data: membershipRows }, { data: allProfiles }] = await Promise.all([
+    supabase
+      .from("group_members")
+      .select("user_id, profiles(id, name, email)")
+      .eq("group_id", groupId),
+    supabase.from("profiles").select("id, name, email, alias").order("name"),
+  ]);
 
   const members = (membershipRows ?? [])
     .map((row) => row.profiles)
     .filter((p): p is { id: string; name: string | null; email: string } => !!p);
 
+  const profiles = allProfiles ?? [];
+
   const memberName = (id: string) =>
-    members.find((m) => m.id === id)?.name ??
-    members.find((m) => m.id === id)?.email ??
+    profiles.find((p) => p.id === id)?.name ??
+    profiles.find((p) => p.id === id)?.email ??
     "Desconocido";
+
+  const memberAlias = (id: string) => profiles.find((p) => p.id === id)?.alias;
 
   const { data: expenses } = await supabase
     .from("expenses")
@@ -48,8 +55,24 @@ export default async function GroupPage({
     .order("expense_date", { ascending: false })
     .order("created_at", { ascending: false });
 
+  // El universo de balances es "miembros formales" + cualquiera que ya
+  // aparezca pagando o participando de un gasto de este grupo — desde que
+  // el selector de "pagó"/"participantes" en AddExpenseForm dejó de estar
+  // limitado a los miembros formales (ver specs/002-gastos.md), alguien
+  // puede aparecer en un gasto sin ser "miembro". Sin esto, calcularBalances
+  // perdería silenciosamente esa plata (solo devuelve balance para los ids
+  // que se le pasan).
+  const relevantIds = new Set(members.map((m) => m.id));
+  for (const e of expenses ?? []) {
+    relevantIds.add(e.paid_by);
+    for (const s of e.expense_shares) relevantIds.add(s.user_id);
+  }
+  const balanceMemberIds = profiles
+    .filter((p) => relevantIds.has(p.id))
+    .map((p) => p.id);
+
   const balances = calcularBalances(
-    members.map((m) => m.id),
+    balanceMemberIds,
     (expenses ?? []).map((e) => ({
       paidBy: e.paid_by,
       shares: e.expense_shares.map((s) => ({
@@ -117,6 +140,12 @@ export default async function GroupPage({
                     ${s.amount.toFixed(2)}
                   </span>{" "}
                   a {memberName(s.to)}
+                  {memberAlias(s.to) && (
+                    <span className="text-foreground/50">
+                      {" "}
+                      (alias: {memberAlias(s.to)})
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -145,7 +174,11 @@ export default async function GroupPage({
         <h2 className="text-sm font-medium text-foreground/50">Agregar gasto</h2>
         <div className="mt-2">
           {canAddExpense ? (
-            <AddExpenseForm groupId={groupId} members={members} />
+            <AddExpenseForm
+              groupId={groupId}
+              people={profiles}
+              defaultParticipantIds={members.map((m) => m.id)}
+            />
           ) : (
             <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
               Necesitás ser parte de este grupo para cargar un gasto.

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { RsvpButtons } from "@/components/eventos/RsvpButtons";
 import { DeleteEventButton } from "./DeleteEventButton";
 import { EditEventForm } from "./EditEventForm";
+import { FutbolStatsForm } from "./FutbolStatsForm";
 import { UploadPhotoForm } from "./UploadPhotoForm";
 import { PhotoGrid } from "./PhotoGrid";
 
@@ -183,6 +184,34 @@ export default async function EventoPage({
   const attendeesJuntada = allAttendees.filter((a) => a.kind === "juntada");
   const attendeesFutbol = allAttendees.filter((a) => a.kind === "futbol");
 
+  // Estadísticas del partido: solo si el evento tiene fútbol. MVP y
+  // goleador se eligen entre quienes confirmaron "Voy" al fútbol.
+  let futbolStats: {
+    resultado: string | null;
+    mvpUserId: string | null;
+    goleadorUserId: string | null;
+  } | null = null;
+
+  if (event.has_futbol) {
+    const { data: statsRow } = await supabase
+      .from("futbol_stats")
+      .select("resultado, mvp_user_id, goleador_user_id")
+      .eq("event_id", eventId)
+      .maybeSingle();
+
+    if (statsRow) {
+      futbolStats = {
+        resultado: statsRow.resultado,
+        mvpUserId: statsRow.mvp_user_id,
+        goleadorUserId: statsRow.goleador_user_id,
+      };
+    }
+  }
+
+  const futbolCandidates = attendeesFutbol
+    .filter((a) => a.status === "yes")
+    .map((a) => ({ userId: a.userId, name: a.name }));
+
   const myStatus =
     (attendeesJuntada.find((a) => a.userId === user?.id)?.status as
       | "yes"
@@ -291,14 +320,21 @@ export default async function EventoPage({
       />
 
       {event.has_futbol && (
-        <RsvpSection
-          title="⚽ ¿Jugás al fútbol?"
-          eventId={eventId}
-          kind="futbol"
-          myStatus={myFutbolStatus}
-          attendees={attendeesFutbol}
-          totalPeople={totalPeople ?? 0}
-        />
+        <>
+          <RsvpSection
+            title="⚽ ¿Jugás al fútbol?"
+            eventId={eventId}
+            kind="futbol"
+            myStatus={myFutbolStatus}
+            attendees={attendeesFutbol}
+            totalPeople={totalPeople ?? 0}
+          />
+          <FutbolStatsForm
+            eventId={eventId}
+            stats={futbolStats}
+            candidates={futbolCandidates}
+          />
+        </>
       )}
 
       <section className="mt-8">

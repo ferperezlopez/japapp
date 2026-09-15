@@ -34,6 +34,26 @@ export function Header({ user }: { user: User | null }) {
           </Link>
           <ShareButton />
           {user && (
+            <Link
+              href="/perfil"
+              className="rounded-full p-2 text-foreground/50 transition-colors duration-200 hover:bg-surface hover:text-foreground"
+              aria-label="Mi perfil"
+              title="Mi perfil"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.75}
+                className="h-5 w-5"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="8.25" r="3.25" />
+                <path strokeLinecap="round" d="M4.75 19c1-3.2 4-5 7.25-5s6.25 1.8 7.25 5" />
+              </svg>
+            </Link>
+          )}
+          {user && (
             <form action={signOut}>
               <button
                 type="submit"

@@ -133,4 +133,7 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-15: `specs/010-estadisticas-de-partidos.md` agregó carga de
+  resultado/MVP/goleador dentro de la sección de fútbol de
+  `/eventos/[eventId]` (tabla `futbol_stats` nueva).
 - 2026-09-14: creada e implementada.

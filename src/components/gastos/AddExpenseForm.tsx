@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { addExpense } from "@/app/gastos/actions";
 import { Button } from "@/components/ui/Button";
 
-interface Member {
+interface Person {
   id: string;
   name: string | null;
   email: string;
@@ -12,10 +12,20 @@ interface Member {
 
 export function AddExpenseForm({
   groupId,
-  members,
+  people,
+  defaultParticipantIds,
 }: {
   groupId: string;
-  members: Member[];
+  // Cualquier persona registrada en la app puede figurar como quien pagó o
+  // como participante de un gasto, no solo los miembros formales del grupo
+  // (ver specs/002-gastos.md) — quien carga el gasto sigue necesitando ser
+  // miembro real, eso lo gatea la página, no este formulario.
+  people: Person[];
+  // Quiénes vienen pre-tildados en "Se divide entre": los miembros
+  // formales del grupo. El resto de la gente igual aparece en la lista,
+  // pero hay que tildarla a mano — no queremos que sumar a alguien nuevo
+  // al selector lo meta sin querer en la división de todos los gastos.
+  defaultParticipantIds: string[];
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -64,11 +74,15 @@ export function AddExpenseForm({
           <select
             name="paidBy"
             required
+            defaultValue=""
             className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           >
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name ?? m.email}
+            <option value="" disabled>
+              Elegí quién pagó
+            </option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name ?? p.email}
               </option>
             ))}
           </select>
@@ -91,18 +105,18 @@ export function AddExpenseForm({
           Se divide entre
         </label>
         <div className="mt-2 flex flex-wrap gap-3">
-          {members.map((m) => (
+          {people.map((p) => (
             <label
-              key={m.id}
+              key={p.id}
               className="flex items-center gap-1.5 text-sm text-foreground/80"
             >
               <input
                 type="checkbox"
                 name="participants"
-                value={m.id}
-                defaultChecked
+                value={p.id}
+                defaultChecked={defaultParticipantIds.includes(p.id)}
               />
-              {m.name ?? m.email}
+              {p.name ?? p.email}
             </label>
           ))}
         </div>
