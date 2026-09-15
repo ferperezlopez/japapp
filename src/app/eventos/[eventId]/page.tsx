@@ -113,11 +113,16 @@ function RsvpSection({
                 {people.map((p, index) => (
                   <li
                     key={p.userId}
-                    className="animate-reveal flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
+                    className="animate-reveal"
                     style={{ animationDelay: `${index * 40}ms` }}
                   >
-                    <Avatar src={p.avatarUrl} name={p.name} size="sm" />
-                    {p.name}
+                    <Link
+                      href={`/perfil/${p.userId}`}
+                      className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80 transition-colors duration-200 hover:bg-surface-border"
+                    >
+                      <Avatar src={p.avatarUrl} name={p.name} size="sm" />
+                      {p.name}
+                    </Link>
                   </li>
                 ))}
                 {people.length === 0 && (
