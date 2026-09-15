@@ -125,7 +125,7 @@ export function AddExpenseForm({
         </div>
       </div>
 
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" loading={pending}>
         {pending ? "Guardando..." : "Agregar gasto"}
       </Button>
       {error && (

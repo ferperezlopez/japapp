@@ -172,7 +172,7 @@ export function FutbolStatsForm({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" loading={pending}>
           {pending ? "Guardando..." : "Guardar"}
         </Button>
         <button

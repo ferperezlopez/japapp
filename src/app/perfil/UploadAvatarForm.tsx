@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ZoomableAvatar } from "@/components/ui/ZoomableAvatar";
+import { Spinner } from "@/components/ui/Spinner";
+import { resizeImage } from "@/lib/images/resizeImage";
 import { updateAvatar } from "./actions";
 
 const ALLOWED_TYPES = [
@@ -44,6 +46,11 @@ export function UploadAvatarForm({
     }
 
     startTransition(async () => {
+      // Un avatar nunca se muestra a más de 64px en la app — bajarlo a
+      // 320px de lado evita mandar fotos de varios MB por una imagen que
+      // termina chiquita, sin resignar nitidez.
+      const resized = await resizeImage(file, { maxDimension: 320, quality: 0.82 });
+
       const supabase = createClient();
       // Path fijo por usuario (sin extensión) + upsert: reemplazar el
       // avatar nunca deja archivos huérfanos en el bucket.
@@ -51,7 +58,7 @@ export function UploadAvatarForm({
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, file, { contentType: file.type, upsert: true });
+        .upload(path, resized, { contentType: resized.type, upsert: true });
 
       if (uploadError) {
         setError("No se pudo subir la foto.");
@@ -80,6 +87,7 @@ export function UploadAvatarForm({
             pending ? "pointer-events-none opacity-60" : ""
           }`}
         >
+          {pending && <Spinner />}
           {pending ? "Subiendo..." : "Cambiar foto"}
           <input
             type="file"

@@ -32,7 +32,7 @@ export function CreateGroupForm() {
           required
           className="flex-1 rounded-lg border border-surface-border bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-gastos"
         />
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" loading={pending}>
           {pending ? "Creando..." : "Crear grupo"}
         </Button>
       </div>
