@@ -181,6 +181,10 @@ completo (triggers, policies, bucket). Lo que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-15: `specs/011-fotos-legacy-y-carrusel.md` agregó
+  `event_media.legacy` (con backfill de una sola vez para las fotos ya
+  cargadas) y usó esta misma tabla, sin filtro de evento, como fuente
+  del carrusel de fotos de la landing.
 - 2026-09-14: se sacaron los gastos embebidos de `/eventos/[eventId]`
   (`GastosEmbed` borrado) a pedido explícito del usuario ("debería haber un
   link a la lista de gastos, pero no un formulario para cargarlos ahí,
