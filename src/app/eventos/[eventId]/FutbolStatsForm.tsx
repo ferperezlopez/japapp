@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { upsertFutbolStats } from "../actions";
 import { Button } from "@/components/ui/Button";
@@ -57,10 +58,13 @@ export function FutbolStatsForm({
               <p className="flex items-center gap-1.5">
                 <span className="text-foreground/50">MVP:</span>{" "}
                 {mvp ? (
-                  <>
+                  <Link
+                    href={`/perfil/${mvp.userId}`}
+                    className="inline-flex items-center gap-1.5 hover:underline"
+                  >
                     <Avatar src={mvp.avatarUrl} name={mvp.name} size="sm" />
                     {mvp.name}
-                  </>
+                  </Link>
                 ) : (
                   "—"
                 )}
@@ -70,14 +74,17 @@ export function FutbolStatsForm({
               <p className="flex items-center gap-1.5">
                 <span className="text-foreground/50">Goleador:</span>{" "}
                 {goleador ? (
-                  <>
+                  <Link
+                    href={`/perfil/${goleador.userId}`}
+                    className="inline-flex items-center gap-1.5 hover:underline"
+                  >
                     <Avatar
                       src={goleador.avatarUrl}
                       name={goleador.name}
                       size="sm"
                     />
                     {goleador.name}
-                  </>
+                  </Link>
                 ) : (
                   "—"
                 )}
