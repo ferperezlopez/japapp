@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/ui/Avatar";
+import { ImageZoomModal } from "@/components/ui/ImageZoomModal";
 import { updateAvatar } from "./actions";
 
 const ALLOWED_TYPES = [
@@ -26,6 +27,7 @@ export function UploadAvatarForm({
   const [preview, setPreview] = useState(avatarUrl);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [zoomOpen, setZoomOpen] = useState(false);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -73,7 +75,18 @@ export function UploadAvatarForm({
 
   return (
     <div className="flex items-center gap-4">
-      <Avatar src={preview} name={name} size="lg" />
+      {preview ? (
+        <button
+          type="button"
+          onClick={() => setZoomOpen(true)}
+          aria-label="Ver foto de perfil ampliada"
+          className="shrink-0 rounded-full transition-opacity duration-200 hover:opacity-80"
+        >
+          <Avatar src={preview} name={name} size="lg" />
+        </button>
+      ) : (
+        <Avatar src={preview} name={name} size="lg" />
+      )}
       <div>
         <label
           className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-surface-border px-4 py-2 text-sm font-medium text-foreground/70 transition-colors duration-200 hover:bg-surface ${
@@ -93,6 +106,13 @@ export function UploadAvatarForm({
           <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
       </div>
+      {zoomOpen && preview && (
+        <ImageZoomModal
+          src={preview}
+          alt={name ? `Foto de perfil de ${name}` : "Foto de perfil"}
+          onClose={() => setZoomOpen(false)}
+        />
+      )}
     </div>
   );
 }
