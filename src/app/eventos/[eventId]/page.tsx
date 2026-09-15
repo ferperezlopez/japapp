@@ -8,6 +8,7 @@ import { EditEventForm } from "./EditEventForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
 import { UploadPhotoForm } from "./UploadPhotoForm";
 import { PhotoGrid } from "./PhotoGrid";
+import { Avatar } from "@/components/ui/Avatar";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "long",
@@ -23,7 +24,12 @@ const GROUPS: { status: "yes" | "maybe" | "no"; label: string }[] = [
   { status: "no", label: "No van" },
 ];
 
-type Attendee = { userId: string; status: string; name: string };
+type Attendee = {
+  userId: string;
+  status: string;
+  name: string;
+  avatarUrl: string | null;
+};
 
 // Barra apilada Van/Tal vez/No van sobre el total de amigos registrados en
 // la app (no solo sobre quienes ya respondieron) — da una noción real de
@@ -107,9 +113,10 @@ function RsvpSection({
                 {people.map((p, index) => (
                   <li
                     key={p.userId}
-                    className="animate-reveal rounded-full bg-surface px-3 py-1 text-xs text-foreground/80"
+                    className="animate-reveal flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
                     style={{ animationDelay: `${index * 40}ms` }}
                   >
+                    <Avatar src={p.avatarUrl} name={p.name} size="sm" />
                     {p.name}
                   </li>
                 ))}
@@ -168,7 +175,7 @@ export default async function EventoPage({
     await Promise.all([
       supabase
         .from("event_rsvps")
-        .select("user_id, status, kind, profiles(name, email)")
+        .select("user_id, status, kind, profiles(name, email, avatar_url)")
         .eq("event_id", eventId),
       supabase.from("profiles").select("id", { count: "exact", head: true }),
       supabase.from("venues").select("id, name").order("name"),
@@ -179,6 +186,7 @@ export default async function EventoPage({
     status: r.status,
     kind: r.kind,
     name: r.profiles?.name ?? r.profiles?.email ?? "Desconocido",
+    avatarUrl: r.profiles?.avatar_url ?? null,
   }));
 
   const attendeesJuntada = allAttendees.filter((a) => a.kind === "juntada");
@@ -210,7 +218,7 @@ export default async function EventoPage({
 
   const futbolCandidates = attendeesFutbol
     .filter((a) => a.status === "yes")
-    .map((a) => ({ userId: a.userId, name: a.name }));
+    .map((a) => ({ userId: a.userId, name: a.name, avatarUrl: a.avatarUrl }));
 
   const myStatus =
     (attendeesJuntada.find((a) => a.userId === user?.id)?.status as

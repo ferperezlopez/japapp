@@ -3,10 +3,12 @@
 import { useState, useTransition } from "react";
 import { upsertFutbolStats } from "../actions";
 import { Button } from "@/components/ui/Button";
+import { Avatar } from "@/components/ui/Avatar";
 
 interface Candidate {
   userId: string;
   name: string;
+  avatarUrl: string | null;
 }
 
 interface Stats {
@@ -28,14 +30,17 @@ export function FutbolStatsForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const candidateName = (id: string | null) =>
-    candidates.find((c) => c.userId === id)?.name;
+  const findCandidate = (id: string | null) =>
+    candidates.find((c) => c.userId === id);
 
   const hasStats = !!(
     stats?.resultado ||
     stats?.mvpUserId ||
     stats?.goleadorUserId
   );
+
+  const mvp = findCandidate(stats?.mvpUserId ?? null);
+  const goleador = findCandidate(stats?.goleadorUserId ?? null);
 
   if (!open) {
     return (
@@ -49,15 +54,33 @@ export function FutbolStatsForm({
               </p>
             )}
             {stats?.mvpUserId && (
-              <p>
+              <p className="flex items-center gap-1.5">
                 <span className="text-foreground/50">MVP:</span>{" "}
-                {candidateName(stats.mvpUserId) ?? "—"}
+                {mvp ? (
+                  <>
+                    <Avatar src={mvp.avatarUrl} name={mvp.name} size="sm" />
+                    {mvp.name}
+                  </>
+                ) : (
+                  "—"
+                )}
               </p>
             )}
             {stats?.goleadorUserId && (
-              <p>
+              <p className="flex items-center gap-1.5">
                 <span className="text-foreground/50">Goleador:</span>{" "}
-                {candidateName(stats.goleadorUserId) ?? "—"}
+                {goleador ? (
+                  <>
+                    <Avatar
+                      src={goleador.avatarUrl}
+                      name={goleador.name}
+                      size="sm"
+                    />
+                    {goleador.name}
+                  </>
+                ) : (
+                  "—"
+                )}
               </p>
             )}
           </div>

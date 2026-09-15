@@ -41,6 +41,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const { data: profile } = user
+    ? await supabase
+        .from("profiles")
+        .select("name, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
+
   return (
     <html
       lang="es"
@@ -48,7 +56,14 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <NavigationProgress />
-        <Header user={user} />
+        <Header
+          user={user}
+          profile={
+            profile
+              ? { name: profile.name, avatarUrl: profile.avatar_url }
+              : null
+          }
+        />
         <div className={`flex flex-1 flex-col ${user ? "pb-16" : ""}`}>
           {children}
         </div>
