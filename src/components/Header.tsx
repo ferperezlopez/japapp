@@ -2,8 +2,15 @@ import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { signOut } from "@/app/actions/auth";
 import { ShareButton } from "@/components/ShareButton";
+import { Avatar } from "@/components/ui/Avatar";
 
-export function Header({ user }: { user: User | null }) {
+export function Header({
+  user,
+  profile,
+}: {
+  user: User | null;
+  profile?: { name: string | null; avatarUrl: string | null } | null;
+}) {
   return (
     <header className="border-b border-surface-border">
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
@@ -40,17 +47,21 @@ export function Header({ user }: { user: User | null }) {
               aria-label="Mi perfil"
               title="Mi perfil"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.75}
-                className="h-5 w-5"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="8.25" r="3.25" />
-                <path strokeLinecap="round" d="M4.75 19c1-3.2 4-5 7.25-5s6.25 1.8 7.25 5" />
-              </svg>
+              {profile?.avatarUrl ? (
+                <Avatar src={profile.avatarUrl} name={profile.name} size="sm" />
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.75}
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="8.25" r="3.25" />
+                  <path strokeLinecap="round" d="M4.75 19c1-3.2 4-5 7.25-5s6.25 1.8 7.25 5" />
+                </svg>
+              )}
             </Link>
           )}
           {user && (

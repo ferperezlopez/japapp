@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
 import { Card } from "@/components/ui/Card";
+import { Avatar } from "@/components/ui/Avatar";
 import { AddMemberForm } from "./AddMemberForm";
 import { AddExpenseForm } from "@/components/gastos/AddExpenseForm";
 import { DeleteExpenseButton } from "@/components/gastos/DeleteExpenseButton";
@@ -42,9 +43,12 @@ export default async function GroupPage({
     await Promise.all([
       supabase
         .from("group_members")
-        .select("user_id, profiles(id, name, email)")
+        .select("user_id, profiles(id, name, email, avatar_url)")
         .eq("group_id", groupId),
-      supabase.from("profiles").select("id, name, email, alias").order("name"),
+      supabase
+        .from("profiles")
+        .select("id, name, email, alias, avatar_url")
+        .order("name"),
       linkedEvent
         ? supabase
             .from("event_rsvps")
@@ -56,7 +60,16 @@ export default async function GroupPage({
 
   const members = (membershipRows ?? [])
     .map((row) => row.profiles)
-    .filter((p): p is { id: string; name: string | null; email: string } => !!p);
+    .filter(
+      (
+        p,
+      ): p is {
+        id: string;
+        name: string | null;
+        email: string;
+        avatar_url: string | null;
+      } => !!p,
+    );
 
   const profiles = allProfiles ?? [];
 
@@ -80,6 +93,9 @@ export default async function GroupPage({
     "Desconocido";
 
   const memberAlias = (id: string) => profiles.find((p) => p.id === id)?.alias;
+
+  const memberAvatar = (id: string) =>
+    profiles.find((p) => p.id === id)?.avatar_url ?? null;
 
   const { data: expenses } = await supabase
     .from("expenses")
@@ -141,7 +157,8 @@ export default async function GroupPage({
               key={b.userId}
               className="flex items-center justify-between text-sm"
             >
-              <span className="text-foreground/80">
+              <span className="flex items-center gap-1.5 text-foreground/80">
+                <Avatar src={memberAvatar(b.userId)} name={memberName(b.userId)} size="sm" />
                 {memberName(b.userId)}
               </span>
               {b.balance > 0 ? (
@@ -168,12 +185,14 @@ export default async function GroupPage({
             </h3>
             <ul className="mt-2 space-y-1 text-foreground/80">
               {settlements.map((s, i) => (
-                <li key={i}>
+                <li key={i} className="flex items-center gap-1.5">
+                  <Avatar src={memberAvatar(s.from)} name={memberName(s.from)} size="sm" />
                   {memberName(s.from)} le paga{" "}
                   <span className="font-medium tabular-nums">
                     ${s.amount.toFixed(2)}
                   </span>{" "}
-                  a {memberName(s.to)}
+                  a <Avatar src={memberAvatar(s.to)} name={memberName(s.to)} size="sm" />
+                  {memberName(s.to)}
                   {memberAlias(s.to) && (
                     <span className="text-foreground/50">
                       {" "}
@@ -193,8 +212,9 @@ export default async function GroupPage({
           {members.map((m) => (
             <li
               key={m.id}
-              className="rounded-full bg-surface px-3 py-1 text-xs text-foreground/80"
+              className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
             >
+              <Avatar src={m.avatar_url} name={m.name ?? m.email} size="sm" />
               {m.name ?? m.email}
             </li>
           ))}

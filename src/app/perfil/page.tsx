@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { EditAliasForm } from "./EditAliasForm";
+import { UploadAvatarForm } from "./UploadAvatarForm";
 
 export default async function PerfilPage() {
   const supabase = await createClient();
@@ -19,7 +20,7 @@ export default async function PerfilPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, email, alias")
+    .select("name, email, alias, avatar_url")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -33,7 +34,12 @@ export default async function PerfilPage() {
       </h1>
 
       <div className="mt-6 rounded-xl border border-surface-border bg-surface p-5">
-        <p className="text-sm font-medium text-foreground">
+        <UploadAvatarForm
+          userId={user.id}
+          name={profile?.name ?? null}
+          avatarUrl={profile?.avatar_url ?? null}
+        />
+        <p className="mt-4 text-sm font-medium text-foreground">
           {profile?.name ?? profile?.email}
         </p>
         <p className="text-xs text-foreground/50">{profile?.email}</p>

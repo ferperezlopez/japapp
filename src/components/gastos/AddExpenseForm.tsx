@@ -3,11 +3,13 @@
 import { useState, useTransition } from "react";
 import { addExpense } from "@/app/gastos/actions";
 import { Button } from "@/components/ui/Button";
+import { Avatar } from "@/components/ui/Avatar";
 
 interface Person {
   id: string;
   name: string | null;
   email: string;
+  avatar_url: string | null;
 }
 
 export function AddExpenseForm({
@@ -116,6 +118,7 @@ export function AddExpenseForm({
                 value={p.id}
                 defaultChecked={defaultParticipantIds.includes(p.id)}
               />
+              <Avatar src={p.avatar_url} name={p.name ?? p.email} size="sm" />
               {p.name ?? p.email}
             </label>
           ))}
