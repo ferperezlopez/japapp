@@ -35,8 +35,10 @@ ya se confirma quién juega.
   una) — se evaluó y se descartó para esta iteración a favor de un campo
   simple.
 - Resultado estructurado por equipos (ej. "Equipo A" vs "Equipo B" con
-  nombres) — no hay concepto de equipos en la app, así que "resultado" es
-  texto libre (ej. "5 - 3").
+  nombres) — `resultado` sigue siendo texto libre (ej. "5 - 3") incluso
+  después de sumar el armado de equipos
+  (`specs/015-armar-equipos-futbol.md`, tabla `futbol_teams`): esa tabla
+  guarda quién quedó en qué equipo, no el marcador por equipo.
 - Historial de partidos jugados fuera de la página de cada evento (una
   sección "Estadísticas" aparte, o un listado histórico de resultados) —
   posible extensión futura del patrón de históricos
@@ -111,7 +113,7 @@ Puntos que el SQL no explica por sí solo:
   partidos jugados (aplicando el patrón vigente/histórico de
   `specs/009-historicos-de-gastos.md`).
 - Tabla de goleadores múltiple con cantidad de goles por jugador.
-- Resultado estructurado por equipos.
+- Resultado estructurado por equipos (ver nota en "No incluye" arriba).
 
 ## 8. Changelog
 

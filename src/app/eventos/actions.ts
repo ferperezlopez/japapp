@@ -433,6 +433,44 @@ export async function setReservaCanchaAssignee(
   return { ok: true };
 }
 
+// Equipos de fútbol: el modal maneja el estado entero (quién quedó en
+// qué equipo, quién es arquero, quién quedó sin asignar) y lo manda de
+// una sola vez al guardar — se reemplaza todo en vez de reconciliar fila
+// por fila, mismo criterio de "borrar y volver a insertar" que
+// setReservaCanchaAssignee.
+export async function saveFutbolTeams(
+  eventId: string,
+  assignments: { userId: string; team: 1 | 2; isGoalkeeper: boolean }[],
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { error: deleteError } = await supabase
+    .from("futbol_teams")
+    .delete()
+    .eq("event_id", eventId);
+  if (deleteError) return { error: deleteError.message };
+
+  if (assignments.length > 0) {
+    const { error } = await supabase.from("futbol_teams").insert(
+      assignments.map((a) => ({
+        event_id: eventId,
+        user_id: a.userId,
+        team: a.team,
+        is_goalkeeper: a.isGoalkeeper,
+        updated_by: user.id,
+      })),
+    );
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
 export async function deleteEventMedia(
   eventId: string,
   mediaId: string,
