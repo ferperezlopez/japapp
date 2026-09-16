@@ -16,18 +16,22 @@ export const NEW_VENUE_VALUE = "__new__";
 // notas. Cada formulario que lo usa se ocupa de su propio <form>/action.
 export function EventFormFields({
   venues,
+  members,
   defaultName = "",
   defaultEventDate = "",
   defaultVenueValue = "",
   defaultNewVenueName = "",
+  defaultNewVenueHostUserId = "",
   defaultDescription = "",
   defaultHasFutbol = false,
 }: {
   venues: { id: string; name: string }[];
+  members: { id: string; name: string | null; email: string }[];
   defaultName?: string;
   defaultEventDate?: string;
   defaultVenueValue?: string;
   defaultNewVenueName?: string;
+  defaultNewVenueHostUserId?: string;
   defaultDescription?: string;
   defaultHasFutbol?: boolean;
 }) {
@@ -89,14 +93,28 @@ export function EventFormFields({
             <option value={NEW_VENUE_VALUE}>+ Nuevo lugar…</option>
           </select>
           {venueSelection === NEW_VENUE_VALUE && (
-            <input
-              type="text"
-              name="newVenueName"
-              defaultValue={defaultNewVenueName}
-              placeholder="Nombre del lugar nuevo"
-              required
-              className="mt-1.5 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
-            />
+            <>
+              <input
+                type="text"
+                name="newVenueName"
+                defaultValue={defaultNewVenueName}
+                placeholder="Nombre del lugar nuevo"
+                required
+                className="mt-1.5 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+              />
+              <select
+                name="newVenueHostUserId"
+                defaultValue={defaultNewVenueHostUserId}
+                className="mt-1.5 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+              >
+                <option value="">¿De quién es la casa? (opcional)</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name ?? member.email}
+                  </option>
+                ))}
+              </select>
+            </>
           )}
         </div>
         <div>

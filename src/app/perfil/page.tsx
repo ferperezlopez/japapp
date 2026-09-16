@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { EditAliasForm } from "./EditAliasForm";
 import { UploadAvatarForm } from "./UploadAvatarForm";
+import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
+import { calcularAsistencia } from "@/lib/eventos/attendance";
 
 export default async function PerfilPage() {
   const supabase = await createClient();
@@ -18,11 +20,15 @@ export default async function PerfilPage() {
     );
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, email, alias, avatar_url")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: rsvps }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("name, email, alias, avatar_url")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase.from("event_rsvps").select("kind, status").eq("user_id", user.id),
+  ]);
+  const attendance = calcularAsistencia(rsvps ?? []);
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
@@ -48,6 +54,8 @@ export default async function PerfilPage() {
       <div className="mt-6">
         <EditAliasForm defaultAlias={profile?.alias ?? ""} />
       </div>
+
+      <AttendanceStatsCard attendance={attendance} />
     </div>
   );
 }

@@ -281,6 +281,45 @@ export interface Database {
           name: string;
           created_by: string;
           created_at: string;
+          host_user_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_by: string;
+          created_at?: string;
+          host_user_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_by?: string;
+          created_at?: string;
+          host_user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "venues_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "venues_host_user_id_fkey";
+            columns: ["host_user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      guests: {
+        Row: {
+          id: string;
+          name: string;
+          created_by: string;
+          created_at: string;
         };
         Insert: {
           id?: string;
@@ -296,10 +335,106 @@ export interface Database {
         };
         Relationships: [
           {
-            foreignKeyName: "venues_created_by_fkey";
+            foreignKeyName: "guests_created_by_fkey";
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      event_guests: {
+        Row: {
+          id: string;
+          event_id: string;
+          guest_id: string;
+          kind: "juntada" | "futbol";
+          added_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          guest_id: string;
+          kind?: "juntada" | "futbol";
+          added_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          guest_id?: string;
+          kind?: "juntada" | "futbol";
+          added_by?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_guests_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_guests_guest_id_fkey";
+            columns: ["guest_id"];
+            isOneToOne: false;
+            referencedRelation: "guests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_guests_added_by_fkey";
+            columns: ["added_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      event_tasks: {
+        Row: {
+          event_id: string;
+          task_type:
+            | "compra_insumos"
+            | "lavado_platos"
+            | "orden_sede"
+            | "reserva_cancha"
+            | "convocatoria";
+          assigned_to: string | null;
+          updated_by: string;
+          updated_at: string;
+        };
+        Insert: {
+          event_id: string;
+          task_type:
+            | "compra_insumos"
+            | "lavado_platos"
+            | "orden_sede"
+            | "reserva_cancha"
+            | "convocatoria";
+          assigned_to?: string | null;
+          updated_by: string;
+          updated_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          task_type?:
+            | "compra_insumos"
+            | "lavado_platos"
+            | "orden_sede"
+            | "reserva_cancha"
+            | "convocatoria";
+          assigned_to?: string | null;
+          updated_by?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_tasks_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
             referencedColumns: ["id"];
           },
         ];

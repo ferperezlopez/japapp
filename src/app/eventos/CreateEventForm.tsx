@@ -9,8 +9,10 @@ import { withMinDuration } from "@/lib/withMinDuration";
 
 export function CreateEventForm({
   venues,
+  members,
 }: {
   venues: { id: string; name: string }[];
+  members: { id: string; name: string | null; email: string }[];
 }) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -36,7 +38,7 @@ export function CreateEventForm({
       }}
       className="space-y-3 rounded-xl border border-surface-border bg-surface p-4"
     >
-      <EventFormFields venues={venues} />
+      <EventFormFields venues={venues} members={members} />
 
       <div className="flex items-center gap-2">
         <Button type="submit" loading={pending}>
