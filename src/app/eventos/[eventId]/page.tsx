@@ -341,7 +341,11 @@ export default async function EventoPage({
     mvpUserId: string | null;
     goleadorUserId: string | null;
   } | null = null;
-  let futbolTeams: { userId: string; team: 1 | 2; isGoalkeeper: boolean }[] = [];
+  let futbolTeams: {
+    userId: string;
+    team: 1 | 2;
+    position: "gk" | "def" | "fwd";
+  }[] = [];
 
   if (event.has_futbol) {
     const [{ data: statsRow }, { data: teamRows }] = await Promise.all([
@@ -352,7 +356,7 @@ export default async function EventoPage({
         .maybeSingle(),
       supabase
         .from("futbol_teams")
-        .select("user_id, team, is_goalkeeper")
+        .select("user_id, team, position")
         .eq("event_id", eventId),
     ]);
 
@@ -367,7 +371,7 @@ export default async function EventoPage({
     futbolTeams = (teamRows ?? []).map((t) => ({
       userId: t.user_id,
       team: t.team as 1 | 2,
-      isGoalkeeper: t.is_goalkeeper,
+      position: t.position as "gk" | "def" | "fwd",
     }));
   }
 

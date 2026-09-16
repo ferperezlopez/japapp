@@ -7,14 +7,52 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 
 type Candidate = { userId: string; name: string; avatarUrl: string | null };
-type SavedAssignment = { userId: string; team: 1 | 2; isGoalkeeper: boolean };
+type Position = "gk" | "def" | "fwd";
+type SavedAssignment = { userId: string; team: 1 | 2; position: Position };
 type Location = "unassigned" | 1 | 2;
 
+const POSITION_LABELS: Record<Position, string> = {
+  gk: "Arquero",
+  def: "Defensores",
+  fwd: "Delanteros",
+};
+
+// Camiseta con dorsal, SVG inline (sin dependencia nueva): equipo claro
+// (Equipo 1) vs oscuro (Equipo 2), número puramente visual — no se
+// guarda en la base, se recalcula en cada render a partir del orden
+// alfabético dentro de cada posición (estable entre recargas).
+function Jersey({ number, dark }: { number: number; dark: boolean }) {
+  const fill = dark ? "#111827" : "#f8fafc";
+  const stroke = dark ? "#4b5563" : "#94a3b8";
+  const textFill = dark ? "#f8fafc" : "#111827";
+  return (
+    <svg viewBox="0 0 64 64" className="h-10 w-9 shrink-0">
+      <path
+        d="M20 4 L8 14 L14 24 L18 21 L18 58 L46 58 L46 21 L50 24 L56 14 L44 4 L36 9 L28 9 Z"
+        fill={fill}
+        stroke={stroke}
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <text
+        x="32"
+        y="43"
+        textAnchor="middle"
+        fontSize="18"
+        fontWeight="700"
+        fill={textFill}
+      >
+        {number}
+      </text>
+    </svg>
+  );
+}
+
 // Tocar y ubicar (sin drag-and-drop, ver specs/015-armar-equipos-futbol.md):
-// tocar un jugador lo selecciona, tocar un equipo o "Sin asignar" lo mueve
-// ahí. El estado se guarda como un mapa por userId en vez de 3 arrays
-// separados, para no tener que sincronizar manualmente de dónde sale un
-// jugador cuando se mueve.
+// tocar un jugador lo selecciona, tocar una franja de posición (o "Sin
+// asignar") lo mueve ahí. El estado se guarda como un mapa por userId en
+// vez de arrays separados, para no tener que sincronizar manualmente de
+// dónde sale un jugador cuando se mueve.
 export function TeamBuilderModal({
   eventId,
   candidates,
@@ -27,14 +65,15 @@ export function TeamBuilderModal({
   onClose: () => void;
 }) {
   const [playerState, setPlayerState] = useState<
-    Record<string, { location: Location; isGoalkeeper: boolean }>
+    Record<string, { location: Location; position: Position }>
   >(() => {
-    const state: Record<string, { location: Location; isGoalkeeper: boolean }> = {};
+    const state: Record<string, { location: Location; position: Position }> =
+      {};
     for (const c of candidates) {
       const saved = initialAssignment.find((a) => a.userId === c.userId);
       state[c.userId] = saved
-        ? { location: saved.team, isGoalkeeper: saved.isGoalkeeper }
-        : { location: "unassigned", isGoalkeeper: false };
+        ? { location: saved.team, position: saved.position }
+        : { location: "unassigned", position: "def" };
     }
     return state;
   });
@@ -59,40 +98,127 @@ export function TeamBuilderModal({
     setSelectedUserId((prev) => (prev === userId ? null : userId));
   };
 
-  const moveSelectedTo = (destination: Location) => {
+  const moveSelectedTo = (
+    destination: "unassigned" | { team: 1 | 2; position: Position },
+  ) => {
     if (!selectedUserId) return;
     setPlayerState((prev) => {
-      if (prev[selectedUserId]?.location === destination) return prev;
-      return {
-        ...prev,
-        [selectedUserId]: { location: destination, isGoalkeeper: false },
-      };
+      if (destination === "unassigned") {
+        if (prev[selectedUserId]?.location === "unassigned") return prev;
+        return {
+          ...prev,
+          [selectedUserId]: { location: "unassigned", position: "def" },
+        };
+      }
+      const { team, position } = destination;
+      if (
+        prev[selectedUserId]?.location === team &&
+        prev[selectedUserId]?.position === position
+      ) {
+        return prev;
+      }
+      const next = { ...prev };
+      // Un solo arquero a la vez por equipo: al arquero anterior se lo
+      // pasa a defensores en vez de dejarlo sin equipo.
+      if (position === "gk") {
+        for (const id of Object.keys(next)) {
+          if (
+            id !== selectedUserId &&
+            next[id].location === team &&
+            next[id].position === "gk"
+          ) {
+            next[id] = { ...next[id], position: "def" };
+          }
+        }
+      }
+      next[selectedUserId] = { location: team, position };
+      return next;
     });
     setSelectedUserId(null);
   };
 
-  // Un solo arquero a la vez por equipo: marcar a uno desmarca al anterior.
-  const toggleGoalkeeper = (userId: string, team: 1 | 2) => {
-    setPlayerState((prev) => {
-      const makingGoalkeeper = !prev[userId]?.isGoalkeeper;
-      const next = { ...prev };
-      for (const id of Object.keys(next)) {
-        if (next[id].location === team) {
-          next[id] = { ...next[id], isGoalkeeper: id === userId && makingGoalkeeper };
-        }
-      }
-      return next;
-    });
+  const byPosition = (team: 1 | 2, position: Position) =>
+    candidates
+      .filter(
+        (c) =>
+          playerState[c.userId]?.location === team &&
+          playerState[c.userId]?.position === position,
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+  const teamOf = (team: 1 | 2) => {
+    const gk = byPosition(team, "gk");
+    const def = byPosition(team, "def");
+    const fwd = byPosition(team, "fwd");
+    let n = 1;
+    const withNumbers = (list: Candidate[]) =>
+      list.map((c) => ({ ...c, number: n++ }));
+    return {
+      gk: withNumbers(gk),
+      def: withNumbers(def),
+      fwd: withNumbers(fwd),
+      total: gk.length + def.length + fwd.length,
+    };
   };
 
-  const team1 = candidates.filter((c) => playerState[c.userId]?.location === 1);
-  const team2 = candidates.filter((c) => playerState[c.userId]?.location === 2);
+  const team1 = teamOf(1);
+  const team2 = teamOf(2);
   const unassigned = candidates.filter(
     (c) => playerState[c.userId]?.location === "unassigned",
   );
 
-  const renderChip = (c: Candidate, location: Location) => {
-    const state = playerState[c.userId];
+  const renderPitchChip = (c: Candidate & { number: number }, dark: boolean) => {
+    const isSelected = selectedUserId === c.userId;
+    return (
+      <div
+        key={c.userId}
+        role="button"
+        tabIndex={0}
+        onClick={(event) => {
+          event.stopPropagation();
+          toggleSelect(c.userId);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleSelect(c.userId);
+          }
+        }}
+        className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-lg px-1 py-1 transition-colors duration-150 ${
+          isSelected ? "bg-white/30 ring-2 ring-white" : "hover:bg-white/10"
+        }`}
+      >
+        <Jersey number={c.number} dark={dark} />
+        <span className="max-w-[3.75rem] truncate text-[10px] font-medium text-white drop-shadow">
+          {c.name}
+        </span>
+      </div>
+    );
+  };
+
+  const renderZone = (
+    team: 1 | 2,
+    position: Position,
+    players: (Candidate & { number: number })[],
+  ) => (
+    <div
+      onClick={(event) => {
+        event.stopPropagation();
+        moveSelectedTo({ team, position });
+      }}
+      className="relative min-h-[3.5rem] cursor-pointer px-1 pb-1 pt-3.5"
+    >
+      <span className="absolute left-1 top-0.5 text-[9px] font-medium uppercase tracking-wide text-white/60">
+        {POSITION_LABELS[position]}
+      </span>
+      <div className="flex flex-wrap items-center justify-center gap-1">
+        {players.map((c) => renderPitchChip(c, team === 2))}
+      </div>
+    </div>
+  );
+
+  const renderUnassignedChip = (c: Candidate) => {
     const isSelected = selectedUserId === c.userId;
     return (
       <div
@@ -113,50 +239,28 @@ export function TeamBuilderModal({
         className={`flex cursor-pointer items-center gap-1 rounded-full py-1 pl-1 pr-2 text-xs transition-colors duration-150 ${
           isSelected
             ? "bg-white text-foreground ring-2 ring-eventos"
-            : location === "unassigned"
-              ? "bg-surface text-foreground/80 hover:bg-surface-border"
-              : "bg-white/90 text-foreground/80 hover:bg-white"
+            : "bg-surface text-foreground/80 hover:bg-surface-border"
         }`}
       >
         <Avatar src={c.avatarUrl} name={c.name} size="sm" />
-        {state?.isGoalkeeper ? "🧤 " : ""}
         {c.name}
-        {location !== "unassigned" && (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              toggleGoalkeeper(c.userId, location);
-            }}
-            title={state?.isGoalkeeper ? "Sacar de arquero" : "Marcar como arquero"}
-            aria-label={
-              state?.isGoalkeeper ? "Sacar de arquero" : "Marcar como arquero"
-            }
-            className="ml-0.5 rounded-full p-0.5 leading-none hover:bg-black/10"
-          >
-            🧤
-          </button>
-        )}
       </div>
     );
   };
 
-  const warnTeam1 = team1.length > 0 && team1.length < 4;
-  const warnTeam2 = team2.length > 0 && team2.length < 4;
+  const warnTeam1 = team1.total > 0 && team1.total < 4;
+  const warnTeam2 = team2.total > 0 && team2.total < 4;
 
   const handleSave = () => {
     setError(null);
+    const buildAssignments = (team: 1 | 2, t: ReturnType<typeof teamOf>) => [
+      ...t.gk.map((c) => ({ userId: c.userId, team, position: "gk" as const })),
+      ...t.def.map((c) => ({ userId: c.userId, team, position: "def" as const })),
+      ...t.fwd.map((c) => ({ userId: c.userId, team, position: "fwd" as const })),
+    ];
     const assignments = [
-      ...team1.map((c) => ({
-        userId: c.userId,
-        team: 1 as const,
-        isGoalkeeper: !!playerState[c.userId]?.isGoalkeeper,
-      })),
-      ...team2.map((c) => ({
-        userId: c.userId,
-        team: 2 as const,
-        isGoalkeeper: !!playerState[c.userId]?.isGoalkeeper,
-      })),
+      ...buildAssignments(1, team1),
+      ...buildAssignments(2, team2),
     ];
     startTransition(async () => {
       const result = await withMinDuration(saveFutbolTeams(eventId, assignments));
@@ -178,7 +282,7 @@ export function TeamBuilderModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-background p-5"
+        className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-background p-5"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">⚽ Armar equipos</h3>
@@ -199,33 +303,39 @@ export function TeamBuilderModal({
           </button>
         </div>
         <p className="mt-1 text-xs text-foreground/50">
-          Tocá un jugador y después el equipo (o &quot;Sin asignar&quot;) donde
-          va. El ícono 🧤 marca al arquero de cada equipo.
+          Tocá un jugador y después la franja (arquero, defensores,
+          delanteros o &quot;Sin asignar&quot;) donde va.
         </p>
 
         <div className="mt-4 overflow-hidden rounded-2xl border-2 border-white bg-green-600 dark:border-green-900">
-          <div className="relative flex divide-x-2 divide-white/70 dark:divide-green-900">
+          <div className="relative flex flex-col divide-y-2 divide-white/70 dark:divide-green-900">
             <span
               aria-hidden="true"
               className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/40"
             />
-            {([1, 2] as const).map((team) => {
-              const teamPlayers = team === 1 ? team1 : team2;
-              return (
-                <div
-                  key={team}
-                  onClick={() => moveSelectedTo(team)}
-                  className="relative min-h-[7rem] flex-1 cursor-pointer space-y-2 p-3"
-                >
-                  <p className="text-xs font-semibold uppercase tracking-wide text-white">
-                    Equipo {team} ({teamPlayers.length})
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {teamPlayers.map((c) => renderChip(c, team))}
-                  </div>
-                </div>
-              );
-            })}
+
+            {/* Equipo 2 (oscuro) — mitad de arriba, espejado: arquero
+                arriba del todo, delanteros pegados a la línea de medio
+                campo. */}
+            <div className="flex flex-col-reverse p-2">
+              <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                Equipo 2 ({team2.total})
+              </p>
+              {renderZone(2, "fwd", team2.fwd)}
+              {renderZone(2, "def", team2.def)}
+              {renderZone(2, "gk", team2.gk)}
+            </div>
+
+            {/* Equipo 1 (claro) — mitad de abajo: delanteros pegados a
+                la línea de medio campo, arquero abajo del todo. */}
+            <div className="flex flex-col p-2">
+              <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                Equipo 1 ({team1.total})
+              </p>
+              {renderZone(1, "fwd", team1.fwd)}
+              {renderZone(1, "def", team1.def)}
+              {renderZone(1, "gk", team1.gk)}
+            </div>
           </div>
         </div>
         {(warnTeam1 || warnTeam2) && (
@@ -242,7 +352,7 @@ export function TeamBuilderModal({
             Sin asignar ({unassigned.length})
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {unassigned.map((c) => renderChip(c, "unassigned"))}
+            {unassigned.map((c) => renderUnassignedChip(c))}
             {unassigned.length === 0 && (
               <p className="text-xs text-foreground/40">Todos asignados</p>
             )}
