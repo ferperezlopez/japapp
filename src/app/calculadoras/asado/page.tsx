@@ -18,6 +18,7 @@ export default function AsadoPage() {
           step={1}
           defaultValue={10}
           calcular={calcularAsado}
+          resultTitle={(n) => `🍖 Asado para ${n} personas`}
         />
       </div>
 

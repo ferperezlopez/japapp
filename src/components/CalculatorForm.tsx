@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ShareResultButton } from "@/components/calculators/ShareResultButton";
 
 export interface CalculatorRow {
   key: string;
@@ -17,6 +18,7 @@ interface CalculatorFormProps {
   min?: number;
   defaultValue?: number;
   calcular: (value: number) => CalculatorRow[];
+  resultTitle: (value: number) => string;
 }
 
 export function CalculatorForm({
@@ -25,6 +27,7 @@ export function CalculatorForm({
   min = 1,
   defaultValue = 10,
   calcular,
+  resultTitle,
 }: CalculatorFormProps) {
   const [rawValue, setRawValue] = useState(String(defaultValue));
   const rows = calcular(Number(rawValue));
@@ -74,6 +77,10 @@ export function CalculatorForm({
           ))}
         </tbody>
       </table>
+
+      {rows.length > 0 && (
+        <ShareResultButton title={resultTitle(Number(rawValue))} rows={rows} />
+      )}
     </div>
   );
 }
