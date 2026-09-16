@@ -5,7 +5,14 @@ import { Avatar } from "@/components/ui/Avatar";
 import { TeamBuilderModal } from "./TeamBuilderModal";
 
 type Candidate = { userId: string; name: string; avatarUrl: string | null };
-type SavedAssignment = { userId: string; team: 1 | 2; isGoalkeeper: boolean };
+type Position = "gk" | "def" | "fwd";
+type SavedAssignment = { userId: string; team: 1 | 2; position: Position };
+
+const POSITION_LABELS: Record<Position, string> = {
+  gk: "Arquero",
+  def: "Defensores",
+  fwd: "Delanteros",
+};
 
 // Mismo criterio visual que FutbolStatsForm (resumen de solo lectura +
 // botón para editar), pero el editor es un modal (ver TeamBuilderModal),
@@ -24,31 +31,44 @@ export function FutbolTeamsSection({
 
   const findCandidate = (userId: string) =>
     candidates.find((c) => c.userId === userId);
-  const team1 = initialAssignment.filter((a) => a.team === 1);
-  const team2 = initialAssignment.filter((a) => a.team === 2);
   const hasTeams = initialAssignment.length > 0;
 
-  const renderTeamChips = (assignment: SavedAssignment[]) => (
-    <ul className="flex flex-wrap gap-2">
-      {assignment.map((a) => {
-        const c = findCandidate(a.userId);
-        if (!c) return null;
-        return (
-          <li
-            key={a.userId}
-            className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
-          >
-            <Avatar src={c.avatarUrl} name={c.name} size="sm" />
-            {a.isGoalkeeper ? "🧤 " : ""}
-            {c.name}
-          </li>
-        );
-      })}
-      {assignment.length === 0 && (
-        <li className="text-xs text-foreground/40">Sin jugadores</li>
-      )}
-    </ul>
-  );
+  const renderTeamSummary = (team: 1 | 2) => {
+    const assignment = initialAssignment.filter((a) => a.team === team);
+    return (
+      <div className="space-y-1.5">
+        {(["gk", "def", "fwd"] as const).map((position) => {
+          const players = assignment.filter((a) => a.position === position);
+          if (players.length === 0) return null;
+          return (
+            <div key={position}>
+              <h5 className="text-[11px] font-medium text-foreground/40">
+                {POSITION_LABELS[position]}
+              </h5>
+              <ul className="mt-0.5 flex flex-wrap gap-2">
+                {players.map((a) => {
+                  const c = findCandidate(a.userId);
+                  if (!c) return null;
+                  return (
+                    <li
+                      key={a.userId}
+                      className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
+                    >
+                      <Avatar src={c.avatarUrl} name={c.name} size="sm" />
+                      {c.name}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+        {assignment.length === 0 && (
+          <p className="text-xs text-foreground/40">Sin jugadores</p>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="mt-3 rounded-xl border border-surface-border bg-surface p-4 text-sm">
@@ -56,11 +76,11 @@ export function FutbolTeamsSection({
         <div className="space-y-3">
           <div>
             <h4 className="text-xs font-medium text-foreground/50">Equipo 1</h4>
-            <div className="mt-1">{renderTeamChips(team1)}</div>
+            <div className="mt-1">{renderTeamSummary(1)}</div>
           </div>
           <div>
             <h4 className="text-xs font-medium text-foreground/50">Equipo 2</h4>
-            <div className="mt-1">{renderTeamChips(team2)}</div>
+            <div className="mt-1">{renderTeamSummary(2)}</div>
           </div>
         </div>
       ) : (

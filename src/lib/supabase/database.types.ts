@@ -551,7 +551,7 @@ export interface Database {
           event_id: string;
           user_id: string;
           team: number;
-          is_goalkeeper: boolean;
+          position: "gk" | "def" | "fwd";
           updated_by: string;
           updated_at: string;
         };
@@ -559,7 +559,7 @@ export interface Database {
           event_id: string;
           user_id: string;
           team: number;
-          is_goalkeeper?: boolean;
+          position?: "gk" | "def" | "fwd";
           updated_by: string;
           updated_at?: string;
         };
@@ -567,7 +567,7 @@ export interface Database {
           event_id?: string;
           user_id?: string;
           team?: number;
-          is_goalkeeper?: boolean;
+          position?: "gk" | "def" | "fwd";
           updated_by?: string;
           updated_at?: string;
         };

@@ -2,43 +2,52 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/eventos/[eventId]` (extendida)
-- **Migraciones relacionadas:** `supabase/migrations/0016_futbol_teams.sql`
+- **Migraciones relacionadas:** `supabase/migrations/0016_futbol_teams.sql`,
+  `supabase/migrations/0017_futbol_teams_position.sql`
 - **Última actualización:** 2026-09-16
 
 ## 1. Resumen
 
 Como miembro del grupo, quiero poder acomodar a los confirmados de
-fútbol de un evento en dos equipos (Fútbol 5, idealmente 5 vs 5), para
-no tener que hacerlo a mano por WhatsApp cada vez que se junta el
-grupo.
+fútbol de un evento en dos equipos (Fútbol 5, idealmente 5 vs 5), con
+una formación fija (arquero, defensores, delanteros), para no tener que
+hacerlo a mano por WhatsApp cada vez que se junta el grupo.
 
 ## 2. Alcance
 
 ### Incluye
 
 - Tabla `futbol_teams`: qué equipo (1 o 2) le tocó a cada jugador
-  confirmado, y si es el arquero de ese equipo.
+  confirmado, y en qué posición (`gk`/`def`/`fwd`).
 - Un modal ("Armar equipos") accesible desde la sección de fútbol del
-  evento (solo si `event.has_futbol`), con una cancha simple dividida
-  en dos mitades donde se acomoda a los jugadores.
-- Interacción por **toque** (tocar un jugador y después el equipo, o
+  evento (solo si `event.has_futbol`), con una **cancha vertical** con
+  los dos equipos enfrentados a través de la línea de medio campo, cada
+  uno con tres franjas fijas: arquero, defensores, delanteros.
+- Interacción por **toque** (tocar un jugador y después la franja, o
   "Sin asignar", donde va) — sin arrastrar. Ver sección 6 para el
   porqué.
-- Un arquero por equipo, marcado con 🧤, sin posiciones individuales
-  para el resto (no hay formación tipo defensa/medio/delantero).
+- Camisetas con dorsal: Equipo 1 con camiseta clara, Equipo 2 con
+  camiseta oscura, número visual (no persistido) por posición.
+- Un arquero por equipo (mover a otro jugador ahí pasa al anterior a
+  defensores); defensores y delanteros sin tope estricto (se acomodan
+  varios en la misma franja si la convocatoria da para más de 2).
 - Aviso no bloqueante si un equipo queda con menos de 4 jugadores.
 - Los equipos armados se guardan en la base y quedan visibles/editables
   por cualquier miembro logueado, igual que el resto de la app.
 
 ### No incluye (por ahora)
 
-- Posiciones individuales en la cancha (arquero, defensa, medio,
-  delantero) — solo se destaca al arquero; el resto es una lista dentro
-  de la mitad de su equipo, sin coordenadas propias.
+- Coordenadas libres por jugador (arrastrar a cualquier punto de la
+  cancha) — las posiciones son 3 franjas fijas por equipo (arquero,
+  defensores, delanteros), no una cancha de posicionamiento libre.
 - Arrastrar y soltar (drag-and-drop) — la app no tenía ninguna librería
   de DnD instalada ni drag nativo de HTML5 en uso, y esto es una PWA
   touch-first (el drag nativo anda mal en celular); se usa un patrón de
   tocar-y-ubicar en su lugar (decisión confirmada con el usuario).
+- Tope estricto de jugadores por franja — se eligió "máximo 2 por línea
+  recomendado, sin límite estricto" (decisión confirmada con el
+  usuario): si sobran confirmados, se acomodan igual en la misma franja
+  en vez de forzarlos a "Sin asignar".
 - Resultado del partido por equipo — sigue siendo el campo de texto
   libre `resultado` de `futbol_stats` (`specs/010-estadisticas-de-partidos.md`),
   sin relación con esta tabla.
@@ -50,7 +59,8 @@ grupo.
 
 ## 3. Modelo de datos
 
-Ver `supabase/migrations/0016_futbol_teams.sql` para la tabla y su RLS.
+Ver `supabase/migrations/0016_futbol_teams.sql` y
+`0017_futbol_teams_position.sql` para la tabla, su evolución y su RLS.
 
 Puntos que el SQL no explica por sí solo:
 
@@ -58,17 +68,29 @@ Puntos que el SQL no explica por sí solo:
   key (una fila por evento, pensada para resultado/MVP/goleador a nivel
   de partido), así que no hay lugar ahí para una fila por jugador.
   `futbol_teams` usa `(event_id, user_id)` como primary key compuesta.
+- `position text check (position in ('gk', 'def', 'fwd'))`: reemplaza
+  al `is_goalkeeper boolean` original de la `0016`. El primer diseño
+  del modal (PR #31) solo destacaba al arquero dentro de una lista
+  libre; el usuario vio el resultado y pidió una formación real
+  (arquero + defensores + delanteros), así que hizo falta una posición
+  de 3 valores en vez de un flag binario. La `0017` migra los datos
+  existentes (`is_goalkeeper=true` → `'gk'`, si no → `'def'`) antes de
+  borrar la columna vieja.
 - Sin policy de `update`: guardar equipos siempre borra todas las filas
   del evento y vuelve a insertar el estado completo (`saveFutbolTeams`
   en `src/app/eventos/actions.ts`) — el modal maneja el estado entero
   en memoria y hace un solo submit al guardar, así que nunca hace falta
   actualizar una fila existente en el lugar.
 - Sin constraint que limite a un solo arquero por equipo a nivel de
-  base: la UI ya solo permite tener uno marcado a la vez por equipo
-  (marcar a otro desmarca al anterior), y forzarlo también en la base
-  sería duplicar una validación que no tiene forma de fallar desde la
-  UI que existe hoy — mismo criterio de "la UI es la barrera real" que
-  ya usan varias acciones de `actions.ts`.
+  base: la UI ya solo permite tener uno a la vez por equipo (mover a
+  otro jugador a la franja de arquero pasa al anterior a defensores),
+  y forzarlo también en la base sería duplicar una validación que no
+  tiene forma de fallar desde la UI que existe hoy — mismo criterio de
+  "la UI es la barrera real" que ya usan varias acciones de `actions.ts`.
+- Sin tope de cantidad por posición a nivel de base (ni de UI): la
+  decisión "2 por línea recomendado, sin límite estricto" significa que
+  defensores/delanteros aceptan cualquier cantidad; nada en el modelo
+  de datos lo impediría de todos modos.
 - `team smallint check (team in (1, 2))`: dos equipos fijos, no una
   cantidad variable — coherente con que la cancha es de Fútbol 5 y
   siempre se arman dos lados.
@@ -86,40 +108,58 @@ Puntos que el SQL no explica por sí solo:
 3. `<FutbolTeamsSection>` (mismo criterio visual que `FutbolStatsForm`:
    resumen de solo lectura + botón para editar) muestra "Todavía no se
    armaron los equipos" o, si ya hay datos guardados, los dos equipos
-   como chips con 🧤 junto al arquero de cada uno.
+   agrupados en tres mini-listas ("Arquero", "Defensores",
+   "Delanteros") con chips de avatar + nombre — sin camisetas acá, el
+   resumen sigue siendo liviano.
 4. El botón "⚽ Armar equipos" / "Editar equipos" abre
    `<TeamBuilderModal>`, que arranca precargado con el último estado
    guardado (o todos los candidatos en "Sin asignar" si no hay nada
    guardado todavía).
 5. Dentro del modal, el estado de cada jugador (`unassigned`, equipo 1
-   o 2, y si es arquero) vive en un mapa por `userId`, no en tres
-   arrays separados — evita tener que sincronizar manualmente de dónde
-   sale un jugador cuando se mueve. Tocar un jugador lo selecciona
-   (resaltado); tocar una mitad de la cancha o la zona "Sin asignar"
-   mueve ahí al seleccionado (mover a la misma ubicación no hace nada,
-   para no resetear el arquero por un toque de más). Tocar el ícono 🧤
-   dentro de un jugador ya asignado a un equipo lo marca/desmarca como
-   arquero de ese equipo, desmarcando a cualquier otro que estuviera
-   marcado ahí.
-6. "Guardar equipos" arma el array de asignaciones a partir de los
+   o 2 + posición) vive en un mapa por `userId`, no en arrays separados
+   — evita tener que sincronizar manualmente de dónde sale un jugador
+   cuando se mueve. La cancha es **vertical**: Equipo 1 (camiseta
+   clara) ocupa la mitad de abajo con su arco propio en la base;
+   Equipo 2 (camiseta oscura) ocupa la mitad de arriba, espejado, con
+   su arco propio arriba del todo — los dos quedan enfrentados a través
+   de la línea de medio campo, con delanteros de ambos equipos pegados
+   a esa línea y arqueros en cada extremo. Tocar un jugador lo
+   selecciona (resaltado); tocar una franja (arquero/defensores/
+   delanteros de un equipo, o "Sin asignar") mueve ahí al seleccionado
+   (mover a la misma franja no hace nada, para no reordenar por un
+   toque de más). Mover un jugador a la franja de arquero de un equipo
+   que ya tenía uno pasa al anterior a defensores (nunca lo deja sin
+   equipo).
+6. Cada jugador en la cancha se muestra como una camiseta con dorsal
+   (SVG inline, sin dependencia nueva): clara con número oscuro para
+   Equipo 1, oscura con número claro para Equipo 2. El número es
+   puramente visual — no se persiste, se recalcula en cada render
+   numerando arquero (1) y siguiendo con defensores y delanteros en
+   orden alfabético por nombre dentro de cada equipo, para que no salte
+   al azar entre recargas.
+7. "Guardar equipos" arma el array de asignaciones a partir de los
    equipos 1 y 2 (quienes quedaron en "Sin asignar" no se guardan) y
    llama a `saveFutbolTeams(eventId, assignments)`, que borra todas las
-   filas del evento en `futbol_teams` y vuelve a insertar las nuevas.
-   Al terminar, cierra el modal.
+   filas del evento en `futbol_teams` y vuelve a insertar las nuevas
+   con su `team` y `position`. Al terminar, cierra el modal.
 
 ## 5. Criterios de aceptación
 
 - [x] La sección "Armar equipos" no aparece si el evento no tiene
       fútbol, y el botón de armar/editar no aparece si no hay ningún
       confirmado de fútbol.
-- [x] Tocar un jugador y después una mitad de la cancha lo mueve ahí;
-      tocar "Sin asignar" lo saca de cualquier equipo.
-- [x] Marcar a un jugador como arquero (🧤) desmarca a cualquier otro
-      arquero del mismo equipo.
-- [x] Si un equipo queda con menos de 4 jugadores, aparece un aviso no
-      bloqueante — "Guardar equipos" sigue funcionando igual.
+- [x] La cancha se ve vertical, con Equipo 1 (camiseta clara) abajo y
+      Equipo 2 (camiseta oscura) arriba, cada uno con sus tres franjas.
+- [x] Tocar un jugador y después una franja lo mueve ahí; tocar "Sin
+      asignar" lo saca de cualquier equipo.
+- [x] Mover a un segundo jugador a la franja de arquero de un equipo
+      pasa al arquero anterior a defensores (no desaparece).
+- [x] Sumar un tercer jugador a defensores o delanteros de un mismo
+      equipo no rompe el layout (sin tope estricto).
+- [x] Si un equipo queda con menos de 4 jugadores en total, aparece un
+      aviso no bloqueante — "Guardar equipos" sigue funcionando igual.
 - [x] Guardar y volver a abrir el modal (o recargar la página) muestra
-      exactamente el último estado guardado.
+      exactamente el último estado guardado, posiciones incluidas.
 - [x] Alguien que ya estaba en un equipo guardado sigue apareciendo en
       el modal aunque haya cambiado su RSVP de fútbol después.
 
@@ -128,7 +168,9 @@ Puntos que el SQL no explica por sí solo:
 | Decisión | Alternativa descartada | Por qué |
 |---|---|---|
 | Tocar y ubicar (tocar jugador, tocar destino) | Arrastrar y soltar (drag-and-drop) | La app no tenía ninguna librería de DnD instalada ni drag nativo de HTML5 en uso; es una PWA touch-first donde el drag nativo anda mal en celular. Decisión confirmada con el usuario. |
-| Cancha simple con solo el arquero destacado (🧤) | Posiciones individuales (arquero, defensa, medio, delantero) por jugador | Decisión explícita del usuario: un grupo de amigos jugando Fútbol 5 no arma formaciones fijas, alcanza con distinguir al arquero del resto. Mucho menos trabajo que definir slots por posición. |
+| Cancha vertical con formación fija (arquero, defensores, delanteros) | Cancha horizontal con solo el arquero destacado (primer diseño, PR #31) | El usuario vio el primer diseño (dos mitades lado a lado, sin formación) y pidió explícitamente cancha vertical, camisetas con dorsal por equipo (clara/oscura) y posiciones fijas, con una imagen ilustrativa de referencia conceptual. |
+| Defensores/delanteros sin tope estricto (máximo 2 por línea "recomendado") | Cupos estrictos 1-2-2 con excedente en "Sin asignar" | Decisión confirmada con el usuario: una convocatoria real de 8 a 12 personas no siempre da justo 5 por equipo: forzar el excedente a "Sin asignar" bloquearía sin necesidad a alguien que sí va a jugar. |
+| Dorsal puramente visual (no persistido) | Guardar el número en la base | El número no tiene ningún uso fuera de la cancha del modal (no aparece en el resumen de solo lectura ni en ningún otro lado); persistirlo sumaría una columna y lógica de reasignación sin ningún beneficio real. |
 | Equipos guardados en la base (tabla nueva) | Herramienta de "repartamos ahora" sin persistencia | Decisión explícita del usuario: que quede guardado y visible/editable por cualquiera, igual que tareas/invitados/stats — no una pantalla que se descarta al cerrar. |
 | Guardar como reemplazo completo (borrar + insertar) | Reconciliar fila por fila (upsert incremental) | El modal ya maneja el estado entero en memoria y hace un solo submit; reconciliar fila por fila sumaría complejidad sin ningún beneficio real acá (a diferencia de invitados/tareas, que se agregan/sacan de a uno con la página siempre montada). |
 | Aviso no bloqueante si un equipo tiene menos de 4 | Bloquear el guardado | Mismo criterio de confianza total que el resto de la app: la convocatoria real puede no dar para 5 vs 5, y la app nunca le impide a alguien guardar lo que decidió. |
@@ -137,10 +179,16 @@ Puntos que el SQL no explica por sí solo:
 
 - Sorteo automático de equipos (repartir al azar entre los
   confirmados).
-- Posiciones individuales en la cancha (formación).
+- Coordenadas libres por jugador dentro de la cancha (más allá de las
+  3 franjas fijas).
 - Resultado del partido separado por equipo (sigue siendo texto libre
   en `futbol_stats`).
 
 ## 8. Changelog
 
-- 2026-09-16: creada e implementada.
+- 2026-09-16: creada e implementada (cancha horizontal, arquero
+  destacado con 🧤 sin formación).
+- 2026-09-16: rediseño a pedido del usuario tras ver el PR #31 —
+  cancha vertical, camisetas con dorsal por equipo (clara/oscura),
+  formación fija (arquero, defensores, delanteros) sin tope estricto
+  por línea. Migración `0017` reemplaza `is_goalkeeper` por `position`.
