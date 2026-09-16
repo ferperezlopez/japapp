@@ -359,19 +359,32 @@ export async function addTaskAssignee(
     }
   }
 
-  const { error } = await supabase.from("event_tasks").upsert(
-    {
+  // Sin unique key que lo evite a nivel de base (ver 0014: una unique
+  // key ancha no distinguiría duplicados de lavado_platos/orden_sede,
+  // donde item_id siempre es null y Postgres trata cada null como
+  // distinto), se chequea a mano antes de insertar: misma persona +
+  // mismo insumo (o, si no aplica insumo, misma persona) ya asignada.
+  let existingQuery = supabase
+    .from("event_tasks")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("task_type", taskType)
+    .eq("assigned_to", userId);
+  existingQuery = itemId
+    ? existingQuery.eq("item_id", itemId)
+    : existingQuery.is("item_id", null);
+  const { data: existing } = await existingQuery.maybeSingle();
+
+  if (!existing) {
+    const { error } = await supabase.from("event_tasks").insert({
       event_id: eventId,
       task_type: taskType,
       assigned_to: userId,
       item_id: itemId,
       updated_by: user.id,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "event_id,task_type,assigned_to", ignoreDuplicates: true },
-  );
-
-  if (error) return { error: error.message };
+    });
+    if (error) return { error: error.message };
+  }
 
   revalidatePath(`/eventos/${eventId}`);
   return { ok: true };
