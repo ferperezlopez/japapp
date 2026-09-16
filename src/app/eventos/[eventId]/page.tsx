@@ -276,10 +276,13 @@ export default async function EventoPage({
       .select("id, guest_id, kind, added_by, guests(name)")
       .eq("event_id", eventId),
   ]);
-  const { data: taskRows } = await supabase
-    .from("event_tasks")
-    .select("id, task_type, assigned_to")
-    .eq("event_id", eventId);
+  const [{ data: taskRows }, { data: insumoItems }] = await Promise.all([
+    supabase
+      .from("event_tasks")
+      .select("id, task_type, assigned_to, item_id")
+      .eq("event_id", eventId),
+    supabase.from("insumo_items").select("id, name").order("name"),
+  ]);
   const totalPeople = allProfiles?.length ?? 0;
   const members = allProfiles ?? [];
   const memberName = (userId: string) =>
@@ -288,11 +291,16 @@ export default async function EventoPage({
     "Desconocido";
   const memberAvatar = (userId: string) =>
     members.find((m) => m.id === userId)?.avatar_url ?? null;
+  const itemName = (itemId: string | null) =>
+    itemId ? (insumoItems?.find((i) => i.id === itemId)?.name ?? null) : null;
 
-  const assigneesByTask = new Map<string, { id: string; userId: string }[]>();
+  const assigneesByTask = new Map<
+    string,
+    { id: string; userId: string; itemId: string | null }[]
+  >();
   for (const t of taskRows ?? []) {
     const list = assigneesByTask.get(t.task_type) ?? [];
-    list.push({ id: t.id, userId: t.assigned_to });
+    list.push({ id: t.id, userId: t.assigned_to, itemId: t.item_id });
     assigneesByTask.set(t.task_type, list);
   }
   const reservaCanchaAssignedTo =
@@ -515,9 +523,15 @@ export default async function EventoPage({
                             userId: a.userId,
                             name: memberName(a.userId),
                             avatarUrl: memberAvatar(a.userId),
+                            itemName: itemName(a.itemId),
                           }),
                         )}
                         members={members}
+                        items={
+                          t.type === "compra_insumos"
+                            ? (insumoItems ?? [])
+                            : undefined
+                        }
                       />
                     ) : (
                       <TaskAssignSelect

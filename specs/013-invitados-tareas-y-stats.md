@@ -2,7 +2,7 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/eventos` (extendida), `/eventos/[eventId]` (extendida), `/perfil` (extendida), `/perfil/[userId]` (extendida)
-- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`
+- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`
 - **Última actualización:** 2026-09-16
 
 ## 1. Resumen
@@ -30,7 +30,9 @@ asistencia de cada persona en su perfil.
   insumos, lavado de platos y orden de la sede admiten varias personas
   asignadas; reserva de cancha es de una sola persona a la vez.
   Cualquier usuario logueado puede sumar, sacar o reemplazar
-  asignaciones.
+  asignaciones. En "compra de insumos", sumarse exige además elegir (o
+  cargar) qué insumo se va a comprar, de un catálogo reusable entre
+  eventos (carne, snacks, bebidas, vinos, etc.).
 - Sede con dueño: al cargar un lugar nuevo, se puede indicar de quién
   es la casa (generalmente el lugar de la JAPA es la casa de alguien).
   Se muestra junto al lugar en la página del evento.
@@ -52,6 +54,9 @@ asistencia de cada persona en su perfil.
   se muestra como dato de solo lectura junto a las tareas.
 - Varias personas asignadas a "reserva de cancha" — es la única tarea
   que sigue siendo de una sola persona a la vez.
+- Insumo obligatorio en "lavado de platos" u "orden de la sede" — no
+  hay un "insumo" que elegir ahí, el selector de ítem es exclusivo de
+  "compra de insumos".
 - Editar el dueño de un lugar ya existente — el selector de dueño solo
   aparece al cargar un lugar nuevo.
 
@@ -84,6 +89,14 @@ Puntos que el SQL no explica por sí solo:
   no es una tarea seteable) y reemplazó la policy de `update` por una
   de `delete` (`using (true)`): reasignar ahora es sacar una fila y
   sumar otra, no un update de la misma fila.
+- `insumo_items` (`0013_insumo_items.sql`) es un catálogo reusable
+  entre eventos, mismo patrón que `guests`: `unique(name)` (mismo
+  criterio que `venues.name`) para que dos personas cargando "Carne" no
+  generen dos filas distintas. `event_tasks.item_id` es nullable a
+  nivel de columna (no aplica a lavado_platos/orden_sede/
+  reserva_cancha) pero obligatorio para `compra_insumos` vía un
+  `check (task_type <> 'compra_insumos' or item_id is not null)` — la
+  regla de negocio queda garantizada en la base, no solo en la UI.
 - `venues.host_user_id` es una columna separada de `venues.created_by`
   a propósito: `created_by` es quién tipeó el nombre del lugar por
   primera vez, `host_user_id` es de quién es la casa — dos conceptos
@@ -133,11 +146,22 @@ Puntos que el SQL no explica por sí solo:
    ahora llama a `setReservaCanchaAssignee` — que borra la fila
    anterior de `(event_id, 'reserva_cancha')` e inserta la nueva,
    reemplazando en vez de sumar.
-4. `addTaskAssignee(eventId, taskType, userId)`: `upsert` en
+4. `addTaskAssignee(eventId, taskType, userId, item?)`: `upsert` en
    `event_tasks` con `onConflict: "event_id,task_type,assigned_to",
    ignoreDuplicates: true`. `removeTaskAssignee(taskId, eventId)`:
    `delete` por `id` — la policy RLS (`using (true)`) es la barrera
    real.
+5. Para "compra de insumos", `<TaskAssigneesEditor>` recibe un prop
+   `items` (solo para ese `task_type`) y el flujo "+ Agregar" exige,
+   además del miembro, elegir un insumo de un segundo `<select>` o
+   cargar uno nuevo (mismo patrón visual que `<AddGuestForm>`, con
+   estado de React directo en vez de `FormData` ya que este componente
+   llama a la action con argumentos posicionales). `addTaskAssignee`
+   valida el ítem igual que `addGuestToEvent` valida el invitado: si
+   viene un nombre nuevo, primero `upsert` en `insumo_items` con
+   `onConflict: "name"` (tolera que dos personas carguen el mismo
+   insumo nuevo a la vez); con el `item_id` resuelto, se guarda la
+   asignación. Cada chip muestra `{nombre} — {insumo}`.
 
 ### Sede con dueño
 
@@ -187,6 +211,11 @@ Puntos que el SQL no explica por sí solo:
       puede sumar dos veces a la misma tarea.
 - [x] Cambiar el `<select>` de "reserva de cancha" reemplaza a la
       persona anterior en vez de sumarla como una segunda fila.
+- [x] Sumarse a "compra de insumos" sin elegir un insumo muestra un
+      error y no crea la asignación.
+- [x] Cargar un insumo nuevo lo deja disponible para elegir (sin
+      re-tipear) en otro evento.
+- [x] "Lavado de platos" y "orden de la sede" no piden ningún insumo.
 - [x] Cargar un lugar nuevo con dueño lo muestra junto al lugar en la
       página del evento.
 - [x] El porcentaje de asistencia calculado a mano coincide con el
@@ -207,6 +236,8 @@ Puntos que el SQL no explica por sí solo:
 | "Reserva de cancha" sigue siendo de una sola persona, las otras 3 tareas admiten varias | Multi-asignación uniforme para las 4 tareas | Feedback explícito del usuario tras probar el PR: solo pidió "varios" para compra de insumos, lavado y orden. |
 | `event_tasks` sin distinción de schema entre tareas de una o varias personas (la UI decide) | Una tabla separada para tareas multi-persona | Evita duplicar el modelo de datos por una diferencia que hoy es puramente de interfaz — `setReservaCanchaAssignee` implementa "una sola persona" reemplazando la fila en vez de sumarla. |
 | "Convocatoria" sacada de `event_tasks` en vez de dejarla sin uso | Dejarla en la lista pero sin asignar nunca | Feedback del usuario: se asume que la hace quien creó el evento, no tiene sentido pedir que alguien la marque. |
+| Insumo obligatorio solo para "compra de insumos", vía `check` en la base | Insumo opcional, o validación solo en la UI | Pedido explícito del usuario ("obligación"); un `check` a nivel de base evita que un bug de UI deje una asignación sin insumo. |
+| Catálogo `insumo_items` reusable entre eventos (mismo patrón que `guests`) | Texto libre por asignación, sin catálogo | Pedido explícito del usuario: poder elegir de una lista ítems ya cargados antes, con opción de agregar uno nuevo. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -223,3 +254,6 @@ Puntos que el SQL no explica por sí solo:
   defecto, "convocatoria" sacada de la lista de tareas seteables, y
   "compra de insumos"/"lavado de platos"/"orden de la sede" pasan a
   admitir varias personas asignadas (`0012_event_tasks_multi_assignee.sql`).
+- 2026-09-16: feedback sobre PR #26 — sumarse a "compra de insumos"
+  ahora exige elegir o cargar qué insumo se va a comprar, de un
+  catálogo reusable `insumo_items` (`0013_insumo_items.sql`).

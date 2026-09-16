@@ -324,10 +324,16 @@ export async function removeGuestFromEvent(eventGuestId: string, eventId: string
 // quién lo hizo. "Compra de insumos", "lavado de platos" y "orden de la
 // sede" admiten varias personas (varias filas por task_type); "reserva
 // de cancha" es de una sola persona a la vez, ver setReservaCanchaAssignee.
+//
+// Solo "compra_insumos" pide un insumo (qué va a comprar esa persona):
+// igual criterio que addGuestToEvent con los invitados — se puede elegir
+// uno ya cargado antes (reusable entre eventos) o tipear uno nuevo, que
+// a partir de ahora también queda disponible para elegir.
 export async function addTaskAssignee(
   eventId: string,
   taskType: "compra_insumos" | "lavado_platos" | "orden_sede",
   userId: string,
+  item?: { existingItemId?: string; newItemName?: string },
 ) {
   const supabase = await createClient();
   const {
@@ -335,11 +341,30 @@ export async function addTaskAssignee(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  let itemId: string | null = null;
+  if (taskType === "compra_insumos") {
+    itemId = item?.existingItemId || null;
+    if (!itemId) {
+      const newName = item?.newItemName?.trim();
+      if (!newName) return { error: "Elegí o cargá qué vas a comprar." };
+      const { data: newItem, error: itemError } = await supabase
+        .from("insumo_items")
+        .upsert({ name: newName, created_by: user.id }, { onConflict: "name" })
+        .select("id")
+        .single();
+      if (itemError || !newItem) {
+        return { error: itemError?.message ?? "No se pudo registrar el insumo." };
+      }
+      itemId = newItem.id;
+    }
+  }
+
   const { error } = await supabase.from("event_tasks").upsert(
     {
       event_id: eventId,
       task_type: taskType,
       assigned_to: userId,
+      item_id: itemId,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     },
