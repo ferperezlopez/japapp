@@ -2,7 +2,7 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/eventos` (extendida), `/eventos/[eventId]` (extendida), `/perfil` (extendida), `/perfil/[userId]` (extendida)
-- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`
+- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`
 - **Última actualización:** 2026-09-16
 
 ## 1. Resumen
@@ -24,10 +24,13 @@ asistencia de cada persona en su perfil.
 - Los invitados quedan guardados en una tabla reusable entre eventos:
   una vez cargado un invitado, aparece disponible para elegirlo de
   nuevo (sin re-tipear el nombre) en cualquier otro evento.
-- Tareas de organización del evento: lista fija de tipos (compra de
-  insumos, lavado de platos, orden de la sede, reserva de cancha,
-  convocatoria), cada una asignable a un miembro registrado. Cualquier
-  usuario logueado puede asignar o reasignar cualquier tarea.
+- Tareas de organización del evento, colapsadas por defecto bajo
+  "Asignación de tareas": lista fija de tipos (compra de insumos,
+  lavado de platos, orden de la sede, reserva de cancha). Compra de
+  insumos, lavado de platos y orden de la sede admiten varias personas
+  asignadas; reserva de cancha es de una sola persona a la vez.
+  Cualquier usuario logueado puede sumar, sacar o reemplazar
+  asignaciones.
 - Sede con dueño: al cargar un lugar nuevo, se puede indicar de quién
   es la casa (generalmente el lugar de la JAPA es la casa de alguien).
   Se muestra junto al lugar en la página del evento.
@@ -43,11 +46,12 @@ asistencia de cada persona en su perfil.
   cambia, el proxy solo aplica a invitados.
 - Estado yes/no/maybe para invitados — sumar un invitado a un evento
   significa directamente "confirmado que viene", sin estado intermedio.
-- Tareas de texto libre o con más de una persona asignada por tipo —
-  lista fija predefinida, un asignado por tarea (o ninguno todavía).
-- "Creación del evento" como una fila de tareas — ya existe
-  `events.created_by`, se muestra como dato de solo lectura junto a las
-  tareas en vez de duplicarlo.
+- Tareas de texto libre — lista fija predefinida de tipos.
+- "Creación del evento" y "convocatoria" como filas de tareas — se
+  asumen hechas por quien creó el evento (`events.created_by`), que ya
+  se muestra como dato de solo lectura junto a las tareas.
+- Varias personas asignadas a "reserva de cancha" — es la única tarea
+  que sigue siendo de una sola persona a la vez.
 - Editar el dueño de un lugar ya existente — el selector de dueño solo
   aparece al cargar un lugar nuevo.
 
@@ -66,9 +70,20 @@ Puntos que el SQL no explica por sí solo:
 - `event_guests` no tiene columna de estado: una fila ahí ya significa
   "confirmado que viene" (a diferencia de `event_rsvps`, que sí tiene
   yes/no/maybe para miembros registrados).
-- `event_tasks` usa `(event_id, task_type)` como primary key compuesta:
-  a lo sumo una asignación vigente por tipo de tarea y evento, así que
-  reasignar es un `upsert`, no un insert nuevo.
+- `event_tasks` originalmente usaba `(event_id, task_type)` como
+  primary key compuesta (una sola asignación por tarea y evento).
+  `0012_event_tasks_multi_assignee.sql` lo cambió a un `id` propio +
+  `unique (event_id, task_type, assigned_to)`: una fila = una
+  asignación, así que "compra de insumos", "lavado de platos" y "orden
+  de la sede" pueden tener varias filas (varias personas). "Reserva de
+  cancha" sigue tratándose como una sola persona a la vez, pero a nivel
+  de aplicación (`setReservaCanchaAssignee` borra la fila anterior
+  antes de insertar la nueva), no de constraint — la tabla en sí ya no
+  distingue "tareas de una persona" de "tareas de varias".
+  `0012` también sacó `'convocatoria'` del `check` de `task_type` (ya
+  no es una tarea seteable) y reemplazó la policy de `update` por una
+  de `delete` (`using (true)`): reasignar ahora es sacar una fila y
+  sumar otra, no un update de la misma fila.
 - `venues.host_user_id` es una columna separada de `venues.created_by`
   a propósito: `created_by` es quién tipeó el nombre del lugar por
   primera vez, `host_user_id` es de quién es la casa — dos conceptos
@@ -103,17 +118,26 @@ Puntos que el SQL no explica por sí solo:
 
 ### Tareas
 
-1. Debajo de las secciones de RSVP, una sección "Tareas" muestra
-   "Creado por: X" (de `events.created_by`) y, para cada tipo de tarea
-   (4 si el evento no tiene fútbol, 5 si sí), un `<select>` con los
-   miembros registrados.
-2. `<TaskAssignSelect>` hace auto-submit al cambiar la selección
-   (`assignEventTask`), sin un botón "Guardar" separado por tarea —
-   con hasta 5 tareas en la misma sección, pedir un submit por cada una
-   sería tedioso.
-3. `assignEventTask(eventId, taskType, assignedTo)`: `upsert` en
-   `event_tasks` con `onConflict: "event_id,task_type"`, mismo patrón
-   que `upsertFutbolStats`.
+1. Debajo de las secciones de RSVP, un `<details>` nativo colapsado por
+   defecto ("Asignación de tareas") muestra "Creado por: X" (de
+   `events.created_by`) y, para cada tipo de tarea (3 si el evento no
+   tiene fútbol, 4 si sí), su editor de asignación.
+2. Para "compra de insumos", "lavado de platos" y "orden de la sede":
+   `<TaskAssigneesEditor>` — mismo patrón visual que la sección de
+   Invitados (chips con `Avatar` + nombre + X para sacar, más un
+   "+ Agregar" que revela un `<select>` con los miembros que todavía no
+   están asignados a esa tarea, para no poder sumar a la misma persona
+   dos veces). Llama a `addTaskAssignee`/`removeTaskAssignee`.
+3. Para "reserva de cancha": `<TaskAssignSelect>` sigue siendo un
+   único `<select>` con auto-submit al cambiar la selección, pero
+   ahora llama a `setReservaCanchaAssignee` — que borra la fila
+   anterior de `(event_id, 'reserva_cancha')` e inserta la nueva,
+   reemplazando en vez de sumar.
+4. `addTaskAssignee(eventId, taskType, userId)`: `upsert` en
+   `event_tasks` con `onConflict: "event_id,task_type,assigned_to",
+   ignoreDuplicates: true`. `removeTaskAssignee(taskId, eventId)`:
+   `delete` por `id` — la policy RLS (`using (true)`) es la barrera
+   real.
 
 ### Sede con dueño
 
@@ -156,6 +180,13 @@ Puntos que el SQL no explica por sí solo:
       evento.
 - [x] "Reserva de cancha" solo aparece como tarea si el evento tiene
       fútbol.
+- [x] La sección de tareas arranca colapsada.
+- [x] "Convocatoria" no aparece en la lista de tareas seteables.
+- [x] "Compra de insumos", "lavado de platos" y "orden de la sede"
+      admiten sumar y sacar varias personas; un mismo miembro no se
+      puede sumar dos veces a la misma tarea.
+- [x] Cambiar el `<select>` de "reserva de cancha" reemplaza a la
+      persona anterior en vez de sumarla como una segunda fila.
 - [x] Cargar un lugar nuevo con dueño lo muestra junto al lugar en la
       página del evento.
 - [x] El porcentaje de asistencia calculado a mano coincide con el
@@ -173,6 +204,9 @@ Puntos que el SQL no explica por sí solo:
 | Lista fija de tipos de tarea, un asignado por tipo | Tareas de texto libre, o múltiples personas por tarea | Decisión del usuario: alcanza con una lista predefinida y simple de asignar. |
 | `host_user_id` como columna nueva en `venues`, separada de `created_by` | Reusar `created_by` como "dueño de la casa" | Son conceptos distintos: quién tipeó el lugar por primera vez no es necesariamente de quién es la casa. |
 | `porcentaje` excluye `maybe` y no-respuesta del numerador y denominador | Contar `maybe` como medio punto, o como ausencia | Sin señal real de si la persona fue o no — sumarlo a cualquiera de los dos lados sería inventar un dato. |
+| "Reserva de cancha" sigue siendo de una sola persona, las otras 3 tareas admiten varias | Multi-asignación uniforme para las 4 tareas | Feedback explícito del usuario tras probar el PR: solo pidió "varios" para compra de insumos, lavado y orden. |
+| `event_tasks` sin distinción de schema entre tareas de una o varias personas (la UI decide) | Una tabla separada para tareas multi-persona | Evita duplicar el modelo de datos por una diferencia que hoy es puramente de interfaz — `setReservaCanchaAssignee` implementa "una sola persona" reemplazando la fila en vez de sumarla. |
+| "Convocatoria" sacada de `event_tasks` en vez de dejarla sin uso | Dejarla en la lista pero sin asignar nunca | Feedback del usuario: se asume que la hace quien creó el evento, no tiene sentido pedir que alguien la marque. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -185,3 +219,7 @@ Puntos que el SQL no explica por sí solo:
 ## 8. Changelog
 
 - 2026-09-16: creada e implementada.
+- 2026-09-16: feedback sobre PR #25 — sección de tareas colapsada por
+  defecto, "convocatoria" sacada de la lista de tareas seteables, y
+  "compra de insumos"/"lavado de platos"/"orden de la sede" pasan a
+  admitir varias personas asignadas (`0012_event_tasks_multi_assignee.sql`).

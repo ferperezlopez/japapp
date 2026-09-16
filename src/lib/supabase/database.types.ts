@@ -394,38 +394,38 @@ export interface Database {
       };
       event_tasks: {
         Row: {
+          id: string;
           event_id: string;
           task_type:
             | "compra_insumos"
             | "lavado_platos"
             | "orden_sede"
-            | "reserva_cancha"
-            | "convocatoria";
-          assigned_to: string | null;
+            | "reserva_cancha";
+          assigned_to: string;
           updated_by: string;
           updated_at: string;
         };
         Insert: {
+          id?: string;
           event_id: string;
           task_type:
             | "compra_insumos"
             | "lavado_platos"
             | "orden_sede"
-            | "reserva_cancha"
-            | "convocatoria";
-          assigned_to?: string | null;
+            | "reserva_cancha";
+          assigned_to: string;
           updated_by: string;
           updated_at?: string;
         };
         Update: {
+          id?: string;
           event_id?: string;
           task_type?:
             | "compra_insumos"
             | "lavado_platos"
             | "orden_sede"
-            | "reserva_cancha"
-            | "convocatoria";
-          assigned_to?: string | null;
+            | "reserva_cancha";
+          assigned_to?: string;
           updated_by?: string;
           updated_at?: string;
         };
@@ -435,6 +435,13 @@ export interface Database {
             columns: ["event_id"];
             isOneToOne: false;
             referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_tasks_assigned_to_fkey";
+            columns: ["assigned_to"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];
