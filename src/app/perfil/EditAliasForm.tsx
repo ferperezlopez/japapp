@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { updateAlias } from "./actions";
 import { Button } from "@/components/ui/Button";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 export function EditAliasForm({ defaultAlias }: { defaultAlias: string }) {
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +16,7 @@ export function EditAliasForm({ defaultAlias }: { defaultAlias: string }) {
         setError(null);
         setSaved(false);
         startTransition(async () => {
-          const result = await updateAlias(formData);
+          const result = await withMinDuration(updateAlias(formData));
           if (result.error) setError(result.error);
           else setSaved(true);
         });

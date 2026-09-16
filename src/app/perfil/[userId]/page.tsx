@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ZoomableAvatar } from "@/components/ui/ZoomableAvatar";
+import { CopyableText } from "@/components/ui/CopyableText";
 
 export default async function UserProfilePage({
   params,
@@ -42,7 +43,10 @@ export default async function UserProfilePage({
           </p>
           {profile.alias && (
             <p className="text-xs text-foreground/50">
-              Alias de pago: {profile.alias}
+              Alias de pago:{" "}
+              <CopyableText text={profile.alias} className="text-foreground/70">
+                {profile.alias}
+              </CopyableText>
             </p>
           )}
         </div>

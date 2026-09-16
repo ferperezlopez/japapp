@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { addExpense } from "@/app/gastos/actions";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 interface Person {
   id: string;
@@ -38,7 +39,7 @@ export function AddExpenseForm({
       action={(formData: FormData) => {
         setError(null);
         startTransition(async () => {
-          const result = await addExpense(groupId, formData);
+          const result = await withMinDuration(addExpense(groupId, formData));
           if (result.error) setError(result.error);
         });
       }}

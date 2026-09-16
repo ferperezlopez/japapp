@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
+import { CopyableText } from "@/components/ui/CopyableText";
 import { AddMemberForm } from "./AddMemberForm";
 import { AddExpenseForm } from "@/components/gastos/AddExpenseForm";
 import { DeleteExpenseButton } from "@/components/gastos/DeleteExpenseButton";
@@ -211,7 +212,11 @@ export default async function GroupPage({
                   {memberAlias(s.to) && (
                     <span className="text-foreground/50">
                       {" "}
-                      (alias: {memberAlias(s.to)})
+                      (alias:{" "}
+                      <CopyableText text={memberAlias(s.to)!}>
+                        {memberAlias(s.to)}
+                      </CopyableText>
+                      )
                     </span>
                   )}
                 </li>

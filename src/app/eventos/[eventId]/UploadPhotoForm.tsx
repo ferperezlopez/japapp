@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { addEventMedia } from "../actions";
 import { Spinner } from "@/components/ui/Spinner";
 import { resizeImage } from "@/lib/images/resizeImage";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -36,25 +37,30 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
     }
 
     startTransition(async () => {
-      // Estas fotos alimentan la galería del evento y el carrusel de la
-      // landing — bajarlas a 1600px de lado más largo alcanza de sobra
-      // para pantalla y corta el peso de fotos de celular de varios MB.
-      const resized = await resizeImage(file, { maxDimension: 1600, quality: 0.82 });
-      const supabase = createClient();
-      const ext = resized.name.split(".").pop() || "jpg";
-      const path = `${eventId}/${crypto.randomUUID()}.${ext}`;
+      await withMinDuration(
+        (async () => {
+          // Estas fotos alimentan la galería del evento y el carrusel de
+          // la landing — bajarlas a 1600px de lado más largo alcanza de
+          // sobra para pantalla y corta el peso de fotos de celular de
+          // varios MB.
+          const resized = await resizeImage(file, { maxDimension: 1600, quality: 0.82 });
+          const supabase = createClient();
+          const ext = resized.name.split(".").pop() || "jpg";
+          const path = `${eventId}/${crypto.randomUUID()}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("event-photos")
-        .upload(path, resized, { contentType: resized.type });
+          const { error: uploadError } = await supabase.storage
+            .from("event-photos")
+            .upload(path, resized, { contentType: resized.type });
 
-      if (uploadError) {
-        setError("No se pudo subir la foto.");
-        return;
-      }
+          if (uploadError) {
+            setError("No se pudo subir la foto.");
+            return;
+          }
 
-      const result = await addEventMedia(eventId, path);
-      if (result.error) setError(result.error);
+          const result = await addEventMedia(eventId, path);
+          if (result.error) setError(result.error);
+        })(),
+      );
     });
   };
 

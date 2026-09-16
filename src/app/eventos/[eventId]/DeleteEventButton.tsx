@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteEvent } from "../actions";
 import { Spinner } from "@/components/ui/Spinner";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 export function DeleteEventButton({ eventId }: { eventId: string }) {
   const [pending, startTransition] = useTransition();
@@ -13,7 +14,7 @@ export function DeleteEventButton({ eventId }: { eventId: string }) {
     <button
       onClick={() =>
         startTransition(async () => {
-          await deleteEvent(eventId);
+          await withMinDuration(deleteEvent(eventId));
           router.push("/eventos");
         })
       }

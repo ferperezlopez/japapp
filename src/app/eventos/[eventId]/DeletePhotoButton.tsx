@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { deleteEventMedia } from "../actions";
 import { Spinner } from "@/components/ui/Spinner";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 export function DeletePhotoButton({
   eventId,
@@ -19,7 +20,7 @@ export function DeletePhotoButton({
     <button
       onClick={() =>
         startTransition(async () => {
-          await deleteEventMedia(eventId, mediaId, storagePath);
+          await withMinDuration(deleteEventMedia(eventId, mediaId, storagePath));
         })
       }
       disabled={pending}
