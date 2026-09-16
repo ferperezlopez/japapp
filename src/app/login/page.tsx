@@ -1,12 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+
+type Mode = "signin" | "signup";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("signin");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -22,6 +32,50 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     }
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+    const supabase = createClient();
+
+    if (mode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+      router.refresh();
+      router.push("/");
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+    if (data.session) {
+      router.refresh();
+      router.push("/");
+      return;
+    }
+    setInfo("Revisá tu email para confirmar la cuenta.");
+    setLoading(false);
   };
 
   return (
@@ -59,6 +113,80 @@ export default function LoginPage() {
           </svg>
           {loading ? "Ingresando..." : "Continuar con Google"}
         </button>
+
+        <div className="mt-6 flex items-center gap-3 text-xs text-foreground/40">
+          <span className="h-px flex-1 bg-surface-border" />
+          o
+          <span className="h-px flex-1 bg-surface-border" />
+        </div>
+
+        <div className="mt-6 flex justify-center gap-4 text-sm font-medium">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("signin");
+              setError(null);
+              setInfo(null);
+            }}
+            className={
+              mode === "signin"
+                ? "text-brand"
+                : "text-foreground/40 hover:text-foreground/70"
+            }
+          >
+            Iniciar sesión
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("signup");
+              setError(null);
+              setInfo(null);
+            }}
+            className={
+              mode === "signup"
+                ? "text-brand"
+                : "text-foreground/40 hover:text-foreground/70"
+            }
+          >
+            Crear cuenta
+          </button>
+        </div>
+
+        <form onSubmit={handleEmailSubmit} className="mt-4 space-y-3 text-left">
+          {mode === "signup" && (
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nombre"
+              required
+              className="w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+            />
+          )}
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            required
+            className="w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Contraseña"
+            required
+            minLength={6}
+            className="w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+          />
+          <Button type="submit" loading={loading} className="w-full justify-center">
+            {mode === "signin" ? "Iniciar sesión" : "Crear cuenta"}
+          </Button>
+        </form>
+
+        {info && <p className="mt-4 text-sm text-foreground/70">{info}</p>}
         {error && (
           <p className="mt-4 text-sm text-red-600 dark:text-red-400">
             {error}
