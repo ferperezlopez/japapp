@@ -13,6 +13,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(
+    null,
+  );
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -54,6 +57,26 @@ export default function LoginPage() {
       router.refresh();
       router.push("/");
       return;
+    }
+
+    // Aviso, no bloqueo (ver specs/014-login-tradicional.md): si el nombre
+    // se parece mucho a uno ya registrado, probablemente sea alguien que
+    // ya tiene cuenta (con Google, por ejemplo) y no se dio cuenta. Se
+    // avisa una sola vez; si confirma igual, se sigue con el alta normal.
+    if (!duplicateWarning) {
+      const { data: similar } = await supabase.rpc(
+        "find_similar_profile_names",
+        { candidate_name: name },
+      );
+      if (similar && similar.length > 0) {
+        setDuplicateWarning(
+          `Ya hay alguien registrado con un nombre parecido: ${similar
+            .map((s) => s.name)
+            .join(", ")}. Si sos vos, iniciá sesión en vez de crear una cuenta nueva.`,
+        );
+        setLoading(false);
+        return;
+      }
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -127,6 +150,7 @@ export default function LoginPage() {
               setMode("signin");
               setError(null);
               setInfo(null);
+              setDuplicateWarning(null);
             }}
             className={
               mode === "signin"
@@ -142,6 +166,7 @@ export default function LoginPage() {
               setMode("signup");
               setError(null);
               setInfo(null);
+              setDuplicateWarning(null);
             }}
             className={
               mode === "signup"
@@ -158,7 +183,10 @@ export default function LoginPage() {
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setDuplicateWarning(null);
+              }}
               placeholder="Nombre"
               required
               className="w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
@@ -182,10 +210,19 @@ export default function LoginPage() {
             className="w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           />
           <Button type="submit" loading={loading} className="w-full justify-center">
-            {mode === "signin" ? "Iniciar sesión" : "Crear cuenta"}
+            {mode === "signin"
+              ? "Iniciar sesión"
+              : duplicateWarning
+                ? "Crear igual"
+                : "Crear cuenta"}
           </Button>
         </form>
 
+        {duplicateWarning && (
+          <p className="mt-4 rounded-lg bg-amber-soft p-3 text-sm text-amber-ink">
+            {duplicateWarning}
+          </p>
+        )}
         {info && <p className="mt-4 text-sm text-foreground/70">{info}</p>}
         {error && (
           <p className="mt-4 text-sm text-red-600 dark:text-red-400">
