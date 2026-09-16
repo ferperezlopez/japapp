@@ -105,7 +105,7 @@ export default function LoginPage() {
     <div className="flex flex-1 items-center justify-center px-4">
       <Card className="animate-reveal w-full max-w-sm p-8 text-center">
         <h1 className="font-heading text-3xl font-semibold text-foreground">
-          JAP<span className="text-brand">app</span>
+          JAP<span className="text-brand">App</span>
         </h1>
         <p className="mt-2 text-sm text-foreground/60">
           Eventos, calculadoras de asado y empanadas, y gastos compartidos
