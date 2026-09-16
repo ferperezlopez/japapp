@@ -7,7 +7,10 @@ import type { Database } from "@/lib/supabase/database.types";
 
 // "venue" viene del <select> de lugares predefinidos; "__new__" indica que
 // se tipeó un lugar nuevo en newVenueName, que además se guarda en
-// `venues` para que quede disponible como opción la próxima vez. Usado
+// `venues` para que quede disponible como opción la próxima vez.
+// "newVenueHostUserId" es opcional: de quién es la casa (generalmente el
+// lugar donde se hace la JAPA es la casa de alguien) — separado de
+// created_by, que es solo quién tipeó el lugar por primera vez. Usado
 // tanto por createEvent como por updateEvent.
 async function resolveVenueLocation(
   supabase: SupabaseClient<Database>,
@@ -16,15 +19,18 @@ async function resolveVenueLocation(
 ) {
   const venueSelection = String(formData.get("venue") ?? "");
   const newVenueName = String(formData.get("newVenueName") ?? "").trim();
+  const newVenueHostUserId = String(formData.get("newVenueHostUserId") ?? "").trim();
 
   if (venueSelection === "__new__") {
     if (!newVenueName) return null;
-    await supabase
-      .from("venues")
-      .upsert(
-        { name: newVenueName, created_by: userId },
-        { onConflict: "name", ignoreDuplicates: true },
-      );
+    await supabase.from("venues").upsert(
+      {
+        name: newVenueName,
+        created_by: userId,
+        host_user_id: newVenueHostUserId || null,
+      },
+      { onConflict: "name", ignoreDuplicates: true },
+    );
     return newVenueName;
   }
 
@@ -246,6 +252,100 @@ export async function upsertFutbolStats(eventId: string, formData: FormData) {
       updated_at: new Date().toISOString(),
     },
     { onConflict: "event_id" },
+  );
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+// Invitados: gente fuera de la nómina que viene acompañando a un miembro
+// registrado. "existingGuestId" reusa un invitado ya cargado antes (en
+// cualquier evento); "newGuestName" registra uno nuevo, que a partir de
+// ahora también va a aparecer en la lista de invitados existentes.
+export async function addGuestToEvent(
+  eventId: string,
+  kind: "juntada" | "futbol",
+  formData: FormData,
+) {
+  const existingGuestId = String(formData.get("existingGuestId") ?? "").trim();
+  const newGuestName = String(formData.get("newGuestName") ?? "").trim();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  let guestId = existingGuestId;
+
+  if (!guestId) {
+    if (!newGuestName) return { error: "Elegí un invitado o escribí un nombre." };
+    const { data: guest, error: guestError } = await supabase
+      .from("guests")
+      .insert({ name: newGuestName, created_by: user.id })
+      .select("id")
+      .single();
+    if (guestError || !guest) {
+      return { error: guestError?.message ?? "No se pudo registrar al invitado." };
+    }
+    guestId = guest.id;
+  }
+
+  const { error } = await supabase.from("event_guests").upsert(
+    { event_id: eventId, guest_id: guestId, kind, added_by: user.id },
+    { onConflict: "event_id,guest_id,kind", ignoreDuplicates: true },
+  );
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+export async function removeGuestFromEvent(eventGuestId: string, eventId: string) {
+  const supabase = await createClient();
+
+  // La policy RLS "Quien sumo al invitado lo puede sacar" (added_by =
+  // auth.uid()) es la barrera real acá, igual que en deleteEvent — no se
+  // re-valida en la action, solo se oculta el botón en la UI a quien no
+  // fue quien lo sumó.
+  const { error } = await supabase.from("event_guests").delete().eq("id", eventGuestId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+// Tareas de organización del evento: cualquier logueado puede asignar o
+// reasignar, igual que MVP/goleador de fútbol (mismo criterio de confianza
+// total dentro del grupo de amigos), pero queda registrado quién lo hizo.
+export async function assignEventTask(
+  eventId: string,
+  taskType:
+    | "compra_insumos"
+    | "lavado_platos"
+    | "orden_sede"
+    | "reserva_cancha"
+    | "convocatoria",
+  assignedTo: string | null,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { error } = await supabase.from("event_tasks").upsert(
+    {
+      event_id: eventId,
+      task_type: taskType,
+      assigned_to: assignedTo,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "event_id,task_type" },
   );
 
   if (error) return { error: error.message };

@@ -23,14 +23,16 @@ export default async function EventosPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: events }, { data: rsvps }, { data: venues }] = await Promise.all([
-    supabase
-      .from("events")
-      .select("id, name, event_date, location, has_futbol")
-      .order("event_date", { ascending: true }),
-    supabase.from("event_rsvps").select("event_id, user_id, status"),
-    supabase.from("venues").select("id, name").order("name"),
-  ]);
+  const [{ data: events }, { data: rsvps }, { data: venues }, { data: members }] =
+    await Promise.all([
+      supabase
+        .from("events")
+        .select("id, name, event_date, location, has_futbol")
+        .order("event_date", { ascending: true }),
+      supabase.from("event_rsvps").select("event_id, user_id, status"),
+      supabase.from("venues").select("id, name").order("name"),
+      supabase.from("profiles").select("id, name, email").order("name"),
+    ]);
 
   const rsvpsByEvent = new Map<string, { userId: string; status: string }[]>();
   for (const r of rsvps ?? []) {
@@ -110,7 +112,7 @@ export default async function EventosPage() {
       </p>
 
       <div className="mt-6">
-        <CreateEventForm venues={venues ?? []} />
+        <CreateEventForm venues={venues ?? []} members={members ?? []} />
       </div>
 
       <section className="mt-8">

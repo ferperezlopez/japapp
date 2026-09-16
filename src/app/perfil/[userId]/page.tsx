@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ZoomableAvatar } from "@/components/ui/ZoomableAvatar";
 import { CopyableText } from "@/components/ui/CopyableText";
+import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
+import { calcularAsistencia } from "@/lib/eventos/attendance";
 
 export default async function UserProfilePage({
   params,
@@ -18,13 +20,18 @@ export default async function UserProfilePage({
   // solo lectura de uno mismo.
   if (userId === user.id) redirect("/perfil");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, email, alias, avatar_url")
-    .eq("id", userId)
-    .maybeSingle();
+  const [{ data: profile }, { data: rsvps }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("name, email, alias, avatar_url")
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase.from("event_rsvps").select("kind, status").eq("user_id", userId),
+  ]);
 
   if (!profile) notFound();
+
+  const attendance = calcularAsistencia(rsvps ?? []);
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
@@ -51,6 +58,8 @@ export default async function UserProfilePage({
           )}
         </div>
       </div>
+
+      <AttendanceStatsCard attendance={attendance} />
     </div>
   );
 }

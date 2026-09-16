@@ -18,11 +18,13 @@ export function EditEventForm({
   eventId,
   event,
   venues,
+  members,
   children,
 }: {
   eventId: string;
   event: EventDefaults;
   venues: { id: string; name: string }[];
+  members: { id: string; name: string | null; email: string }[];
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -72,6 +74,7 @@ export function EditEventForm({
     >
       <EventFormFields
         venues={venues}
+        members={members}
         defaultName={event.name}
         defaultEventDate={event.eventDateLocal}
         defaultVenueValue={defaultVenueValue}
