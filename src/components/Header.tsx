@@ -18,7 +18,7 @@ export function Header({
           href="/"
           className="font-heading text-lg font-semibold tracking-tight text-foreground"
         >
-          JAP<span className="text-brand">app</span>
+          JAP<span className="text-brand">App</span>
         </Link>
         <div className="flex items-center gap-1">
           <Link
