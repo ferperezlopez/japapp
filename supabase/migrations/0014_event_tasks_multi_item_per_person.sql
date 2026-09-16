@@ -1,0 +1,14 @@
+-- "Compra de insumos" debe permitir que la misma persona traiga más de
+-- un insumo (ej. carne Y hielo). La unique key de 0012, (event_id,
+-- task_type, assigned_to), solo dejaba una fila por persona y tarea —
+-- bloqueaba justamente eso.
+--
+-- No se reemplaza por una unique key más ancha (sumando item_id):
+-- Postgres trata cada NULL como distinto en una unique key, así que
+-- (event_id, task_type, assigned_to, item_id) no evitaría que la misma
+-- persona quede dos veces en "lavado_platos"/"orden_sede" (item_id
+-- siempre null ahí) — y una unique key parcial (con where) no se puede
+-- usar como target de upsert vía PostgREST/supabase-js. La prevención
+-- de duplicados exactos pasa a hacerse en la server action
+-- (addTaskAssignee), con un select antes del insert.
+alter table public.event_tasks drop constraint event_tasks_event_task_assignee_key;

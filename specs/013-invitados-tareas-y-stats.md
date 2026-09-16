@@ -2,7 +2,7 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/eventos` (extendida), `/eventos/[eventId]` (extendida), `/perfil` (extendida), `/perfil/[userId]` (extendida)
-- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`
+- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`, `supabase/migrations/0014_event_tasks_multi_item_per_person.sql`
 - **Última actualización:** 2026-09-16
 
 ## 1. Resumen
@@ -32,7 +32,9 @@ asistencia de cada persona en su perfil.
   Cualquier usuario logueado puede sumar, sacar o reemplazar
   asignaciones. En "compra de insumos", sumarse exige además elegir (o
   cargar) qué insumo se va a comprar, de un catálogo reusable entre
-  eventos (carne, snacks, bebidas, vinos, etc.).
+  eventos (carne, snacks, bebidas, vinos, etc.); una misma persona
+  puede traer varios insumos distintos (se listan indentados debajo de
+  su nombre, cada uno con su propia opción de sacarlo).
 - Sede con dueño: al cargar un lugar nuevo, se puede indicar de quién
   es la casa (generalmente el lugar de la JAPA es la casa de alguien).
   Se muestra junto al lugar en la página del evento.
@@ -97,6 +99,17 @@ Puntos que el SQL no explica por sí solo:
   reserva_cancha) pero obligatorio para `compra_insumos` vía un
   `check (task_type <> 'compra_insumos' or item_id is not null)` — la
   regla de negocio queda garantizada en la base, no solo en la UI.
+- `0014_event_tasks_multi_item_per_person.sql` sacó la unique key de
+  `0012` (`event_id, task_type, assigned_to`): bloqueaba que la misma
+  persona trajera más de un insumo. No se reemplazó por una unique key
+  más ancha sumando `item_id` porque Postgres trata cada `null` como
+  distinto en una unique key — eso no evitaría que la misma persona
+  quede dos veces en `lavado_platos`/`orden_sede` (`item_id` siempre
+  `null` ahí), y una unique key parcial (con `where`) no se puede usar
+  como target de `upsert` vía PostgREST/supabase-js. La prevención de
+  duplicados exactos (misma persona + mismo insumo, o misma persona sin
+  insumo) pasa a hacerse en `addTaskAssignee` con un `select` antes del
+  `insert`, en vez de confiar en `onConflict`.
 - `venues.host_user_id` es una columna separada de `venues.created_by`
   a propósito: `created_by` es quién tipeó el nombre del lugar por
   primera vez, `host_user_id` es de quién es la casa — dos conceptos
@@ -152,16 +165,23 @@ Puntos que el SQL no explica por sí solo:
    `delete` por `id` — la policy RLS (`using (true)`) es la barrera
    real.
 5. Para "compra de insumos", `<TaskAssigneesEditor>` recibe un prop
-   `items` (solo para ese `task_type`) y el flujo "+ Agregar" exige,
-   además del miembro, elegir un insumo de un segundo `<select>` o
-   cargar uno nuevo (mismo patrón visual que `<AddGuestForm>`, con
-   estado de React directo en vez de `FormData` ya que este componente
-   llama a la action con argumentos posicionales). `addTaskAssignee`
-   valida el ítem igual que `addGuestToEvent` valida el invitado: si
-   viene un nombre nuevo, primero `upsert` en `insumo_items` con
-   `onConflict: "name"` (tolera que dos personas carguen el mismo
-   insumo nuevo a la vez); con el `item_id` resuelto, se guarda la
-   asignación. Cada chip muestra `{nombre} — {insumo}`.
+   `items` (solo para ese `task_type`) y agrupa los `assignees` por
+   persona: una fila con avatar + nombre, y debajo, indentados, sus
+   insumos (cada uno con su propia X para sacarlo). Cada persona tiene
+   su propio "+ Agregar insumo" (selector de insumo solamente, sin
+   volver a elegir el miembro) para sumarle otro; además, un
+   "+ Agregar persona" al final del todo suma a alguien nuevo (con
+   selector de miembro + insumo). El selector de insumo (existente o
+   "+ Nuevo insumo…" con input de texto) es un sub-componente
+   (`ItemPicker`) reusado en ambos flujos.
+6. `addTaskAssignee` valida el ítem igual que `addGuestToEvent` valida
+   el invitado: si viene un nombre nuevo, primero `upsert` en
+   `insumo_items` con `onConflict: "name"` (tolera que dos personas
+   carguen el mismo insumo nuevo a la vez); con el `item_id` resuelto,
+   hace un `select` por `(event_id, task_type, assigned_to, item_id)`
+   (o sin `item_id` para lavado_platos/orden_sede) y solo inserta si no
+   existe ya esa fila exacta — reemplaza al `upsert` con `onConflict`
+   que usaba antes de `0014` (ver sección 3).
 
 ### Sede con dueño
 
@@ -216,6 +236,11 @@ Puntos que el SQL no explica por sí solo:
 - [x] Cargar un insumo nuevo lo deja disponible para elegir (sin
       re-tipear) en otro evento.
 - [x] "Lavado de platos" y "orden de la sede" no piden ningún insumo.
+- [x] La misma persona puede sumar más de un insumo a "compra de
+      insumos"; cada insumo se lista indentado debajo de su nombre con
+      su propia X.
+- [x] Sumar el mismo insumo dos veces a la misma persona no crea una
+      fila duplicada.
 - [x] Cargar un lugar nuevo con dueño lo muestra junto al lugar en la
       página del evento.
 - [x] El porcentaje de asistencia calculado a mano coincide con el
@@ -238,6 +263,8 @@ Puntos que el SQL no explica por sí solo:
 | "Convocatoria" sacada de `event_tasks` en vez de dejarla sin uso | Dejarla en la lista pero sin asignar nunca | Feedback del usuario: se asume que la hace quien creó el evento, no tiene sentido pedir que alguien la marque. |
 | Insumo obligatorio solo para "compra de insumos", vía `check` en la base | Insumo opcional, o validación solo en la UI | Pedido explícito del usuario ("obligación"); un `check` a nivel de base evita que un bug de UI deje una asignación sin insumo. |
 | Catálogo `insumo_items` reusable entre eventos (mismo patrón que `guests`) | Texto libre por asignación, sin catálogo | Pedido explícito del usuario: poder elegir de una lista ítems ya cargados antes, con opción de agregar uno nuevo. |
+| Una persona puede traer varios insumos en "compra de insumos" | Un insumo por persona (como quedó en `0013`) | Feedback del usuario tras probar el PR: alguien puede comprar más de una cosa (ej. carne y hielo). |
+| Prevención de duplicados en `addTaskAssignee` vía `select` + `insert` en la action | Una unique key más ancha (sumando `item_id`) a nivel de base | Postgres no distingue duplicados de `null` en una unique key, y una unique key parcial no sirve como target de `upsert` en PostgREST/supabase-js — ver sección 3. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -246,6 +273,13 @@ Puntos que el SQL no explica por sí solo:
 - Proxy-RSVP entre miembros registrados.
 - Historial/tabla de invitados frecuentes con cuántas veces vino cada
   uno.
+- Idea planteada por el usuario, no implementada todavía: al cargar un
+  gasto (`specs/002-gastos.md`), sugerir o precargar como gastos
+  default los insumos que cada persona quedó asignada a comprar en
+  "compra de insumos" (esa persona sería quien pagó). Requeriría
+  decidir cómo mapear insumos a montos (hoy `insumo_items` no tiene
+  precio) y cómo evitar duplicar el gasto si la persona ya lo cargó a
+  mano — queda pendiente de diseño.
 
 ## 8. Changelog
 
@@ -257,3 +291,7 @@ Puntos que el SQL no explica por sí solo:
 - 2026-09-16: feedback sobre PR #26 — sumarse a "compra de insumos"
   ahora exige elegir o cargar qué insumo se va a comprar, de un
   catálogo reusable `insumo_items` (`0013_insumo_items.sql`).
+- 2026-09-16: fix reportado sobre PR #26 mergeado — la misma persona
+  ahora puede traer varios insumos a "compra de insumos" (antes quedaba
+  bloqueada la segunda asignación), listados indentados debajo de su
+  nombre (`0014_event_tasks_multi_item_per_person.sql`).
