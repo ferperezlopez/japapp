@@ -7,6 +7,7 @@ import { DeleteEventButton } from "./DeleteEventButton";
 import { EditEventForm } from "./EditEventForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
 import { FutbolTeamsSection } from "./FutbolTeamsSection";
+import { RemoveFutbolButton } from "./RemoveFutbolButton";
 import { UploadPhotoForm } from "./UploadPhotoForm";
 import { PhotoGrid } from "./PhotoGrid";
 import { Avatar } from "@/components/ui/Avatar";
@@ -531,6 +532,7 @@ export default async function EventoPage({
             candidates={futbolTeamCandidates}
             initialAssignment={futbolTeams}
           />
+          <RemoveFutbolButton eventId={eventId} />
         </>
       )}
 

@@ -26,8 +26,11 @@ hacerlo a mano por WhatsApp cada vez que se junta el grupo.
 - Interacción por **toque** (tocar un jugador y después la franja, o
   "Sin asignar", donde va) — sin arrastrar. Ver sección 6 para el
   porqué.
-- Camisetas con dorsal: Equipo 1 con camiseta clara, Equipo 2 con
-  camiseta oscura, número visual (no persistido) por posición.
+- Camisetas grandes con el nombre abreviado del jugador (ej. "F. Perez"):
+  Equipo 1 con camiseta clara, Equipo 2 con camiseta oscura — y el
+  arquero de cualquiera de los dos equipos con un tercer color propio
+  (amarillo, el mismo que ya usa la app para "aviso/pendiente"), para
+  distinguirlo de un vistazo sin tener que fijarse en la franja.
 - Un arquero por equipo (mover a otro jugador ahí pasa al anterior a
   defensores); defensores y delanteros sin tope estricto (se acomodan
   varios en la misma franja si la convocatoria da para más de 2).
@@ -130,13 +133,14 @@ Puntos que el SQL no explica por sí solo:
    toque de más). Mover un jugador a la franja de arquero de un equipo
    que ya tenía uno pasa al anterior a defensores (nunca lo deja sin
    equipo).
-6. Cada jugador en la cancha se muestra como una camiseta con dorsal
-   (SVG inline, sin dependencia nueva): clara con número oscuro para
-   Equipo 1, oscura con número claro para Equipo 2. El número es
-   puramente visual — no se persiste, se recalcula en cada render
-   numerando arquero (1) y siguiendo con defensores y delanteros en
-   orden alfabético por nombre dentro de cada equipo, para que no salte
-   al azar entre recargas.
+6. Cada jugador en la cancha se muestra como una camiseta grande con su
+   nombre abreviado (SVG inline, sin dependencia nueva): inicial del
+   nombre + primer apellido (ej. "F. Perez"), calculado en el momento
+   (no se persiste, es una función pura sobre `candidate.name`). El
+   color de la camiseta depende de la posición antes que del equipo:
+   arquero siempre en el tercer color (amarillo), y solo defensores/
+   delanteros usan el color del equipo (clara para Equipo 1, oscura
+   para Equipo 2).
 7. "Guardar equipos" arma el array de asignaciones a partir de los
    equipos 1 y 2 (quienes quedaron en "Sin asignar" no se guardan) y
    llama a `saveFutbolTeams(eventId, assignments)`, que borra todas las
@@ -162,6 +166,10 @@ Puntos que el SQL no explica por sí solo:
       exactamente el último estado guardado, posiciones incluidas.
 - [x] Alguien que ya estaba en un equipo guardado sigue apareciendo en
       el modal aunque haya cambiado su RSVP de fútbol después.
+- [x] Las camisetas son grandes y muestran el nombre abreviado del
+      jugador (ej. "F. Perez"), no un número.
+- [x] El arquero de cualquier equipo se ve en un tercer color (amarillo),
+      distinto de la camiseta clara/oscura del resto de su equipo.
 
 ## 6. Decisiones y tradeoffs
 
@@ -170,7 +178,8 @@ Puntos que el SQL no explica por sí solo:
 | Tocar y ubicar (tocar jugador, tocar destino) | Arrastrar y soltar (drag-and-drop) | La app no tenía ninguna librería de DnD instalada ni drag nativo de HTML5 en uso; es una PWA touch-first donde el drag nativo anda mal en celular. Decisión confirmada con el usuario. |
 | Cancha vertical con formación fija (arquero, defensores, delanteros) | Cancha horizontal con solo el arquero destacado (primer diseño, PR #31) | El usuario vio el primer diseño (dos mitades lado a lado, sin formación) y pidió explícitamente cancha vertical, camisetas con dorsal por equipo (clara/oscura) y posiciones fijas, con una imagen ilustrativa de referencia conceptual. |
 | Defensores/delanteros sin tope estricto (máximo 2 por línea "recomendado") | Cupos estrictos 1-2-2 con excedente en "Sin asignar" | Decisión confirmada con el usuario: una convocatoria real de 8 a 12 personas no siempre da justo 5 por equipo: forzar el excedente a "Sin asignar" bloquearía sin necesidad a alguien que sí va a jugar. |
-| Dorsal puramente visual (no persistido) | Guardar el número en la base | El número no tiene ningún uso fuera de la cancha del modal (no aparece en el resumen de solo lectura ni en ningún otro lado); persistirlo sumaría una columna y lógica de reasignación sin ningún beneficio real. |
+| Nombre abreviado en la casaca ("F. Perez"), sin dorsal numérico | Número de camiseta | El usuario pidió explícitamente ver el nombre en la camiseta; con la casaca agrandada (a pedido del usuario, "hay espacio de sobra") entra cómodo y es más útil que un número arbitrario para identificar jugadores de un vistazo. |
+| Arquero con un tercer color (amarillo) sin importar el equipo | Mantener el color de camiseta del equipo también para el arquero | Pedido explícito del usuario ("arquero destacado con otro color"); reusa el amarillo que la app ya usa para "aviso/pendiente" (`--color-amber`) en vez de inventar un color nuevo, y se adapta solo a dark mode al ser una variable CSS. |
 | Equipos guardados en la base (tabla nueva) | Herramienta de "repartamos ahora" sin persistencia | Decisión explícita del usuario: que quede guardado y visible/editable por cualquiera, igual que tareas/invitados/stats — no una pantalla que se descarta al cerrar. |
 | Guardar como reemplazo completo (borrar + insertar) | Reconciliar fila por fila (upsert incremental) | El modal ya maneja el estado entero en memoria y hace un solo submit; reconciliar fila por fila sumaría complejidad sin ningún beneficio real acá (a diferencia de invitados/tareas, que se agregan/sacan de a uno con la página siempre montada). |
 | Aviso no bloqueante si un equipo tiene menos de 4 | Bloquear el guardado | Mismo criterio de confianza total que el resto de la app: la convocatoria real puede no dar para 5 vs 5, y la app nunca le impide a alguien guardar lo que decidió. |
@@ -186,9 +195,13 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
-- 2026-09-16: creada e implementada (cancha horizontal, arquero
-  destacado con 🧤 sin formación).
+- 2026-09-16: ajustes visuales a pedido del usuario tras ver el PR #32
+  — camisetas más grandes, nombre abreviado en la casaca en vez de
+  dorsal numérico, arquero en un tercer color (amarillo) sin importar
+  el equipo.
 - 2026-09-16: rediseño a pedido del usuario tras ver el PR #31 —
   cancha vertical, camisetas con dorsal por equipo (clara/oscura),
   formación fija (arquero, defensores, delanteros) sin tope estricto
   por línea. Migración `0017` reemplaza `is_goalkeeper` por `position`.
+- 2026-09-16: creada e implementada (cancha horizontal, arquero
+  destacado con 🧤 sin formación).

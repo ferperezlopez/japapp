@@ -2,8 +2,9 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/`, `/eventos`, `/eventos/[eventId]`
-- **Migraciones relacionadas:** `supabase/migrations/0005_evento_futbol.sql`
-- **Última actualización:** 2026-09-14
+- **Migraciones relacionadas:** `supabase/migrations/0005_evento_futbol.sql`,
+  `supabase/migrations/0018_remove_event_futbol.sql`
+- **Última actualización:** 2026-09-16
 
 ## 1. Resumen
 
@@ -29,21 +30,41 @@ lugar, mismos gastos.
   `/eventos` a confirmar.
 - Badge ⚽ en la lista de `/eventos` para identificar de un vistazo qué
   eventos tienen fútbol.
+- Sacar el fútbol de un evento ya creado si al final no se juega: un
+  botón "El fútbol no se hace más — quitarlo de este evento", visible a
+  **cualquier** miembro logueado (no solo a quien creó el evento) desde
+  la sección de fútbol misma. No borra los datos ya cargados (RSVPs de
+  fútbol, `futbol_stats`, `futbol_teams`) — solo apaga `has_futbol`, así
+  que esas secciones dejan de mostrarse pero nada se pierde.
 
 ### No incluye (por ahora)
 
 - Límite de cupo para el fútbol (ej. máximo 10 anotados).
 - Notificar por separado quién confirmó fútbol vs juntada (comparten el
   mismo botón de "Compartir en WhatsApp" del evento).
-- Editar `has_futbol` de un evento ya creado (solo se define al crear).
+- Volver a prender `has_futbol` una vez apagado (por el botón de sacarlo
+  o desde la edición) que no sea a través de "Editar evento" — esa
+  edición general sigue siendo solo de quien creó el evento
+  (`specs/003-eventos.md`); sacar el fútbol es la única acción sobre
+  `has_futbol` abierta a cualquiera.
 - Gastos separados para el fútbol (ej. cancha) — sigue siendo el mismo
   `group_id` de gastos del evento completo.
 
 ## 3. Modelo de datos
 
-Ver `supabase/migrations/0005_evento_futbol.sql` para el detalle completo.
+Ver `supabase/migrations/0005_evento_futbol.sql` y
+`0018_remove_event_futbol.sql` para el detalle completo.
 
 Puntos que el SQL no explica por sí solo:
+
+- `remove_event_futbol(p_event_id)` es una función de Postgres acotada
+  (`security definer`, `grant execute ... to authenticated`) que solo
+  hace `update events set has_futbol = false`. Existe porque la policy
+  de update de `events` exige `created_by = auth.uid()` (ver
+  `specs/003-eventos.md`), y abrir esa policy entera a cualquiera para
+  poder sacar el fútbol también dejaría editar nombre/fecha/lugar a
+  cualquiera — más de lo pedido. La función bypassea RLS pero solo
+  puede tocar esa única columna, a un único valor.
 
 - Se optó por agregar una columna `kind` (`'juntada' | 'futbol'`) a la
   tabla `event_rsvps` existente, en vez de crear una tabla
@@ -96,6 +117,15 @@ Puntos que el SQL no explica por sí solo:
    próximo evento agendado, que es lo que el usuario pidió resolver
    ("que figure que hay un evento para poder confirmarse sin ir a
    buscarlo").
+6. `has_futbol` de un evento ya creado se puede prender o apagar desde
+   "Editar evento" (`EventFormFields`/`updateEvent`), pero eso sigue
+   siendo solo de quien creó el evento. Para el caso puntual de "el
+   fútbol no se termina jugando", el botón `<RemoveFutbolButton>` (en
+   la sección de fútbol misma, visible con `has_futbol = true`) llama a
+   `removeEventFutbol(eventId)`, que usa `supabase.rpc("remove_event_futbol", ...)`
+   en vez de un `update` directo — cualquier logueado puede usarlo, no
+   solo el creador. Al apagar `has_futbol`, la página deja de mostrar
+   la sección de fútbol (RSVP, stats, equipos) sin borrar ninguna fila.
 
 ## 5. Criterios de aceptación
 
@@ -113,13 +143,20 @@ Puntos que el SQL no explica por sí solo:
 - [x] Si no hay ningún evento con fecha futura, la landing no muestra el
       banner (se comporta como antes de esta feature).
 - [x] El listado de `/eventos` marca con ⚽ los eventos con fútbol.
+- [x] Cualquier logueado (no solo el creador) puede apagar `has_futbol`
+      desde el botón de la sección de fútbol; las secciones de fútbol
+      desaparecen de la página sin borrar RSVPs/stats/equipos ya
+      cargados.
+- [x] Solo el creador del evento puede volver a prender `has_futbol`
+      (vía "Editar evento").
 
 ## 6. Decisiones y tradeoffs
 
 | Decisión | Alternativa descartada | Por qué |
 |---|---|---|
 | Columna `kind` en `event_rsvps` existente | Tabla `event_futbol_rsvps` separada | Mismo modelo de datos (confirmar sí/no/tal vez), evita duplicar upsert/RLS/agrupación; el costo es una PK compuesta de 3 columnas en vez de 2. |
-| `has_futbol` fijo al crear el evento, sin edición posterior | Formulario de edición de evento | Consistente con la spec de eventos (`003-eventos.md`), que ya no incluye edición general; si se equivocan, borran y recrean. |
+| `has_futbol` editable después de crear el evento (vía "Editar evento", y apagable por cualquiera vía RPC) | Fijo al crear, sin edición posterior (decisión original de esta spec) | El usuario pidió poder sacar el fútbol de un evento si al final no se juega; mantenerlo fijo forzaría a borrar y recrear el evento entero solo para eso. |
+| `remove_event_futbol` como función `security definer` acotada a una sola columna, en vez de abrir la policy de update de `events` a cualquiera | Ampliar la policy de update de `events` (`using (true)`) | Abrir la policy dejaría editar nombre/fecha/lugar a cualquiera, no solo apagar el fútbol — mucho más de lo pedido. |
 | "Evento en curso" en la landing = próximo evento por fecha, no un estado en tiempo real | Modelar `event_date` + `ends_at` para saber si está pasando "ahora" | No hay caso de uso que necesite distinguir "en curso" de "el próximo agendado"; agregar una columna de fin solo para esto sería sobre-ingeniería sin pedido explícito. |
 | `RsvpButtons` movido a `src/components/eventos/` | Duplicar el componente para la landing, o importarlo desde la carpeta de la ruta de evento | Sigue el patrón ya establecido en el repo (`src/components/gastos/`) para componentes reusados entre rutas distintas. |
 
@@ -133,6 +170,9 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-16: `has_futbol` pasa a ser editable (vía "Editar evento",
+  solo el creador) y se suma `remove_event_futbol` para que cualquier
+  logueado pueda sacar el fútbol de un evento si al final no se juega.
 - 2026-09-15: `specs/010-estadisticas-de-partidos.md` agregó carga de
   resultado/MVP/goleador dentro de la sección de fútbol de
   `/eventos/[eventId]` (tabla `futbol_stats` nueva).
