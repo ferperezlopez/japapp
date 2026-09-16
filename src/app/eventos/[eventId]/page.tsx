@@ -6,6 +6,7 @@ import { RsvpButtons } from "@/components/eventos/RsvpButtons";
 import { DeleteEventButton } from "./DeleteEventButton";
 import { EditEventForm } from "./EditEventForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
+import { FutbolTeamsSection } from "./FutbolTeamsSection";
 import { UploadPhotoForm } from "./UploadPhotoForm";
 import { PhotoGrid } from "./PhotoGrid";
 import { Avatar } from "@/components/ui/Avatar";
@@ -340,13 +341,20 @@ export default async function EventoPage({
     mvpUserId: string | null;
     goleadorUserId: string | null;
   } | null = null;
+  let futbolTeams: { userId: string; team: 1 | 2; isGoalkeeper: boolean }[] = [];
 
   if (event.has_futbol) {
-    const { data: statsRow } = await supabase
-      .from("futbol_stats")
-      .select("resultado, mvp_user_id, goleador_user_id")
-      .eq("event_id", eventId)
-      .maybeSingle();
+    const [{ data: statsRow }, { data: teamRows }] = await Promise.all([
+      supabase
+        .from("futbol_stats")
+        .select("resultado, mvp_user_id, goleador_user_id")
+        .eq("event_id", eventId)
+        .maybeSingle(),
+      supabase
+        .from("futbol_teams")
+        .select("user_id, team, is_goalkeeper")
+        .eq("event_id", eventId),
+    ]);
 
     if (statsRow) {
       futbolStats = {
@@ -355,11 +363,31 @@ export default async function EventoPage({
         goleadorUserId: statsRow.goleador_user_id,
       };
     }
+
+    futbolTeams = (teamRows ?? []).map((t) => ({
+      userId: t.user_id,
+      team: t.team as 1 | 2,
+      isGoalkeeper: t.is_goalkeeper,
+    }));
   }
 
   const futbolCandidates = attendeesFutbol
     .filter((a) => a.status === "yes")
     .map((a) => ({ userId: a.userId, name: a.name, avatarUrl: a.avatarUrl }));
+
+  // El pool del armador de equipos no es solo los confirmados actuales: si
+  // alguien ya quedó guardado en un equipo y después cambió su RSVP, sigue
+  // apareciendo (resuelto contra `members`) para no hacerlo desaparecer.
+  const futbolTeamCandidates = [
+    ...futbolCandidates,
+    ...futbolTeams
+      .filter((t) => !futbolCandidates.some((c) => c.userId === t.userId))
+      .map((t) => ({
+        userId: t.userId,
+        name: memberName(t.userId),
+        avatarUrl: memberAvatar(t.userId),
+      })),
+  ];
 
   const myStatus =
     (attendeesJuntada.find((a) => a.userId === user?.id)?.status as
@@ -493,6 +521,11 @@ export default async function EventoPage({
             eventId={eventId}
             stats={futbolStats}
             candidates={futbolCandidates}
+          />
+          <FutbolTeamsSection
+            eventId={eventId}
+            candidates={futbolTeamCandidates}
+            initialAssignment={futbolTeams}
           />
         </>
       )}

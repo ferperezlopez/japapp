@@ -546,6 +546,55 @@ export interface Database {
           },
         ];
       };
+      futbol_teams: {
+        Row: {
+          event_id: string;
+          user_id: string;
+          team: number;
+          is_goalkeeper: boolean;
+          updated_by: string;
+          updated_at: string;
+        };
+        Insert: {
+          event_id: string;
+          user_id: string;
+          team: number;
+          is_goalkeeper?: boolean;
+          updated_by: string;
+          updated_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          user_id?: string;
+          team?: number;
+          is_goalkeeper?: boolean;
+          updated_by?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "futbol_teams_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "futbol_teams_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "futbol_teams_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       event_media: {
         Row: {
           id: string;
