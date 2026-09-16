@@ -6,7 +6,12 @@
 export interface Database {
   public: {
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      find_similar_profile_names: {
+        Args: { candidate_name: string };
+        Returns: { name: string }[];
+      };
+    };
     Tables: {
       profiles: {
         Row: {
