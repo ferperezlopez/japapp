@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { AddGuestForm } from "./AddGuestForm";
 import { RemoveGuestButton } from "./RemoveGuestButton";
 import { TaskAssignSelect } from "./TaskAssignSelect";
+import { TaskAssigneesEditor } from "./TaskAssigneesEditor";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "long",
@@ -27,23 +28,32 @@ const GROUPS: { status: "yes" | "maybe" | "no"; label: string }[] = [
   { status: "no", label: "No van" },
 ];
 
-// "Creación del evento" no está en esta lista: ya se muestra por separado
-// como "Creado por", tomado de events.created_by.
-const TASK_TYPES: {
-  type:
-    | "compra_insumos"
-    | "lavado_platos"
-    | "orden_sede"
-    | "reserva_cancha"
-    | "convocatoria";
-  label: string;
-  futbolOnly?: boolean;
-}[] = [
-  { type: "compra_insumos", label: "Compra de insumos" },
-  { type: "lavado_platos", label: "Lavado de platos" },
-  { type: "orden_sede", label: "Orden de la sede" },
-  { type: "reserva_cancha", label: "Reserva de cancha", futbolOnly: true },
-  { type: "convocatoria", label: "Convocatoria" },
+// "Creación del evento" y "convocatoria" no están en esta lista: se
+// asumen hechas por quien creó el evento (events.created_by), mostrado
+// por separado como "Creado por".
+const TASK_TYPES: (
+  | {
+      type: "compra_insumos" | "lavado_platos" | "orden_sede";
+      label: string;
+      multi: true;
+      futbolOnly?: boolean;
+    }
+  | {
+      type: "reserva_cancha";
+      label: string;
+      multi: false;
+      futbolOnly?: boolean;
+    }
+)[] = [
+  { type: "compra_insumos", label: "Compra de insumos", multi: true },
+  { type: "lavado_platos", label: "Lavado de platos", multi: true },
+  { type: "orden_sede", label: "Orden de la sede", multi: true },
+  {
+    type: "reserva_cancha",
+    label: "Reserva de cancha",
+    multi: false,
+    futbolOnly: true,
+  },
 ];
 
 type Attendee = {
@@ -255,7 +265,7 @@ export default async function EventoPage({
       .from("event_rsvps")
       .select("user_id, status, kind, profiles(name, email, avatar_url)")
       .eq("event_id", eventId),
-    supabase.from("profiles").select("id, name, email").order("name"),
+    supabase.from("profiles").select("id, name, email, avatar_url").order("name"),
     supabase
       .from("venues")
       .select("id, name, host_user_id, profiles!venues_host_user_id_fkey(name, email)")
@@ -266,19 +276,35 @@ export default async function EventoPage({
       .select("id, guest_id, kind, added_by, guests(name)")
       .eq("event_id", eventId),
   ]);
-  const { data: taskRows } = await supabase
-    .from("event_tasks")
-    .select("task_type, assigned_to")
-    .eq("event_id", eventId);
-  const assignedByTask = new Map(
-    (taskRows ?? []).map((t) => [t.task_type, t.assigned_to]),
-  );
+  const [{ data: taskRows }, { data: insumoItems }] = await Promise.all([
+    supabase
+      .from("event_tasks")
+      .select("id, task_type, assigned_to, item_id")
+      .eq("event_id", eventId),
+    supabase.from("insumo_items").select("id, name").order("name"),
+  ]);
   const totalPeople = allProfiles?.length ?? 0;
   const members = allProfiles ?? [];
   const memberName = (userId: string) =>
     members.find((m) => m.id === userId)?.name ??
     members.find((m) => m.id === userId)?.email ??
     "Desconocido";
+  const memberAvatar = (userId: string) =>
+    members.find((m) => m.id === userId)?.avatar_url ?? null;
+  const itemName = (itemId: string | null) =>
+    itemId ? (insumoItems?.find((i) => i.id === itemId)?.name ?? null) : null;
+
+  const assigneesByTask = new Map<
+    string,
+    { id: string; userId: string; itemId: string | null }[]
+  >();
+  for (const t of taskRows ?? []) {
+    const list = assigneesByTask.get(t.task_type) ?? [];
+    list.push({ id: t.id, userId: t.assigned_to, itemId: t.item_id });
+    assigneesByTask.set(t.task_type, list);
+  }
+  const reservaCanchaAssignedTo =
+    assigneesByTask.get("reserva_cancha")?.[0]?.userId ?? null;
 
   const eventVenue = venues?.find((v) => v.name === event.location);
   const hostName = eventVenue?.profiles?.name ?? eventVenue?.profiles?.email ?? null;
@@ -472,29 +498,54 @@ export default async function EventoPage({
       )}
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium">Tareas</h2>
-        <p className="mt-1 text-xs text-foreground/50">
-          Creado por: {memberName(event.created_by)}
-        </p>
-        <div className="mt-3 space-y-3">
-          {TASK_TYPES.filter((t) => !t.futbolOnly || event.has_futbol).map(
-            (t) => (
-              <div key={t.type}>
-                <label className="block text-xs font-medium text-foreground/50">
-                  {t.label}
-                </label>
-                <div className="mt-1">
-                  <TaskAssignSelect
-                    eventId={eventId}
-                    taskType={t.type}
-                    assignedTo={assignedByTask.get(t.type) ?? null}
-                    members={members}
-                  />
+        <details className="rounded-xl border border-surface-border bg-surface p-4">
+          <summary className="cursor-pointer text-sm font-medium">
+            Asignación de tareas
+          </summary>
+          <p className="mt-3 text-xs text-foreground/50">
+            Creado por: {memberName(event.created_by)}
+          </p>
+          <div className="mt-3 space-y-3">
+            {TASK_TYPES.filter((t) => !t.futbolOnly || event.has_futbol).map(
+              (t) => (
+                <div key={t.type}>
+                  <label className="block text-xs font-medium text-foreground/50">
+                    {t.label}
+                  </label>
+                  <div className="mt-1">
+                    {t.multi ? (
+                      <TaskAssigneesEditor
+                        eventId={eventId}
+                        taskType={t.type}
+                        assignees={(assigneesByTask.get(t.type) ?? []).map(
+                          (a) => ({
+                            id: a.id,
+                            userId: a.userId,
+                            name: memberName(a.userId),
+                            avatarUrl: memberAvatar(a.userId),
+                            itemName: itemName(a.itemId),
+                          }),
+                        )}
+                        members={members}
+                        items={
+                          t.type === "compra_insumos"
+                            ? (insumoItems ?? [])
+                            : undefined
+                        }
+                      />
+                    ) : (
+                      <TaskAssignSelect
+                        eventId={eventId}
+                        assignedTo={reservaCanchaAssignedTo}
+                        members={members}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            ),
-          )}
-        </div>
+              ),
+            )}
+          </div>
+        </details>
       </section>
 
       <section className="mt-8">

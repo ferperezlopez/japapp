@@ -1,29 +1,19 @@
 "use client";
 
 import { useTransition } from "react";
-import { assignEventTask } from "../actions";
+import { setReservaCanchaAssignee } from "../actions";
 import { Spinner } from "@/components/ui/Spinner";
 import { withMinDuration } from "@/lib/withMinDuration";
 
-type TaskType =
-  | "compra_insumos"
-  | "lavado_platos"
-  | "orden_sede"
-  | "reserva_cancha"
-  | "convocatoria";
-
-// Auto-submit al cambiar de selección — mismo criterio de confianza total
-// que MVP/goleador de fútbol, pero sin botón de "Guardar" separado porque
-// acá hay hasta 5 tareas en la misma sección y pedir un submit por cada
-// una sería tedioso.
+// Única tarea de una sola persona a la vez ("Reserva de cancha"):
+// auto-submit al cambiar de selección, reemplazando a quien estaba
+// antes en vez de sumar (a diferencia de TaskAssigneesEditor).
 export function TaskAssignSelect({
   eventId,
-  taskType,
   assignedTo,
   members,
 }: {
   eventId: string;
-  taskType: TaskType;
   assignedTo: string | null;
   members: { id: string; name: string | null; email: string }[];
 }) {
@@ -37,7 +27,7 @@ export function TaskAssignSelect({
         onChange={(e) =>
           startTransition(async () => {
             await withMinDuration(
-              assignEventTask(eventId, taskType, e.target.value || null),
+              setReservaCanchaAssignee(eventId, e.target.value || null),
             );
           })
         }

@@ -318,18 +318,22 @@ export async function removeGuestFromEvent(eventGuestId: string, eventId: string
   return { ok: true };
 }
 
-// Tareas de organización del evento: cualquier logueado puede asignar o
-// reasignar, igual que MVP/goleador de fútbol (mismo criterio de confianza
-// total dentro del grupo de amigos), pero queda registrado quién lo hizo.
-export async function assignEventTask(
+// Tareas de organización del evento: cualquier logueado puede
+// sumar/sacar gente, igual que MVP/goleador de fútbol (mismo criterio de
+// confianza total dentro del grupo de amigos), pero queda registrado
+// quién lo hizo. "Compra de insumos", "lavado de platos" y "orden de la
+// sede" admiten varias personas (varias filas por task_type); "reserva
+// de cancha" es de una sola persona a la vez, ver setReservaCanchaAssignee.
+//
+// Solo "compra_insumos" pide un insumo (qué va a comprar esa persona):
+// igual criterio que addGuestToEvent con los invitados — se puede elegir
+// uno ya cargado antes (reusable entre eventos) o tipear uno nuevo, que
+// a partir de ahora también queda disponible para elegir.
+export async function addTaskAssignee(
   eventId: string,
-  taskType:
-    | "compra_insumos"
-    | "lavado_platos"
-    | "orden_sede"
-    | "reserva_cancha"
-    | "convocatoria",
-  assignedTo: string | null,
+  taskType: "compra_insumos" | "lavado_platos" | "orden_sede",
+  userId: string,
+  item?: { existingItemId?: string; newItemName?: string },
 ) {
   const supabase = await createClient();
   const {
@@ -337,18 +341,80 @@ export async function assignEventTask(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  let itemId: string | null = null;
+  if (taskType === "compra_insumos") {
+    itemId = item?.existingItemId || null;
+    if (!itemId) {
+      const newName = item?.newItemName?.trim();
+      if (!newName) return { error: "Elegí o cargá qué vas a comprar." };
+      const { data: newItem, error: itemError } = await supabase
+        .from("insumo_items")
+        .upsert({ name: newName, created_by: user.id }, { onConflict: "name" })
+        .select("id")
+        .single();
+      if (itemError || !newItem) {
+        return { error: itemError?.message ?? "No se pudo registrar el insumo." };
+      }
+      itemId = newItem.id;
+    }
+  }
+
   const { error } = await supabase.from("event_tasks").upsert(
     {
       event_id: eventId,
       task_type: taskType,
-      assigned_to: assignedTo,
+      assigned_to: userId,
+      item_id: itemId,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "event_id,task_type" },
+    { onConflict: "event_id,task_type,assigned_to", ignoreDuplicates: true },
   );
 
   if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+export async function removeTaskAssignee(taskId: string, eventId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("event_tasks").delete().eq("id", taskId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+// "Reserva de cancha" es la única tarea de una sola persona a la vez:
+// reasignar es sacar la fila anterior y sumar la nueva, no un update
+// (event_tasks ya no tiene una fila fija por task_type).
+export async function setReservaCanchaAssignee(
+  eventId: string,
+  userId: string | null,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { error: deleteError } = await supabase
+    .from("event_tasks")
+    .delete()
+    .eq("event_id", eventId)
+    .eq("task_type", "reserva_cancha");
+  if (deleteError) return { error: deleteError.message };
+
+  if (userId) {
+    const { error } = await supabase.from("event_tasks").insert({
+      event_id: eventId,
+      task_type: "reserva_cancha",
+      assigned_to: userId,
+      updated_by: user.id,
+    });
+    if (error) return { error: error.message };
+  }
 
   revalidatePath(`/eventos/${eventId}`);
   return { ok: true };

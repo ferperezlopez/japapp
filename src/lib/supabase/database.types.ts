@@ -392,40 +392,72 @@ export interface Database {
           },
         ];
       };
+      insumo_items: {
+        Row: {
+          id: string;
+          name: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_by?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "insumo_items_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       event_tasks: {
         Row: {
+          id: string;
           event_id: string;
           task_type:
             | "compra_insumos"
             | "lavado_platos"
             | "orden_sede"
-            | "reserva_cancha"
-            | "convocatoria";
-          assigned_to: string | null;
+            | "reserva_cancha";
+          assigned_to: string;
+          item_id: string | null;
           updated_by: string;
           updated_at: string;
         };
         Insert: {
+          id?: string;
           event_id: string;
           task_type:
             | "compra_insumos"
             | "lavado_platos"
             | "orden_sede"
-            | "reserva_cancha"
-            | "convocatoria";
-          assigned_to?: string | null;
+            | "reserva_cancha";
+          assigned_to: string;
+          item_id?: string | null;
           updated_by: string;
           updated_at?: string;
         };
         Update: {
+          id?: string;
           event_id?: string;
           task_type?:
             | "compra_insumos"
             | "lavado_platos"
             | "orden_sede"
-            | "reserva_cancha"
-            | "convocatoria";
-          assigned_to?: string | null;
+            | "reserva_cancha";
+          assigned_to?: string;
+          item_id?: string | null;
           updated_by?: string;
           updated_at?: string;
         };
@@ -435,6 +467,20 @@ export interface Database {
             columns: ["event_id"];
             isOneToOne: false;
             referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_tasks_assigned_to_fkey";
+            columns: ["assigned_to"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_tasks_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "insumo_items";
             referencedColumns: ["id"];
           },
         ];
