@@ -17,16 +17,42 @@ const POSITION_LABELS: Record<Position, string> = {
   fwd: "Delanteros",
 };
 
-// Camiseta con dorsal, SVG inline (sin dependencia nueva): equipo claro
-// (Equipo 1) vs oscuro (Equipo 2), número puramente visual — no se
-// guarda en la base, se recalcula en cada render a partir del orden
-// alfabético dentro de cada posición (estable entre recargas).
-function Jersey({ number, dark }: { number: number; dark: boolean }) {
-  const fill = dark ? "#111827" : "#f8fafc";
-  const stroke = dark ? "#4b5563" : "#94a3b8";
-  const textFill = dark ? "#f8fafc" : "#111827";
+type JerseyVariant = "light" | "dark" | "gk";
+
+const JERSEY_COLORS: Record<
+  JerseyVariant,
+  { fill: string; stroke: string; text: string }
+> = {
+  light: { fill: "#f8fafc", stroke: "#94a3b8", text: "#111827" },
+  dark: { fill: "#111827", stroke: "#4b5563", text: "#f8fafc" },
+  // El arquero se destaca con el mismo amarillo que ya usa la app para
+  // "aviso/pendiente" (--color-amber en globals.css) — se adapta solo a
+  // dark mode al ser una variable CSS, sin necesidad de un segundo set
+  // de colores hardcodeados.
+  gk: {
+    fill: "var(--color-amber)",
+    stroke: "var(--color-amber-hover)",
+    text: "var(--color-amber-ink)",
+  },
+};
+
+// "F. Perez" a partir de "Fernando Pérez López" — inicial del nombre +
+// el primer apellido (no todos), para que entre cómodo en la casaca.
+function nameOnJersey(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return { initial: "", surname: parts[0] ?? "" };
+  return { initial: `${parts[0][0]}.`, surname: parts[1] };
+}
+
+// Camiseta con nombre, SVG inline (sin dependencia nueva): clara para el
+// Equipo 1, oscura para el Equipo 2, y un tercer color (arquero) sin
+// importar el equipo — para que el arquero se distinga de un vistazo.
+function Jersey({ name, variant }: { name: string; variant: JerseyVariant }) {
+  const { fill, stroke, text } = JERSEY_COLORS[variant];
+  const { initial, surname } = nameOnJersey(name);
+  const surnameFontSize = surname.length > 7 ? 7 : 9;
   return (
-    <svg viewBox="0 0 64 64" className="h-10 w-9 shrink-0">
+    <svg viewBox="0 0 64 64" className="h-20 w-16 shrink-0">
       <path
         d="M20 4 L8 14 L14 24 L18 21 L18 58 L46 58 L46 21 L50 24 L56 14 L44 4 L36 9 L28 9 Z"
         fill={fill}
@@ -34,15 +60,27 @@ function Jersey({ number, dark }: { number: number; dark: boolean }) {
         strokeWidth="2"
         strokeLinejoin="round"
       />
+      {initial && (
+        <text
+          x="32"
+          y="33"
+          textAnchor="middle"
+          fontSize="9"
+          fontWeight="700"
+          fill={text}
+        >
+          {initial}
+        </text>
+      )}
       <text
         x="32"
-        y="43"
+        y={initial ? "46" : "40"}
         textAnchor="middle"
-        fontSize="18"
+        fontSize={surnameFontSize}
         fontWeight="700"
-        fill={textFill}
+        fill={text}
       >
-        {number}
+        {surname}
       </text>
     </svg>
   );
@@ -150,15 +188,7 @@ export function TeamBuilderModal({
     const gk = byPosition(team, "gk");
     const def = byPosition(team, "def");
     const fwd = byPosition(team, "fwd");
-    let n = 1;
-    const withNumbers = (list: Candidate[]) =>
-      list.map((c) => ({ ...c, number: n++ }));
-    return {
-      gk: withNumbers(gk),
-      def: withNumbers(def),
-      fwd: withNumbers(fwd),
-      total: gk.length + def.length + fwd.length,
-    };
+    return { gk, def, fwd, total: gk.length + def.length + fwd.length };
   };
 
   const team1 = teamOf(1);
@@ -167,7 +197,7 @@ export function TeamBuilderModal({
     (c) => playerState[c.userId]?.location === "unassigned",
   );
 
-  const renderPitchChip = (c: Candidate & { number: number }, dark: boolean) => {
+  const renderPitchChip = (c: Candidate, variant: JerseyVariant) => {
     const isSelected = selectedUserId === c.userId;
     return (
       <div
@@ -189,10 +219,7 @@ export function TeamBuilderModal({
           isSelected ? "bg-white/30 ring-2 ring-white" : "hover:bg-white/10"
         }`}
       >
-        <Jersey number={c.number} dark={dark} />
-        <span className="max-w-[3.75rem] truncate text-[10px] font-medium text-white drop-shadow">
-          {c.name}
-        </span>
+        <Jersey name={c.name} variant={variant} />
       </div>
     );
   };
@@ -200,20 +227,22 @@ export function TeamBuilderModal({
   const renderZone = (
     team: 1 | 2,
     position: Position,
-    players: (Candidate & { number: number })[],
+    players: Candidate[],
   ) => (
     <div
       onClick={(event) => {
         event.stopPropagation();
         moveSelectedTo({ team, position });
       }}
-      className="relative min-h-[3.5rem] cursor-pointer px-1 pb-1 pt-3.5"
+      className="relative min-h-[6rem] cursor-pointer px-1 pb-1 pt-3.5"
     >
       <span className="absolute left-1 top-0.5 text-[9px] font-medium uppercase tracking-wide text-white/60">
         {POSITION_LABELS[position]}
       </span>
       <div className="flex flex-wrap items-center justify-center gap-1">
-        {players.map((c) => renderPitchChip(c, team === 2))}
+        {players.map((c) =>
+          renderPitchChip(c, position === "gk" ? "gk" : team === 2 ? "dark" : "light"),
+        )}
       </div>
     </div>
   );
