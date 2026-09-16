@@ -3,24 +3,33 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
+// Piso de visibilidad: aunque la navegación sea instantánea (rutas
+// prefetcheadas, estáticas), el click deja un rastro perceptible en vez de
+// sentirse como que la app no respondió — mismo criterio que
+// withMinDuration para las acciones con spinner.
+const MIN_VISIBLE_MS = 250;
+
 // Barra de progreso indeterminada arriba de la pantalla: se activa apenas
-// se hace click en un link interno (antes de que la navegación termine) y
-// se apaga cuando usePathname refleja la ruta nueva. Sin esto, cambiar de
-// sección durante una carga lenta se siente como que la app no respondió.
+// se hace click en un link interno y se apaga cuando usePathname refleja
+// la ruta nueva, nunca antes de MIN_VISIBLE_MS.
 export function NavigationProgress() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
   const previousPathname = useRef(pathname);
-  const showTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shownAt = useRef<number | null>(null);
+  const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (previousPathname.current !== pathname) {
       previousPathname.current = pathname;
-      if (showTimeout.current !== null) {
-        clearTimeout(showTimeout.current);
-        showTimeout.current = null;
-      }
-      setVisible(false);
+      const elapsed = shownAt.current !== null ? Date.now() - shownAt.current : MIN_VISIBLE_MS;
+      const remaining = Math.max(0, MIN_VISIBLE_MS - elapsed);
+
+      if (hideTimeout.current !== null) clearTimeout(hideTimeout.current);
+      hideTimeout.current = setTimeout(() => {
+        setVisible(false);
+        shownAt.current = null;
+      }, remaining);
     }
   }, [pathname]);
 
@@ -53,17 +62,18 @@ export function NavigationProgress() {
       if (url.origin !== window.location.origin) return;
       if (url.pathname === previousPathname.current) return;
 
-      // Debounce: si la navegación es casi instantánea (rutas estáticas
-      // como las calculadoras), no llega a mostrarse — solo aparece cuando
-      // de verdad hay una espera perceptible.
-      if (showTimeout.current !== null) clearTimeout(showTimeout.current);
-      showTimeout.current = setTimeout(() => setVisible(true), 150);
+      if (hideTimeout.current !== null) {
+        clearTimeout(hideTimeout.current);
+        hideTimeout.current = null;
+      }
+      shownAt.current = Date.now();
+      setVisible(true);
     }
 
     document.addEventListener("click", handleClick);
     return () => {
       document.removeEventListener("click", handleClick);
-      if (showTimeout.current !== null) clearTimeout(showTimeout.current);
+      if (hideTimeout.current !== null) clearTimeout(hideTimeout.current);
     };
   }, []);
 

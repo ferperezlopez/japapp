@@ -22,6 +22,7 @@ export default function EmpanadasPage() {
           step={1}
           defaultValue={3}
           calcular={calcularEmpanadas}
+          resultTitle={(n) => `🥟 ${n} docenas de empanadas`}
         />
         <p className="mt-3 text-xs text-foreground/50">
           Sal, pimienta, provenzal y laurel: a gusto (
