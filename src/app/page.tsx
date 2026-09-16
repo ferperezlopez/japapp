@@ -68,8 +68,22 @@ export default async function Home() {
   } | null = null;
   let myStatus: "yes" | "no" | "maybe" | null = null;
   let myFutbolStatus: "yes" | "no" | "maybe" | null = null;
+  let recentMembers: { id: string; name: string | null; email: string }[] = [];
 
   if (user) {
+    // Sin login de Google, alguien nuevo no tiene forma de avisarle al
+    // resto que se sumó — este aviso (ventana fija de 7 días, sin marcar
+    // "visto") es el mecanismo elegido para eso, sin sumar notificaciones
+    // por email ni ninguna infraestructura nueva.
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const { data: newMembers } = await supabase
+      .from("profiles")
+      .select("id, name, email")
+      .neq("id", user.id)
+      .gte("created_at", sevenDaysAgo.toISOString())
+      .order("created_at", { ascending: false });
+    recentMembers = newMembers ?? [];
     // Pool general de fotos (ver specs/011-fotos-legacy-y-carrusel.md):
     // todas las fotos de todos los eventos, sin filtrar por evento ni por
     // "legacy" — las legacy también cuentan acá, solo se ocultan de la
@@ -166,6 +180,13 @@ export default async function Home() {
       <div className="mx-auto w-full max-w-2xl px-4 pb-8">
         {user ? (
           <div className="mt-2 flex flex-col gap-3">
+            {recentMembers.length > 0 && (
+              <Card className="animate-reveal p-4 text-sm">
+                🎉 Se sumó{recentMembers.length > 1 ? "n" : ""} a JAPapp:{" "}
+                {recentMembers.map((m) => m.name ?? m.email).join(", ")}
+              </Card>
+            )}
+
             {upcomingEvent && (
               <Card className="animate-reveal bg-grain border-eventos-mid/40 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-eventos">
@@ -244,7 +265,7 @@ export default async function Home() {
         ) : (
           <div className="mt-2">
             <Link href="/login">
-              <Button>Iniciar sesión con Google</Button>
+              <Button>Iniciar sesión</Button>
             </Link>
           </div>
         )}
