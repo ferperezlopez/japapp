@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createEvent } from "./actions";
 import { Button } from "@/components/ui/Button";
 import { EventFormFields } from "./EventFormFields";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 export function CreateEventForm({
   venues,
@@ -25,7 +26,7 @@ export function CreateEventForm({
       action={(formData: FormData) => {
         setError(null);
         startTransition(async () => {
-          const result = await createEvent(formData);
+          const result = await withMinDuration(createEvent(formData));
           if (result.error) {
             setError(result.error);
           } else if (result.eventId) {

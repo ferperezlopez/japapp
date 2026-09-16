@@ -4,6 +4,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { updateEvent } from "../actions";
 import { Button } from "@/components/ui/Button";
 import { EventFormFields, NEW_VENUE_VALUE } from "../EventFormFields";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 interface EventDefaults {
   name: string;
@@ -59,7 +60,7 @@ export function EditEventForm({
       action={(formData: FormData) => {
         setError(null);
         startTransition(async () => {
-          const result = await updateEvent(eventId, formData);
+          const result = await withMinDuration(updateEvent(eventId, formData));
           if (result.error) {
             setError(result.error);
           } else {

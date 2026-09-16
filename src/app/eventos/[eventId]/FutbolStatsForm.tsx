@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { upsertFutbolStats } from "../actions";
+import { withMinDuration } from "@/lib/withMinDuration";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 
@@ -112,7 +113,7 @@ export function FutbolStatsForm({
       action={(formData: FormData) => {
         setError(null);
         startTransition(async () => {
-          const result = await upsertFutbolStats(eventId, formData);
+          const result = await withMinDuration(upsertFutbolStats(eventId, formData));
           if (result.error) {
             setError(result.error);
           } else {

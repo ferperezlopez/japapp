@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createGroup } from "./actions";
 import { Button } from "@/components/ui/Button";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 export function CreateGroupForm() {
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +16,7 @@ export function CreateGroupForm() {
       action={(formData: FormData) => {
         setError(null);
         startTransition(async () => {
-          const result = await createGroup(formData);
+          const result = await withMinDuration(createGroup(formData));
           if (result.error) {
             setError(result.error);
           } else if (result.groupId) {

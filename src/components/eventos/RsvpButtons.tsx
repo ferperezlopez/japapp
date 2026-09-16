@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { setRsvp } from "@/app/eventos/actions";
 import { Spinner } from "@/components/ui/Spinner";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 type Status = "yes" | "no" | "maybe";
 
@@ -54,7 +55,7 @@ export function RsvpButtons({
                 setError(null);
                 setSubmittingStatus(option.status);
                 startTransition(async () => {
-                  const result = await setRsvp(eventId, option.status, kind);
+                  const result = await withMinDuration(setRsvp(eventId, option.status, kind));
                   if (result.error) setError(result.error);
                   setSubmittingStatus(null);
                 });

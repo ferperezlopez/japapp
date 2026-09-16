@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { deleteExpense } from "@/app/gastos/actions";
 import { Spinner } from "@/components/ui/Spinner";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 export function DeleteExpenseButton({
   groupId,
@@ -17,7 +18,7 @@ export function DeleteExpenseButton({
     <button
       onClick={() =>
         startTransition(async () => {
-          await deleteExpense(groupId, expenseId);
+          await withMinDuration(deleteExpense(groupId, expenseId));
         })
       }
       disabled={pending}

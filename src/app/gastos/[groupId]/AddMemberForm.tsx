@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { addMemberByEmail } from "../actions";
 import { Button } from "@/components/ui/Button";
+import { withMinDuration } from "@/lib/withMinDuration";
 
 export function AddMemberForm({ groupId }: { groupId: string }) {
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +14,7 @@ export function AddMemberForm({ groupId }: { groupId: string }) {
       action={(formData: FormData) => {
         setError(null);
         startTransition(async () => {
-          const result = await addMemberByEmail(groupId, formData);
+          const result = await withMinDuration(addMemberByEmail(groupId, formData));
           if (result.error) setError(result.error);
         });
       }}
