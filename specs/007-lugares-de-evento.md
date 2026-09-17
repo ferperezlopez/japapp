@@ -3,7 +3,8 @@
 - **Estado:** Implemented
 - **Rutas:** `/eventos` (formulario de alta)
 - **Migraciones relacionadas:** `supabase/migrations/0006_venues.sql`,
-  `supabase/migrations/0019_venue_gps.sql`
+  `supabase/migrations/0019_venue_gps.sql` (revertida por `0021`),
+  `supabase/migrations/0021_venue_address.sql`
 - **Última actualización:** 2026-09-17
 
 ## 1. Resumen
@@ -27,16 +28,24 @@ muestra.
   la próxima vez.
 - Debajo del selector de fecha/hora del formulario de alta, un texto con el
   día de la semana calculado a partir del valor elegido.
-- Coordenadas GPS opcionales (`venues.lat`/`lng`) cargadas con un mapa
-  interactivo (Leaflet + OpenStreetMap, sin API key) al crear un lugar
-  **nuevo**: tocar el mapa marca un pin. Si el lugar del evento tiene
-  coordenadas, la página del evento muestra un link "📍 Ver en el mapa".
+- Dirección opcional de texto libre (`venues.address`) cargada al crear un
+  lugar **nuevo**. Si el lugar del evento tiene dirección, la página del
+  evento muestra un link "🧭 Cómo llegar" que abre la navegación de Google
+  Maps hacia esa dirección directamente en el dispositivo de quien lo
+  toca (no un mapa para mirar, dispara la navegación).
 
 ### No incluye (por ahora)
 
-- Cargar o editar coordenadas GPS de un lugar **ya existente** — solo se
-  pueden cargar al crear el lugar por primera vez (ver sección 6, mismo
+- Cargar o editar la dirección de un lugar **ya existente** — solo se
+  puede cargar al crear el lugar por primera vez (ver sección 6, mismo
   criterio que `host_user_id`: sin policy de `update` en `venues`).
+- Un mapa interactivo para elegir la ubicación tocando un punto (se
+  probó con Leaflet + OpenStreetMap y se sacó — ver changelog): el
+  usuario no necesita ver ni marcar un mapa, solo registrar la dirección
+  como texto para que la navegación se dispare sola al tocarla.
+- Geocodificar o validar la dirección tipeada — es texto libre tal cual
+  lo escribe quien crea el lugar; Google Maps resuelve direcciones de
+  texto sin necesitar coordenadas ni una API key.
 - Editar o borrar un lugar de la lista.
 - Autocompletar o normalizar nombres parecidos ("Casa de Fer" vs "casa de
   fer" quedan como dos lugares distintos: el `unique` de `venues.name` es
@@ -47,8 +56,9 @@ muestra.
 
 ## 3. Modelo de datos
 
-Ver `supabase/migrations/0006_venues.sql` y `0019_venue_gps.sql` para el
-detalle completo.
+Ver `supabase/migrations/0006_venues.sql` y `0021_venue_address.sql` para
+el detalle completo (`0019_venue_gps.sql` agregó `lat`/`lng`, que `0021`
+borró — ver changelog).
 
 Puntos que el SQL no explica por sí solo:
 
@@ -61,15 +71,17 @@ Puntos que el SQL no explica por sí solo:
 - `venues.name` es `unique`: el upsert en `createEvent()` usa
   `onConflict: "name", ignoreDuplicates: true`, así que cargar un lugar que
   ya existe (con el mismo texto exacto) no falla ni duplica fila, solo no
-  hace nada. Como el pin de GPS viaja en ese mismo `upsert`
-  (`resolveVenueLocation` en `actions.ts`), si el lugar ya existe el pin
-  nuevo tampoco pisa nada — mismo comportamiento que `host_user_id`.
-- `lat`/`lng` son `double precision` nullable, sin constraint de rango:
-  no hay caso de uso que necesite validar que sean coordenadas "reales"
-  (el mapa solo puede generar valores válidos al hacer click).
+  hace nada. Como la dirección viaja en ese mismo `upsert`
+  (`resolveVenueLocation` en `actions.ts`), si el lugar ya existe la
+  dirección nueva tampoco pisa nada — mismo comportamiento que
+  `host_user_id`.
+- `venues.address` es `text` nullable, sin normalización ni validación de
+  formato: es la dirección tal cual la tipeó quien creó el lugar, y
+  Google Maps la resuelve como texto libre al armar el link de
+  navegación (sin necesitar coordenadas).
 - Sin policies de `update`/`delete` en `venues`: no hay forma de editar o
-  borrar un lugar desde la UI todavía (no se pidió), y por eso el pin de
-  GPS tampoco se puede agregar a un lugar ya guardado — decisión
+  borrar un lugar desde la UI todavía (no se pidió), y por eso la
+  dirección tampoco se puede agregar a un lugar ya guardado — decisión
   confirmada con el usuario al conversar el alcance.
 
 ## 4. Diseño / flujo
@@ -88,25 +100,21 @@ Puntos que el SQL no explica por sí solo:
    - Si no se eligió nada: `location = null` (igual que "sin lugar" antes
      de esta feature).
 
-**GPS del lugar:**
+**Dirección del lugar:**
 1. Al elegir "+ Nuevo lugar…", además del nombre y "¿de quién es la
-   casa?" aparece `<VenueLocationPicker>`, que carga
-   `LeafletMapPicker` vía `next/dynamic(..., { ssr: false })` — Leaflet
-   toca `window` al importarse, así que no puede evaluarse en el
-   server, ni siquiera dentro de un client component.
-2. `LeafletMapPicker` muestra un `<MapContainer>` con tiles públicos de
-   OpenStreetMap, centrado en Buenos Aires con zoom bajo si todavía no
-   hay pin. Tocar el mapa (`useMapEvents({ click })`) llama a
-   `onChange(lat, lng)`, que `EventFormFields` guarda en estado y
-   vuelca a dos `<input type="hidden">` (`newVenueLat`/`newVenueLng`)
-   para que viajen en el mismo `<form>`.
-3. `resolveVenueLocation` (`actions.ts`) lee esos dos campos y los suma
-   al `upsert` de `venues` — sin cambios en `createEvent`/`updateEvent`,
+   casa?" aparece un `<input name="newVenueAddress">` de texto libre
+   ("Dirección (opcional, para que se pueda navegar)").
+2. `resolveVenueLocation` (`actions.ts`) lee ese campo y lo suma al
+   `upsert` de `venues` — sin cambios en `createEvent`/`updateEvent`,
    que ya llaman a esa función sin conocer sus detalles internos.
-4. En `/eventos/[eventId]`, si el `venue` resuelto (`eventVenue`) tiene
-   `lat`/`lng`, aparece un link "📍 Ver en el mapa" junto a la fecha/
-   lugar, apuntando a `openstreetmap.org/?mlat=...&mlon=...` — no hace
-   falta ninguna librería para esto, es un link común.
+3. En `/eventos/[eventId]`, si el `venue` resuelto (`eventVenue`) tiene
+   `address`, aparece un link "🧭 Cómo llegar" junto a la fecha/lugar,
+   apuntando a
+   `https://www.google.com/maps/dir/?api=1&destination=<address codificada>`
+   — el link "Directions" oficial de Google Maps (sin API key: es solo
+   una URL), que en el celular de quien lo toca abre la app de mapas
+   instalada con la navegación ya armada hacia esa dirección, no un
+   mapa para mirar.
 
 **Día de la semana:**
 1. El input `datetime-local` del formulario de alta pasa a ser controlado
@@ -130,14 +138,14 @@ Puntos que el SQL no explica por sí solo:
       `location = null`, igual que el comportamiento previo.
 - [x] Al cargar una fecha/hora en el formulario de alta, se ve el día de la
       semana correspondiente debajo del input.
-- [x] Al elegir "+ Nuevo lugar…", tocar el mapa marca un pin y "Quitar
-      pin" lo saca; guardar el evento persiste esas coordenadas en
-      `venues`.
-- [x] Elegir un lugar existente de la lista no muestra ningún mapa (no
-      se puede agregar/editar GPS a un lugar ya guardado).
-- [x] Si el lugar del evento tiene coordenadas, la página del evento
-      muestra "📍 Ver en el mapa" con el link correcto; si no tiene, no
-      aparece nada.
+- [x] Al elegir "+ Nuevo lugar…", aparece un campo de dirección
+      opcional; guardar el evento persiste esa dirección en `venues`.
+- [x] Elegir un lugar existente de la lista no muestra el campo de
+      dirección (no se puede agregar/editar la dirección de un lugar ya
+      guardado).
+- [x] Si el lugar del evento tiene dirección cargada, la página del
+      evento muestra "🧭 Cómo llegar" con el link de navegación de
+      Google Maps hacia esa dirección; si no tiene, no aparece nada.
 
 ## 6. Decisiones y tradeoffs
 
@@ -145,19 +153,30 @@ Puntos que el SQL no explica por sí solo:
 |---|---|---|
 | `venues` como lista de sugerencias sin FK desde `events` | `events.venue_id` normalizado, sin columna `location` de texto | No hay caso de uso hoy que necesite la relación (filtrar eventos por lugar, editar un lugar y propagar el cambio); agregarla sería anticipar una necesidad no pedida. |
 | Día de la semana calculado en el cliente, mostrado como texto auxiliar | Intentar am `<input type="date">` custom que muestre el día en el propio calendario | El calendario del `datetime-local` es UI nativa del browser/SO, no manipulable desde CSS/JS; mostrar el dato calculado al lado es la única vía sin reemplazar el input nativo por un date-picker propio (fuera de alcance de este pedido puntual). |
-| Mapa con Leaflet + OpenStreetMap (gratis, sin API key) | Google Maps JavaScript API | Google Maps exige una API key con facturación habilitada que el usuario tendría que crear y mantener; Leaflet + tiles públicos de OSM da la misma interacción (tocar el mapa, tirar un pin) sin ese costo ni esa dependencia externa de credenciales. Confirmado con el usuario. Es la primera librería de UI externa del repo (hasta ahora todo se construyó a mano). |
-| GPS solo al crear un lugar nuevo, sin poder agregarlo a uno ya existente | Sumar policy de `update` + una pantalla para editar coordenadas de lugares guardados | Mismo criterio que `host_user_id`: no hay policy de `update` en `venues` hoy, y agregarla solo para esto sería una feature aparte no pedida. Confirmado con el usuario. |
+| Dirección de texto + link "Directions" de Google Maps (sin API key) | (a) Mapa Leaflet + OpenStreetMap con pin de coordenadas (probado, revertido); (b) Google Maps JavaScript API embebido | El usuario probó el mapa Leaflet y no lo necesitaba: solo quería registrar la dirección para que cualquier participante la toque y el dispositivo dispare la navegación — un mapa para mirar no resuelve eso. El link `google.com/maps/dir/?api=1&destination=...` hace exactamente eso sin necesitar coordenadas, sin API key y sin ninguna librería de mapas (se sacó `leaflet`/`react-leaflet`, quedó cero dependencias de UI externas de nuevo). Se descartó la opción (b) porque exige una API key con facturación que el usuario tendría que crear y mantener, y además el usuario aclaró que no necesita ver un mapa embebido en la app. |
+| Dirección solo al crear un lugar nuevo, sin poder agregarla a uno ya existente | Sumar policy de `update` + una pantalla para editar la dirección de lugares guardados | Mismo criterio que `host_user_id`: no hay policy de `update` en `venues` hoy, y agregarla solo para esto sería una feature aparte no pedida. Confirmado con el usuario. |
 
 ## 7. Futuro / fuera de alcance
 
-- Cargar/editar coordenadas GPS de un lugar ya existente (necesitaría
+- Cargar/editar la dirección de un lugar ya existente (necesitaría
   policy de `update` en `venues`).
 - Editar/borrar lugares de la lista.
 - Normalización de nombres para evitar duplicados casi-iguales.
 
 ## 8. Changelog
 
+- 2026-09-17: revertidas las coordenadas GPS/mapa Leaflet (agregadas
+  más temprano el mismo día) a pedido del usuario — probó el mapa y no
+  lo necesitaba, solo poder registrar la dirección y que cualquier
+  participante dispare la navegación al tocarla. `venues.lat`/`lng` se
+  borraron (`0021_venue_address.sql`) y se reemplazaron por
+  `venues.address` (texto libre); el link del evento pasó de "📍 Ver en
+  el mapa" (OpenStreetMap) a "🧭 Cómo llegar" (`google.com/maps/dir`,
+  dispara navegación directa, sin API key). Se desinstalaron
+  `leaflet`/`react-leaflet`/`@types/leaflet` — el repo vuelve a no
+  tener ninguna librería de UI externa.
 - 2026-09-17: coordenadas GPS opcionales por lugar (solo al crear uno
   nuevo), con mapa Leaflet + OpenStreetMap y link "Ver en el mapa" en
-  el evento. Primera librería de UI externa del repo.
+  el evento. Primera librería de UI externa del repo — revertido más
+  tarde el mismo día (ver entrada de arriba).
 - 2026-09-14: creada e implementada.

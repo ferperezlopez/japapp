@@ -254,7 +254,7 @@ export default async function EventoPage({
     supabase
       .from("venues")
       .select(
-        "id, name, host_user_id, lat, lng, profiles!venues_host_user_id_fkey(name, email)",
+        "id, name, host_user_id, address, profiles!venues_host_user_id_fkey(name, email)",
       )
       .order("name"),
     supabase.from("guests").select("id, name").order("name"),
@@ -428,16 +428,16 @@ export default async function EventoPage({
         {dateFormatter.format(new Date(event.event_date))}
         {event.location ? ` · ${event.location}` : ""}
         {hostName ? ` (casa de ${hostName})` : ""}
-        {eventVenue?.lat != null && eventVenue?.lng != null && (
+        {eventVenue?.address && (
           <>
             {" · "}
             <a
-              href={`https://www.openstreetmap.org/?mlat=${eventVenue.lat}&mlon=${eventVenue.lng}#map=16/${eventVenue.lat}/${eventVenue.lng}`}
+              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(eventVenue.address)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-eventos hover:underline"
             >
-              📍 Ver en el mapa
+              🧭 Cómo llegar
             </a>
           </>
         )}

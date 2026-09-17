@@ -287,8 +287,7 @@ export interface Database {
           created_by: string;
           created_at: string;
           host_user_id: string | null;
-          lat: number | null;
-          lng: number | null;
+          address: string | null;
         };
         Insert: {
           id?: string;
@@ -296,8 +295,7 @@ export interface Database {
           created_by: string;
           created_at?: string;
           host_user_id?: string | null;
-          lat?: number | null;
-          lng?: number | null;
+          address?: string | null;
         };
         Update: {
           id?: string;
@@ -305,8 +303,7 @@ export interface Database {
           created_by?: string;
           created_at?: string;
           host_user_id?: string | null;
-          lat?: number | null;
-          lng?: number | null;
+          address?: string | null;
         };
         Relationships: [
           {

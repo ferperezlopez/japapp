@@ -20,8 +20,7 @@ async function resolveVenueLocation(
   const venueSelection = String(formData.get("venue") ?? "");
   const newVenueName = String(formData.get("newVenueName") ?? "").trim();
   const newVenueHostUserId = String(formData.get("newVenueHostUserId") ?? "").trim();
-  const newVenueLat = String(formData.get("newVenueLat") ?? "").trim();
-  const newVenueLng = String(formData.get("newVenueLng") ?? "").trim();
+  const newVenueAddress = String(formData.get("newVenueAddress") ?? "").trim();
 
   if (venueSelection === "__new__") {
     if (!newVenueName) return null;
@@ -30,8 +29,7 @@ async function resolveVenueLocation(
         name: newVenueName,
         created_by: userId,
         host_user_id: newVenueHostUserId || null,
-        lat: newVenueLat ? Number(newVenueLat) : null,
-        lng: newVenueLng ? Number(newVenueLng) : null,
+        address: newVenueAddress || null,
       },
       { onConflict: "name", ignoreDuplicates: true },
     );
