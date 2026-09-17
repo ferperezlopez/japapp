@@ -75,14 +75,22 @@ function splitEqual(amount: number, participantIds: string[]) {
   }));
 }
 
+// La descripción viene del ItemPicker compartido (mismo catálogo
+// insumo_items que "compra de insumos"): "existingItemId" liga el gasto
+// a ese ítem (para heredar su emoji) y usa su nombre como descripción;
+// "newItemName" es texto libre puro, sin ítem asociado — a diferencia de
+// "compra de insumos", tipear algo nuevo acá NO crea un insumo_item
+// nuevo (las descripciones de gasto suelen ser puntuales, no cosas
+// reusables, ver specs/002-gastos.md).
 export async function addExpense(groupId: string, formData: FormData) {
-  const description = String(formData.get("description") ?? "").trim();
+  const existingItemId = String(formData.get("existingItemId") ?? "").trim();
+  const newItemName = String(formData.get("newItemName") ?? "").trim();
   const amount = Number(formData.get("amount"));
   const paidBy = String(formData.get("paidBy") ?? "");
   const expenseDate = String(formData.get("date") ?? "");
   const participantIds = formData.getAll("participants").map(String);
 
-  if (!description) return { error: "Poné una descripción." };
+  if (!existingItemId && !newItemName) return { error: "Poné una descripción." };
   if (!Number.isFinite(amount) || amount <= 0)
     return { error: "El monto tiene que ser mayor a 0." };
   if (!paidBy) return { error: "Elegí quién pagó." };
@@ -95,11 +103,27 @@ export async function addExpense(groupId: string, formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  let description = newItemName;
+  let itemId: string | null = null;
+  if (existingItemId) {
+    const { data: item, error: itemError } = await supabase
+      .from("insumo_items")
+      .select("name")
+      .eq("id", existingItemId)
+      .single();
+    if (itemError || !item) {
+      return { error: itemError?.message ?? "No se encontró ese ítem." };
+    }
+    description = item.name;
+    itemId = existingItemId;
+  }
+
   const { data: expense, error } = await supabase
     .from("expenses")
     .insert({
       group_id: groupId,
       description,
+      item_id: itemId,
       amount,
       paid_by: paidBy,
       expense_date: expenseDate || new Date().toISOString().slice(0, 10),

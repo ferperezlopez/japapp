@@ -110,6 +110,7 @@ export interface Database {
           id: string;
           group_id: string;
           description: string;
+          item_id: string | null;
           amount: number;
           paid_by: string;
           expense_date: string;
@@ -120,6 +121,7 @@ export interface Database {
           id?: string;
           group_id: string;
           description: string;
+          item_id?: string | null;
           amount: number;
           paid_by: string;
           expense_date?: string;
@@ -130,6 +132,7 @@ export interface Database {
           id?: string;
           group_id?: string;
           description?: string;
+          item_id?: string | null;
           amount?: number;
           paid_by?: string;
           expense_date?: string;
@@ -156,6 +159,13 @@ export interface Database {
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "insumo_items";
             referencedColumns: ["id"];
           },
         ];
@@ -417,18 +427,21 @@ export interface Database {
         Row: {
           id: string;
           name: string;
+          icon: string | null;
           created_by: string;
           created_at: string;
         };
         Insert: {
           id?: string;
           name: string;
+          icon?: string | null;
           created_by: string;
           created_at?: string;
         };
         Update: {
           id?: string;
           name?: string;
+          icon?: string | null;
           created_by?: string;
           created_at?: string;
         };
@@ -564,24 +577,30 @@ export interface Database {
       };
       futbol_teams: {
         Row: {
+          id: string;
           event_id: string;
-          user_id: string;
+          user_id: string | null;
+          event_guest_id: string | null;
           team: number;
           position: "gk" | "def" | "fwd";
           updated_by: string;
           updated_at: string;
         };
         Insert: {
+          id?: string;
           event_id: string;
-          user_id: string;
+          user_id?: string | null;
+          event_guest_id?: string | null;
           team: number;
           position?: "gk" | "def" | "fwd";
           updated_by: string;
           updated_at?: string;
         };
         Update: {
+          id?: string;
           event_id?: string;
-          user_id?: string;
+          user_id?: string | null;
+          event_guest_id?: string | null;
           team?: number;
           position?: "gk" | "def" | "fwd";
           updated_by?: string;
@@ -600,6 +619,13 @@ export interface Database {
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "futbol_teams_event_guest_id_fkey";
+            columns: ["event_guest_id"];
+            isOneToOne: false;
+            referencedRelation: "event_guests";
             referencedColumns: ["id"];
           },
           {

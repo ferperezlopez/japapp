@@ -16,6 +16,7 @@ export function AttendanceSummary({
   for (const a of attendees) {
     if (a.status in counts) counts[a.status as keyof typeof counts]++;
   }
+  const yesWithGuests = counts.yes + guestCount;
   const responded = counts.yes + counts.maybe + counts.no;
   const pct = (n: number) => (totalPeople > 0 ? (n / totalPeople) * 100 : 0);
 
@@ -26,7 +27,7 @@ export function AttendanceSummary({
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-surface">
         <div
           className="bg-eventos transition-[width] duration-300"
-          style={{ width: `${pct(counts.yes)}%` }}
+          style={{ width: `${pct(yesWithGuests)}%` }}
         />
         <div
           className="bg-amber transition-[width] duration-300"
@@ -38,10 +39,10 @@ export function AttendanceSummary({
         />
       </div>
       <p className="mt-1.5 text-xs text-foreground/50">
-        {counts.yes} de {totalPeople} confirmaron
-        {totalPeople > 0 ? ` (${Math.round(pct(counts.yes))}%)` : ""} ·{" "}
+        {yesWithGuests} de {totalPeople} confirmaron
+        {totalPeople > 0 ? ` (${Math.round(pct(yesWithGuests))}%)` : ""} ·{" "}
         {responded}/{totalPeople} respondieron
-        {guestCount > 0 ? ` · +${guestCount} invitadxs` : ""}
+        {guestCount > 0 ? ` (incluye ${guestCount} invitadxs)` : ""}
       </p>
     </div>
   );

@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { TeamBuilderModal } from "./TeamBuilderModal";
 
-type Candidate = { userId: string; name: string; avatarUrl: string | null };
+type Candidate = { id: string; name: string; avatarUrl: string | null };
 type Position = "gk" | "def" | "fwd";
-type SavedAssignment = { userId: string; team: 1 | 2; position: Position };
+type SavedAssignment = { id: string; team: 1 | 2; position: Position };
 
 const POSITION_LABELS: Record<Position, string> = {
   gk: "Arquero",
@@ -29,8 +29,7 @@ export function FutbolTeamsSection({
 }) {
   const [open, setOpen] = useState(false);
 
-  const findCandidate = (userId: string) =>
-    candidates.find((c) => c.userId === userId);
+  const findCandidate = (id: string) => candidates.find((c) => c.id === id);
   const hasTeams = initialAssignment.length > 0;
 
   const renderTeamSummary = (team: 1 | 2) => {
@@ -47,11 +46,11 @@ export function FutbolTeamsSection({
               </h5>
               <ul className="mt-0.5 flex flex-wrap gap-2">
                 {players.map((a) => {
-                  const c = findCandidate(a.userId);
+                  const c = findCandidate(a.id);
                   if (!c) return null;
                   return (
                     <li
-                      key={a.userId}
+                      key={a.id}
                       className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
                     >
                       <Avatar src={c.avatarUrl} name={c.name} size="sm" />

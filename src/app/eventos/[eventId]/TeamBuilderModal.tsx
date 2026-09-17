@@ -7,9 +7,9 @@ import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 
-type Candidate = { userId: string; name: string; avatarUrl: string | null };
+type Candidate = { id: string; name: string; avatarUrl: string | null };
 type Position = "gk" | "def" | "fwd";
-type SavedAssignment = { userId: string; team: 1 | 2; position: Position };
+type SavedAssignment = { id: string; team: 1 | 2; position: Position };
 type Location = "unassigned" | 1 | 2;
 
 const POSITION_LABELS: Record<Position, string> = {
@@ -77,8 +77,9 @@ function Jersey({ number, variant }: { number: number; variant: JerseyVariant })
 
 // Tocar y ubicar (sin drag-and-drop, ver specs/015-armar-equipos-futbol.md):
 // tocar un jugador lo selecciona, tocar una franja de posición (o "Sin
-// asignar") lo mueve ahí. El estado se guarda como un mapa por userId en
-// vez de arrays separados, para no tener que sincronizar manualmente de
+// asignar") lo mueve ahí. El estado se guarda como un mapa por id (de
+// miembro o de invitado, ver Candidate) en vez de arrays separados, para
+// no tener que sincronizar manualmente de
 // dónde sale un jugador cuando se mueve.
 export function TeamBuilderModal({
   eventId,
@@ -97,14 +98,14 @@ export function TeamBuilderModal({
     const state: Record<string, { location: Location; position: Position }> =
       {};
     for (const c of candidates) {
-      const saved = initialAssignment.find((a) => a.userId === c.userId);
-      state[c.userId] = saved
+      const saved = initialAssignment.find((a) => a.id === c.id);
+      state[c.id] = saved
         ? { location: saved.team, position: saved.position }
         : { location: "unassigned", position: "def" };
     }
     return state;
   });
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -121,26 +122,26 @@ export function TeamBuilderModal({
     };
   }, [onClose]);
 
-  const toggleSelect = (userId: string) => {
-    setSelectedUserId((prev) => (prev === userId ? null : userId));
+  const toggleSelect = (id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id));
   };
 
   const moveSelectedTo = (
     destination: "unassigned" | { team: 1 | 2; position: Position },
   ) => {
-    if (!selectedUserId) return;
+    if (!selectedId) return;
     setPlayerState((prev) => {
       if (destination === "unassigned") {
-        if (prev[selectedUserId]?.location === "unassigned") return prev;
+        if (prev[selectedId]?.location === "unassigned") return prev;
         return {
           ...prev,
-          [selectedUserId]: { location: "unassigned", position: "def" },
+          [selectedId]: { location: "unassigned", position: "def" },
         };
       }
       const { team, position } = destination;
       if (
-        prev[selectedUserId]?.location === team &&
-        prev[selectedUserId]?.position === position
+        prev[selectedId]?.location === team &&
+        prev[selectedId]?.position === position
       ) {
         return prev;
       }
@@ -150,7 +151,7 @@ export function TeamBuilderModal({
       if (position === "gk") {
         for (const id of Object.keys(next)) {
           if (
-            id !== selectedUserId &&
+            id !== selectedId &&
             next[id].location === team &&
             next[id].position === "gk"
           ) {
@@ -158,18 +159,18 @@ export function TeamBuilderModal({
           }
         }
       }
-      next[selectedUserId] = { location: team, position };
+      next[selectedId] = { location: team, position };
       return next;
     });
-    setSelectedUserId(null);
+    setSelectedId(null);
   };
 
   const byPosition = (team: 1 | 2, position: Position) =>
     candidates
       .filter(
         (c) =>
-          playerState[c.userId]?.location === team &&
-          playerState[c.userId]?.position === position,
+          playerState[c.id]?.location === team &&
+          playerState[c.id]?.position === position,
       )
       .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -185,25 +186,25 @@ export function TeamBuilderModal({
   const team1Numbers = assignJerseyNumbers([team1.gk, team1.def, team1.fwd]);
   const team2Numbers = assignJerseyNumbers([team2.gk, team2.def, team2.fwd]);
   const unassigned = candidates.filter(
-    (c) => playerState[c.userId]?.location === "unassigned",
+    (c) => playerState[c.id]?.location === "unassigned",
   );
 
   const renderPitchChip = (c: Candidate, variant: JerseyVariant, number: number) => {
-    const isSelected = selectedUserId === c.userId;
+    const isSelected = selectedId === c.id;
     return (
       <div
-        key={c.userId}
+        key={c.id}
         role="button"
         tabIndex={0}
         onClick={(event) => {
           event.stopPropagation();
-          toggleSelect(c.userId);
+          toggleSelect(c.id);
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             event.stopPropagation();
-            toggleSelect(c.userId);
+            toggleSelect(c.id);
           }
         }}
         className={`flex cursor-pointer flex-col items-center gap-0.5 rounded-lg px-1 py-1 transition-colors duration-150 ${
@@ -240,7 +241,7 @@ export function TeamBuilderModal({
             renderPitchChip(
               c,
               position === "gk" ? "gk" : team === 2 ? "dark" : "light",
-              numbers.get(c.userId) ?? 0,
+              numbers.get(c.id) ?? 0,
             ),
           )}
         </div>
@@ -249,21 +250,21 @@ export function TeamBuilderModal({
   };
 
   const renderUnassignedChip = (c: Candidate) => {
-    const isSelected = selectedUserId === c.userId;
+    const isSelected = selectedId === c.id;
     return (
       <div
-        key={c.userId}
+        key={c.id}
         role="button"
         tabIndex={0}
         onClick={(event) => {
           event.stopPropagation();
-          toggleSelect(c.userId);
+          toggleSelect(c.id);
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             event.stopPropagation();
-            toggleSelect(c.userId);
+            toggleSelect(c.id);
           }
         }}
         className={`flex cursor-pointer items-center gap-1 rounded-full py-1 pl-1 pr-2 text-xs transition-colors duration-150 ${
@@ -284,9 +285,9 @@ export function TeamBuilderModal({
   const handleSave = () => {
     setError(null);
     const buildAssignments = (team: 1 | 2, t: ReturnType<typeof teamOf>) => [
-      ...t.gk.map((c) => ({ userId: c.userId, team, position: "gk" as const })),
-      ...t.def.map((c) => ({ userId: c.userId, team, position: "def" as const })),
-      ...t.fwd.map((c) => ({ userId: c.userId, team, position: "fwd" as const })),
+      ...t.gk.map((c) => ({ id: c.id, team, position: "gk" as const })),
+      ...t.def.map((c) => ({ id: c.id, team, position: "def" as const })),
+      ...t.fwd.map((c) => ({ id: c.id, team, position: "fwd" as const })),
     ];
     const assignments = [
       ...buildAssignments(1, team1),

@@ -6,8 +6,10 @@
   (tablas y RLS), `supabase/migrations/0003_harden_definer_functions.sql`
   (endurecimiento de `is_group_member`), `supabase/migrations/0004_event_groups_and_media.sql`
   (relaja el SELECT de este esquema para grupos enlazados a un evento — ver
-  `specs/004-eventos-gastos-y-fotos.md`)
-- **Última actualización:** 2026-09-15 (revisada más tarde el mismo día)
+  `specs/004-eventos-gastos-y-fotos.md`), `supabase/migrations/0027_insumo_items_icon.sql`
+  (suma `expenses.item_id`, ligando opcionalmente un gasto al catálogo
+  `insumo_items` de `specs/013-invitados-tareas-y-stats.md`)
+- **Última actualización:** 2026-09-17
 
 ## 1. Resumen
 
@@ -23,8 +25,15 @@ transferencias posible.
 - Agregar miembros a un grupo por email, solo si esa persona ya inició
   sesión al menos una vez en JAPapp (existe su `profiles` row).
 - Cargar un gasto: descripción, monto, quién pagó, fecha, entre quiénes
-  se divide. Quién *carga* el gasto sigue necesitando ser miembro real
-  del grupo. Quién puede figurar como **pagó**/**participante**:
+  se divide. La descripción se carga con el mismo `<ItemPicker>`
+  (`src/components/ItemPicker.tsx`) que "compra de insumos" en
+  `specs/013-invitados-tareas-y-stats.md`, contra el mismo catálogo
+  `insumo_items` — elegir un ítem existente muestra su emoji junto a
+  la descripción; tipear texto libre nuevo sigue funcionando igual que
+  antes, pero **no** crea una entrada nueva en el catálogo (ver
+  sección 6, decisión "sin auto-creación"). Quién *carga* el gasto
+  sigue necesitando ser miembro real del grupo. Quién puede figurar
+  como **pagó**/**participante**:
   - Si el grupo está enlazado a un evento: solo quien tiene
     confirmado "Voy" (`status='yes'`) a la juntada de ese evento **en
     este momento** — no alcanza con haberlo confirmado alguna vez y
@@ -89,11 +98,24 @@ Puntos que el SQL no explica por sí solo:
    *distinto* de `canAddExpense` (quién puede cargar un gasto, basado en
    `group_members`) — uno gatea quién ve el formulario, el otro qué
    opciones ofrece adentro.
-4. `addExpense(groupId, formData)` valida descripción, monto > 0, quién
-   pagó y al menos un participante; inserta en `expenses` y luego en
-   `expense_shares` usando `splitEqual(amount, participantIds)`
-   (reparte en centavos, sobrante va a los primeros N participantes en
-   orden de la lista). El formulario (`AddExpenseForm`) solo se muestra si
+4. `addExpense(groupId, formData)` recibe `existingItemId` (elegido del
+   catálogo) o `newItemName` (texto libre) en vez de una `description`
+   suelta: con `existingItemId`, hace un `select` a `insumo_items` por
+   `name` y usa ese nombre como `description` + guarda `item_id`; con
+   `newItemName`, usa ese texto tal cual como `description` e
+   `item_id` queda `null` — a diferencia de `addTaskAssignee`
+   (`specs/013-invitados-tareas-y-stats.md`), acá tipear algo nuevo NO
+   hace un `upsert` en `insumo_items` (ver sección 6). Valida
+   descripción no vacía, monto > 0, quién pagó y al menos un
+   participante; inserta en `expenses` y luego en `expense_shares`
+   usando `splitEqual(amount, participantIds)` (reparte en centavos,
+   sobrante va a los primeros N participantes en orden de la lista). En
+   el listado de gastos, cada fila muestra el emoji resuelto con
+   `resolveIcon` (`src/lib/eventos/insumos.ts`) solo cuando
+   `item_id` está seteado — una descripción en texto libre no pasa por
+   matching de palabra clave, para no sacar un emoji "por casualidad"
+   de un texto que no es un ítem de catálogo. El formulario
+   (`AddExpenseForm`) solo se muestra si
    `canAddExpense` (el usuario logueado es miembro del grupo) — si no, un
    mensaje invita a sumarse; si sí pero `payerOptions` quedó vacío (evento
    sin nadie confirmado todavía), otro mensaje en vez de un formulario sin
@@ -163,6 +185,12 @@ Puntos que el SQL no explica por sí solo:
       confirmado (o nunca lo estuvo, cargado bajo el criterio anterior)
       igual aparece correctamente en Balances y en "Para saldar cuentas"
       (no se pierde esa plata del cálculo).
+- [x] Elegir un ítem del catálogo al cargar un gasto lo muestra con su
+      emoji en el listado; como admin, editar el emoji desde el picker
+      lo actualiza también en "compra de insumos" (y viceversa).
+- [x] Escribir una descripción en texto libre (sin elegir del
+      catálogo) sigue funcionando igual que antes, sin emoji, y no crea
+      una fila nueva en `insumo_items`.
 
 ## 6. Decisiones y tradeoffs
 
@@ -176,6 +204,8 @@ Puntos que el SQL no explica por sí solo:
 | "Pagó"/"se divide entre" restringidos a quien está confirmado (`status='yes'`) en vivo para la juntada del evento enlazado; sin evento, cualquier persona de la app | (a) Abrir sin restricción a cualquier profile (decisión de la mañana del 2026-09-15, revertida); (b) Restringir a `group_members` | El usuario pidió que la selección "siempre sea entre la gente confirmada en el evento". `group_members` no sirve para esto porque es un registro pegajoso: el trigger que suma gente al confirmar "Voy" nunca la saca si después cambia de opinión, así que no refleja quién está confirmado *ahora*. Se optó por consultar `event_rsvps` en vivo en cada render en vez de depender de esa tabla derivada. |
 | El creador del evento no se incluye automáticamente en `payerOptions` | Darle un pase automático, como ya lo tiene en `group_members` vía el trigger de creación | Decisión explícita del usuario: si el organizador no confirmó su propia asistencia, tampoco debería figurar pagando/participando — mismo criterio estricto que para cualquier otra persona. |
 | La lista "Miembros" de la página del grupo sigue mostrando `group_members` sin cambios, aunque ahora puede diferir de quién aparece en `payerOptions` para un grupo enlazado a un evento | Actualizar también "Miembros" para que muestre solo confirmados en grupos con evento, y así las dos listas siempre coincidan | Decisión explícita del usuario: aceptar la inconsistencia por ahora en vez de tocar un concepto más (membresía formal del grupo) que no fue parte de este pedido. |
+| Gastos comparte el catálogo `insumo_items` de "compra de insumos" (`ItemPicker` extraído a `src/components/ItemPicker.tsx`) | Un catálogo de ítems propio y separado para Gastos | Decisión del usuario (`AskUserQuestion`): un emoji cargado de un lado (Tareas) se ve del otro (Gastos), sin duplicar el concepto. |
+| Elegir texto libre nuevo en Gastos NO crea una fila en `insumo_items` (a diferencia de "compra de insumos", donde sí) | Mismo comportamiento que `addTaskAssignee`: cualquier texto nuevo se guarda en el catálogo | Las descripciones de gasto suelen ser puntuales ("Cuota cancha marzo"), no cosas reusables como "Carne" — auto-crearlas ensuciaría el catálogo compartido con Tareas. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -191,6 +221,12 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: la descripción de un gasto se carga con el `<ItemPicker>`
+  compartido con "compra de insumos" (`specs/013-invitados-tareas-y-stats.md`),
+  contra el mismo catálogo `insumo_items` — elegir un ítem existente
+  muestra su emoji (editable por admin) en el listado; texto libre
+  sigue funcionando igual que antes, sin crear una fila nueva en el
+  catálogo. `expenses` suma `item_id` (nullable).
 - 2026-09-15 (más tarde): revertido/refinado el cambio de la entrada
   anterior de hoy. En vez de "cualquier profile de la app", el selector
   de "pagó"/"se divide entre" ahora se restringe, para un grupo enlazado

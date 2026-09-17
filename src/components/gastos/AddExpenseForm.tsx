@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { addExpense } from "@/app/gastos/actions";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import { ItemPicker, NEW_ITEM_VALUE, type PickerItem } from "@/components/ItemPicker";
 import { withMinDuration } from "@/lib/withMinDuration";
 
 interface Person {
@@ -17,6 +18,8 @@ export function AddExpenseForm({
   groupId,
   people,
   defaultParticipantIds,
+  items,
+  isAdmin = false,
 }: {
   groupId: string;
   // Cualquier persona registrada en la app puede figurar como quien pagó o
@@ -29,9 +32,20 @@ export function AddExpenseForm({
   // pero hay que tildarla a mano — no queremos que sumar a alguien nuevo
   // al selector lo meta sin querer en la división de todos los gastos.
   defaultParticipantIds: string[];
+  // Mismo catálogo insumo_items que "compra de insumos" (ver
+  // specs/002-gastos.md): elegir uno existente liga el gasto a su emoji;
+  // tipear texto libre nuevo no crea un ítem de catálogo.
+  items: PickerItem[];
+  isAdmin?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [itemSelection, setItemSelection] = useState("");
+  const [newItemName, setNewItemName] = useState("");
+  // Fuerza a ItemPicker a remontar (y limpiar su texto visible) después de
+  // un submit exitoso: a diferencia de TaskAssigneesEditor, acá el picker
+  // queda siempre montado (no hay un "addTarget" que lo oculte).
+  const [pickerKey, setPickerKey] = useState(0);
   const today = new Date().toISOString().slice(0, 10);
 
   return (
@@ -41,6 +55,11 @@ export function AddExpenseForm({
         startTransition(async () => {
           const result = await withMinDuration(addExpense(groupId, formData));
           if (result.error) setError(result.error);
+          else {
+            setItemSelection("");
+            setNewItemName("");
+            setPickerKey((k) => k + 1);
+          }
         });
       }}
       className="space-y-3 rounded-xl border border-surface-border bg-surface p-4"
@@ -50,12 +69,25 @@ export function AddExpenseForm({
           <label className="block text-xs font-medium text-foreground/50">
             Descripción
           </label>
+          <div className="mt-1">
+            <ItemPicker
+              key={pickerKey}
+              items={items}
+              value={itemSelection}
+              onChange={setItemSelection}
+              newName={newItemName}
+              onNewNameChange={setNewItemName}
+              isAdmin={isAdmin}
+              createLabel={(text) => `Usar "${text}"`}
+              placeholder="Buscar o escribir una descripción…"
+            />
+          </div>
           <input
-            type="text"
-            name="description"
-            required
-            className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+            type="hidden"
+            name="existingItemId"
+            value={itemSelection === NEW_ITEM_VALUE ? "" : itemSelection}
           />
+          <input type="hidden" name="newItemName" value={newItemName} />
         </div>
         <div>
           <label className="block text-xs font-medium text-foreground/50">
