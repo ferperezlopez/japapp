@@ -16,6 +16,7 @@ import { AddGuestForm } from "./AddGuestForm";
 import { RemoveGuestButton } from "./RemoveGuestButton";
 import { TaskAssignSelect } from "./TaskAssignSelect";
 import { TaskAssigneesEditor } from "./TaskAssigneesEditor";
+import { buildMapsLink } from "@/lib/eventos/mapsLink";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "long",
@@ -433,7 +434,7 @@ export default async function EventoPage({
           <>
             {" · "}
             <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(eventVenue.address)}`}
+              href={buildMapsLink(eventVenue.address)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-eventos hover:underline"

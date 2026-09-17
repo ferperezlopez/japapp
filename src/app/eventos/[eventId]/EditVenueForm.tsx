@@ -71,9 +71,14 @@ export function EditVenueForm({
           type="text"
           name="address"
           defaultValue={venue.address ?? ""}
-          placeholder="Para que se pueda navegar"
+          placeholder="Dirección o link de Google Maps"
           className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
         />
+        <p className="mt-1 text-xs text-foreground/40">
+          Para navegar directo: pegá la dirección (ej. &quot;Av. Cabildo 2394,
+          CABA&quot;) o el link que da &quot;Compartir ubicación&quot; en
+          Google Maps.
+        </p>
       </div>
       <div>
         <label className="block text-xs font-medium text-foreground/50">
