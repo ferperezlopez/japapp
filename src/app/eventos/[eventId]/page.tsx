@@ -149,6 +149,7 @@ function RsvpSection({
   currentUserId,
   registeredGuests,
   members,
+  isAdmin,
 }: {
   title: string;
   eventId: string;
@@ -160,6 +161,7 @@ function RsvpSection({
   currentUserId: string | undefined;
   registeredGuests: { id: string; name: string }[];
   members: { id: string; name: string | null; email: string }[];
+  isAdmin: boolean;
 }) {
   return (
     <section className="mt-8">
@@ -218,7 +220,7 @@ function RsvpSection({
                           (trajo: {g.broughtByName})
                         </span>
                       </span>
-                      {g.addedBy === currentUserId && (
+                      {(g.addedBy === currentUserId || isAdmin) && (
                         <RemoveGuestButton
                           eventGuestId={g.eventGuestId}
                           eventId={eventId}
@@ -301,6 +303,7 @@ export default async function EventoPage({
     { data: venues },
     { data: registeredGuests },
     { data: eventGuestRows },
+    { data: me },
   ] = await Promise.all([
     supabase
       .from("event_rsvps")
@@ -318,7 +321,11 @@ export default async function EventoPage({
       .from("event_guests")
       .select("id, guest_id, kind, added_by, brought_by, guests(name)")
       .eq("event_id", eventId),
+    user
+      ? supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const isAdmin = me?.is_admin ?? false;
   const [{ data: taskRows }, { data: insumoItems }] = await Promise.all([
     supabase
       .from("event_tasks")
@@ -588,6 +595,7 @@ export default async function EventoPage({
         currentUserId={user?.id}
         registeredGuests={registeredGuests ?? []}
         members={members}
+        isAdmin={isAdmin}
       />
 
       <section className="mt-8">
@@ -666,6 +674,7 @@ export default async function EventoPage({
             currentUserId={user?.id}
             registeredGuests={registeredGuests ?? []}
             members={members}
+            isAdmin={isAdmin}
           />
           <div className="mt-4 rounded-xl border border-surface-border bg-surface p-4">
             <label className="block text-xs font-medium text-foreground/50">

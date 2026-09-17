@@ -168,7 +168,11 @@ Puntos que el SQL no explica por sí solo:
    guest_id, kind)` para no duplicar.
 4. `removeGuestFromEvent(eventGuestId, eventId)`: borra la fila de
    `event_guests` — la policy RLS es la barrera real, la action no
-   revalida autoría (mismo criterio que `deleteEvent`).
+   revalida autoría (mismo criterio que `deleteEvent`). Desde
+   `0025_admin_delete_any_guest.sql`, además de quien sumó al
+   invitado (`added_by = auth.uid()`), un admin puede sacar cualquier
+   invitado — la UI muestra el botón también en ese caso
+   (`g.addedBy === currentUserId || isAdmin`).
 
 ### Tareas
 

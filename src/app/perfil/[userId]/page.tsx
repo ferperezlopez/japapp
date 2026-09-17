@@ -74,11 +74,16 @@ export default async function UserProfilePage({
       </div>
 
       {isAdmin && (
-        <AdminEditProfileForm
-          userId={userId}
-          defaultName={profile.name ?? ""}
-          defaultAlias={profile.alias ?? ""}
-        />
+        <>
+          <p className="mt-2 text-xs text-foreground/50">
+            Email de registro: {profile.email}
+          </p>
+          <AdminEditProfileForm
+            userId={userId}
+            defaultName={profile.name ?? ""}
+            defaultAlias={profile.alias ?? ""}
+          />
+        </>
       )}
 
       <AttendanceStatsCard attendance={attendance} />
