@@ -84,7 +84,19 @@ Puntos que el SQL no explica por sí solo:
   evento).
 - `event_guests` no tiene columna de estado: una fila ahí ya significa
   "confirmado que viene" (a diferencia de `event_rsvps`, que sí tiene
-  yes/no/maybe para miembros registrados).
+  yes/no/maybe para miembros registrados). Por eso, en la UI
+  (`/eventos/[eventId]`), los invitados se muestran fusionados dentro
+  del grupo "Van" de la sección de RSVP correspondiente (no en una
+  lista aparte): son gente ya confirmada, al mismo nivel que un
+  miembro que respondió "Voy".
+- `brought_by` (sumada en `0024_event_guests_brought_by.sql`) es un
+  tercer concepto de atribución, distinto de `added_by` y de
+  `guests.created_by`: quién es el referente/"quien lo trae" para ESE
+  evento, elegible libremente entre los miembros al cargar el
+  invitado (no necesariamente quien hace la carga). `added_by` sigue
+  siendo el dueño de la fila a efectos de RLS de borrado; `brought_by`
+  no es security-relevant, solo determina el texto "(trajo: X)" que se
+  muestra en la UI.
 - `event_tasks` originalmente usaba `(event_id, task_type)` como
   primary key compuesta (una sola asignación por tarea y evento).
   `0012_event_tasks_multi_assignee.sql` lo cambió a un `id` propio +
@@ -135,17 +147,25 @@ Puntos que el SQL no explica por sí solo:
 ### Invitados
 
 1. En `/eventos/[eventId]`, dentro de cada sección de RSVP (juntada y,
-   si aplica, fútbol), una sub-sección "Invitados" lista a quienes ya
-   están sumados a ese evento con ese `kind`, mostrando "trajo: X" y
-   una X para sacarlo (visible solo a quien lo sumó).
+   si aplica, fútbol), los invitados ya sumados a ese evento con ese
+   `kind` se listan fusionados dentro del grupo "Van" (junto a los
+   miembros que respondieron "Voy"), mostrando "trajo: X" (el
+   `brought_by` elegido) y una X para sacarlo (visible solo a quien lo
+   sumó, `added_by`). El contador del grupo se ve como
+   "Van (N + M invitadxs)" cuando hay invitados.
 2. `<AddGuestForm>` ofrece un `<select>` con los invitados ya
    registrados (traídos en la misma query de la página) más una opción
    "Nueva persona…" que revela un input de texto — mismo patrón que el
-   selector de lugares de `EventFormFields`.
+   selector de lugares de `EventFormFields` — y un segundo `<select>`
+   con los miembros del grupo para elegir quién lo trae
+   (`brought_by`), preseleccionado en quien está cargando el invitado
+   pero editable a cualquier otro miembro.
 3. `addGuestToEvent(eventId, kind, formData)`: si viene un nombre
    nuevo, primero inserta en `guests`; con el `guest_id` (nuevo o
-   elegido), inserta en `event_guests` con `onConflict` en la unique
-   key `(event_id, guest_id, kind)` para no duplicar.
+   elegido), inserta en `event_guests` (con `added_by` = quien ejecuta
+   la action y `brought_by` = lo elegido en el form, o `added_by` si no
+   se eligió nada) con `onConflict` en la unique key `(event_id,
+   guest_id, kind)` para no duplicar.
 4. `removeGuestFromEvent(eventGuestId, eventId)`: borra la fila de
    `event_guests` — la policy RLS es la barrera real, la action no
    revalida autoría (mismo criterio que `deleteEvent`).
@@ -317,6 +337,7 @@ Puntos que el SQL no explica por sí solo:
 |---|---|---|
 | Invitados reusables entre eventos (`guests` + `event_guests`) | Guardar el nombre como texto libre en cada evento, sin tabla maestra | Pedido explícito del usuario: poder elegir de una lista a alguien ya cargado antes, no re-tipear el nombre cada vez. |
 | Sin estado yes/no/maybe para invitados | Mismo modelo de `event_rsvps` para invitados | Decisión del usuario: sumar un invitado ya significa "confirmado que viene", no tiene sentido un estado "tal vez" para alguien que otro trae. |
+| Invitados fusionados dentro del grupo "Van", `brought_by` elegible separado de `added_by` | Dejar a los invitados en una lista aparte de "confirmados"; usar `added_by` también como "quién lo trae" | Pedido explícito del usuario: sumar un invitado no se veía reflejado en "la lista de confirmados" (bug de presentación, el dato ya significaba confirmado); y quien carga al invitado no es necesariamente quien lo trae de verdad. |
 | Proxy solo para invitados, RSVP de miembros sigue siendo autoservicio | Permitir que cualquiera confirme la asistencia de cualquier miembro | Decisión explícita del usuario, para no romper la semántica actual de "cada uno confirma lo suyo". Excepción puntual: un admin sí puede confirmar en nombre de otro vía "actuar como" — ver `specs/016-admin.md`, pedido explícito y posterior del usuario, acotado a ese rol. |
 | Lista fija de tipos de tarea, un asignado por tipo | Tareas de texto libre, o múltiples personas por tarea | Decisión del usuario: alcanza con una lista predefinida y simple de asignar. |
 | `host_user_id` como columna nueva en `venues`, separada de `created_by` | Reusar `created_by` como "dueño de la casa" | Son conceptos distintos: quién tipeó el lugar por primera vez no es necesariamente de quién es la casa. |

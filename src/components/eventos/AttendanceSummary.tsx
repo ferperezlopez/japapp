@@ -6,9 +6,11 @@
 export function AttendanceSummary({
   attendees,
   totalPeople,
+  guestCount = 0,
 }: {
   attendees: { status: string }[];
   totalPeople: number;
+  guestCount?: number;
 }) {
   const counts = { yes: 0, maybe: 0, no: 0 };
   for (const a of attendees) {
@@ -39,6 +41,7 @@ export function AttendanceSummary({
         {counts.yes} de {totalPeople} confirmaron
         {totalPeople > 0 ? ` (${Math.round(pct(counts.yes))}%)` : ""} ·{" "}
         {responded}/{totalPeople} respondieron
+        {guestCount > 0 ? ` · +${guestCount} invitadxs` : ""}
       </p>
     </div>
   );

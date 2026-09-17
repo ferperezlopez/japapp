@@ -361,6 +361,7 @@ export interface Database {
           guest_id: string;
           kind: "juntada" | "futbol";
           added_by: string;
+          brought_by: string;
           created_at: string;
         };
         Insert: {
@@ -369,6 +370,7 @@ export interface Database {
           guest_id: string;
           kind?: "juntada" | "futbol";
           added_by: string;
+          brought_by: string;
           created_at?: string;
         };
         Update: {
@@ -377,6 +379,7 @@ export interface Database {
           guest_id?: string;
           kind?: "juntada" | "futbol";
           added_by?: string;
+          brought_by?: string;
           created_at?: string;
         };
         Relationships: [
@@ -397,6 +400,13 @@ export interface Database {
           {
             foreignKeyName: "event_guests_added_by_fkey";
             columns: ["added_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_guests_brought_by_fkey";
+            columns: ["brought_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];

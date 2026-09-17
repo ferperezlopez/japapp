@@ -13,10 +13,14 @@ export function AddGuestForm({
   eventId,
   kind,
   guests,
+  members,
+  currentUserId,
 }: {
   eventId: string;
   kind: "juntada" | "futbol";
   guests: { id: string; name: string }[];
+  members: { id: string; name: string | null; email: string }[];
+  currentUserId: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState("");
@@ -83,6 +87,19 @@ export function AddGuestForm({
         name="existingGuestId"
         value={selection === NEW_GUEST_VALUE ? "" : selection}
       />
+      <div>
+        <select
+          name="broughtBy"
+          defaultValue={currentUserId}
+          className="rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+        >
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.id === currentUserId ? "Yo lo traigo" : `Lo trae: ${m.name ?? m.email}`}
+            </option>
+          ))}
+        </select>
+      </div>
       <Button type="submit" loading={pending}>
         {pending ? "Sumando..." : "Sumar"}
       </Button>
