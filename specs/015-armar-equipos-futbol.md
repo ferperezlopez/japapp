@@ -154,11 +154,14 @@ Puntos que el SQL no explica por sí solo:
    invitado — ver Modelo de datos), no en arrays separados — evita
    tener que sincronizar manualmente de dónde sale un jugador cuando se
    mueve. La cancha es **vertical**: Equipo 1 (camiseta
-   clara) ocupa la mitad de abajo con su arco propio en la base;
-   Equipo 2 (camiseta oscura) ocupa la mitad de arriba, espejado, con
-   su arco propio arriba del todo — los dos quedan enfrentados a través
-   de la línea de medio campo, con delanteros de ambos equipos pegados
-   a esa línea y arqueros en cada extremo. Tocar un jugador lo
+   clara) ocupa la mitad de abajo, Equipo 2 (camiseta oscura) ocupa la
+   mitad de arriba — los dos quedan enfrentados a través de la línea
+   de medio campo. Dentro de cada mitad, las 3 franjas (arquero,
+   defensores, delanteros) van en **columnas lado a lado** (no
+   apiladas una debajo de la otra): apilarlas desperdiciaba todo el
+   ancho disponible a los costados del modal (`max-w-xl`, antes
+   `max-w-sm`) e igual no entraba en una pantalla de celular común
+   (feedback del usuario con captura de pantalla). Tocar un jugador lo
    selecciona (resaltado); tocar una franja (arquero/defensores/
    delanteros de un equipo, o "Sin asignar") mueve ahí al seleccionado
    (mover a la misma franja no hace nada, para no reordenar por un
@@ -236,6 +239,7 @@ Puntos que el SQL no explica por sí solo:
 | Aviso no bloqueante si un equipo tiene menos de 4 | Bloquear el guardado | Mismo criterio de confianza total que el resto de la app: la convocatoria real puede no dar para 5 vs 5, y la app nunca le impide a alguien guardar lo que decidió. |
 | Invitados elegibles para armar equipos, pero no para MVP/goleador | Excluir invitados de armar equipos también, mismo criterio que MVP/goleador | Pedido explícito del usuario, acotado a equipos: MVP/goleador es un reconocimiento individual sobre alguien con cuenta en la app, mientras que "quién juega en qué equipo" es información del partido en sí, sin esa restricción. |
 | `id` genérico con prefijo (`u:`/`g:`) en vez de una unión discriminada tipada | Un tipo `Candidate` con campos `kind`/`userId`/`guestId` separados | Mismo espíritu que `NEW_GUEST_VALUE` ya usado en `AddGuestForm.tsx`: un string simple evita tocar la forma de todos los mapas/comparaciones (`playerState`, `byPosition`, `assignJerseyNumbers`) que ya asumían una clave string plana. |
+| Franjas de posición en columnas lado a lado dentro de cada equipo, modal ensanchado a `max-w-xl` | Mantener las franjas apiladas y solo ensanchar el modal | Feedback del usuario con captura: solo ensanchar no reducía la altura (6 franjas apiladas seguían apiladas), y sobraba mucho espacio a los costados sin usar — pasar a columnas usa ese ancho para bajar la cantidad de franjas apiladas de 6 a 2 (una fila de 3 columnas por equipo). |
 
 ## 7. Futuro / fuera de alcance
 
@@ -248,6 +252,12 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: las franjas de posición (arquero/defensores/delanteros)
+  dentro de cada equipo pasan de estar apiladas a ir en columnas lado a
+  lado, y el modal se ensancha de `max-w-sm` a `max-w-xl` — feedback
+  del usuario con captura de pantalla mostrando que el modal no entraba
+  en una pantalla de celular común, con mucho espacio sin usar a los
+  costados.
 - 2026-09-17: los invitados al fútbol pasan a ser candidatos elegibles
   para armar equipos (no para MVP/goleador). `futbol_teams` cambia su
   primary key de `(event_id, user_id)` a un `id` propio, con `user_id`
