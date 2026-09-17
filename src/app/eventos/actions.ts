@@ -20,6 +20,8 @@ async function resolveVenueLocation(
   const venueSelection = String(formData.get("venue") ?? "");
   const newVenueName = String(formData.get("newVenueName") ?? "").trim();
   const newVenueHostUserId = String(formData.get("newVenueHostUserId") ?? "").trim();
+  const newVenueLat = String(formData.get("newVenueLat") ?? "").trim();
+  const newVenueLng = String(formData.get("newVenueLng") ?? "").trim();
 
   if (venueSelection === "__new__") {
     if (!newVenueName) return null;
@@ -28,6 +30,8 @@ async function resolveVenueLocation(
         name: newVenueName,
         created_by: userId,
         host_user_id: newVenueHostUserId || null,
+        lat: newVenueLat ? Number(newVenueLat) : null,
+        lng: newVenueLng ? Number(newVenueLng) : null,
       },
       { onConflict: "name", ignoreDuplicates: true },
     );
@@ -164,34 +168,6 @@ export async function deleteEvent(eventId: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/eventos");
-  return { ok: true };
-}
-
-// Sacar el fútbol de un evento (ej. "al final no se junta gente para
-// jugar") es más liviano que borrar el evento entero, y cualquier
-// logueado debería poder avisarlo, no solo quien lo creó — mismo
-// criterio de confianza total que RSVPs/tareas/futbol_stats. La policy
-// de update de "events" exige ser el creador, así que esto pasa por
-// remove_event_futbol (función de Postgres acotada, security definer)
-// en vez de abrir esa policy a cualquiera. No borra los datos ya
-// cargados (RSVPs de fútbol, stats, equipos) — solo deja de mostrarlos,
-// mismo criterio conservador de "nunca se borra algo por un cambio en
-// otro lado" que ya usa el resto de la app.
-export async function removeEventFutbol(eventId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No estás logueado." };
-
-  const { error } = await supabase.rpc("remove_event_futbol", {
-    p_event_id: eventId,
-  });
-  if (error) return { error: error.message };
-
-  revalidatePath(`/eventos/${eventId}`);
-  revalidatePath("/eventos");
-  revalidatePath("/");
   return { ok: true };
 }
 

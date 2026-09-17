@@ -7,7 +7,6 @@ import { DeleteEventButton } from "./DeleteEventButton";
 import { EditEventForm } from "./EditEventForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
 import { FutbolTeamsSection } from "./FutbolTeamsSection";
-import { RemoveFutbolButton } from "./RemoveFutbolButton";
 import { UploadPhotoForm } from "./UploadPhotoForm";
 import { PhotoGrid } from "./PhotoGrid";
 import { Avatar } from "@/components/ui/Avatar";
@@ -118,6 +117,29 @@ function AttendanceSummary({
   );
 }
 
+// Separador liviano (línea + eyebrow), sin tarjetas anidadas: marca dónde
+// termina el contenido de la juntada y dónde empieza el del fútbol, ya que
+// antes quedaban pegados uno debajo del otro sin ningún límite visual.
+function SectionDivider({
+  label,
+  colorClass,
+}: {
+  label: string;
+  colorClass: string;
+}) {
+  return (
+    <div className="mt-10 flex items-center gap-3">
+      <span className="h-px flex-1 bg-surface-border" />
+      <h2
+        className={`text-xs font-semibold uppercase tracking-[0.14em] ${colorClass}`}
+      >
+        {label}
+      </h2>
+      <span className="h-px flex-1 bg-surface-border" />
+    </div>
+  );
+}
+
 // Confirmación + lista de asistentes de un tipo (juntada o fútbol): las dos
 // se ven en el mismo lugar (la página del evento), cada una con su propio
 // estado y su propia lista de Van/Tal vez/No van.
@@ -149,70 +171,75 @@ function RsvpSection({
       <div className="mt-3">
         <RsvpButtons eventId={eventId} kind={kind} currentStatus={myStatus} />
       </div>
-      <div className="mt-4 space-y-4">
-        {GROUPS.map((group) => {
-          const people = attendees.filter((a) => a.status === group.status);
-          return (
-            <div key={group.status}>
-              <h3 className="text-sm font-medium text-foreground/50">
-                {group.label} ({people.length})
-              </h3>
-              <ul className="mt-1 flex flex-wrap gap-2">
-                {people.map((p, index) => (
-                  <li
-                    key={p.userId}
-                    className="animate-reveal"
-                    style={{ animationDelay: `${index * 40}ms` }}
-                  >
-                    <Link
-                      href={`/perfil/${p.userId}`}
-                      className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80 transition-colors duration-200 hover:bg-surface-border"
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-medium text-foreground/50">
+          Ver detalle de asistentes
+        </summary>
+        <div className="mt-3 space-y-4">
+          {GROUPS.map((group) => {
+            const people = attendees.filter((a) => a.status === group.status);
+            return (
+              <div key={group.status}>
+                <h3 className="text-sm font-medium text-foreground/50">
+                  {group.label} ({people.length})
+                </h3>
+                <ul className="mt-1 flex flex-wrap gap-2">
+                  {people.map((p, index) => (
+                    <li
+                      key={p.userId}
+                      className="animate-reveal"
+                      style={{ animationDelay: `${index * 40}ms` }}
                     >
-                      <Avatar src={p.avatarUrl} name={p.name} size="sm" />
-                      {p.name}
-                    </Link>
-                  </li>
-                ))}
-                {people.length === 0 && (
-                  <li className="text-xs text-foreground/40">Nadie por ahora</li>
-                )}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-4">
-        <h3 className="text-sm font-medium text-foreground/50">
-          Invitados ({guests.length})
-        </h3>
-        <ul className="mt-1 flex flex-wrap gap-2">
-          {guests.map((g, index) => (
-            <li
-              key={g.eventGuestId}
-              className="animate-reveal flex items-center gap-1 rounded-full bg-surface py-1 pl-1 pr-2 text-xs text-foreground/80"
-              style={{ animationDelay: `${index * 40}ms` }}
-            >
-              <Avatar src={null} name={g.name} size="sm" />
-              <span>
-                {g.name}{" "}
-                <span className="text-foreground/40">
-                  (trajo: {g.addedByName})
-                </span>
-              </span>
-              {g.addedBy === currentUserId && (
-                <RemoveGuestButton eventGuestId={g.eventGuestId} eventId={eventId} />
-              )}
-            </li>
-          ))}
-          {guests.length === 0 && (
-            <li className="text-xs text-foreground/40">Nadie por ahora</li>
-          )}
-        </ul>
-        <div className="mt-1.5">
-          <AddGuestForm eventId={eventId} kind={kind} guests={registeredGuests} />
+                      <Link
+                        href={`/perfil/${p.userId}`}
+                        className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80 transition-colors duration-200 hover:bg-surface-border"
+                      >
+                        <Avatar src={p.avatarUrl} name={p.name} size="sm" />
+                        {p.name}
+                      </Link>
+                    </li>
+                  ))}
+                  {people.length === 0 && (
+                    <li className="text-xs text-foreground/40">Nadie por ahora</li>
+                  )}
+                </ul>
+              </div>
+            );
+          })}
         </div>
-      </div>
+
+        <div className="mt-4">
+          <h3 className="text-sm font-medium text-foreground/50">
+            Invitados ({guests.length})
+          </h3>
+          <ul className="mt-1 flex flex-wrap gap-2">
+            {guests.map((g, index) => (
+              <li
+                key={g.eventGuestId}
+                className="animate-reveal flex items-center gap-1 rounded-full bg-surface py-1 pl-1 pr-2 text-xs text-foreground/80"
+                style={{ animationDelay: `${index * 40}ms` }}
+              >
+                <Avatar src={null} name={g.name} size="sm" />
+                <span>
+                  {g.name}{" "}
+                  <span className="text-foreground/40">
+                    (trajo: {g.addedByName})
+                  </span>
+                </span>
+                {g.addedBy === currentUserId && (
+                  <RemoveGuestButton eventGuestId={g.eventGuestId} eventId={eventId} />
+                )}
+              </li>
+            ))}
+            {guests.length === 0 && (
+              <li className="text-xs text-foreground/40">Nadie por ahora</li>
+            )}
+          </ul>
+          <div className="mt-1.5">
+            <AddGuestForm eventId={eventId} kind={kind} guests={registeredGuests} />
+          </div>
+        </div>
+      </details>
     </section>
   );
 }
@@ -270,7 +297,9 @@ export default async function EventoPage({
     supabase.from("profiles").select("id, name, email, avatar_url").order("name"),
     supabase
       .from("venues")
-      .select("id, name, host_user_id, profiles!venues_host_user_id_fkey(name, email)")
+      .select(
+        "id, name, host_user_id, lat, lng, profiles!venues_host_user_id_fkey(name, email)",
+      )
       .order("name"),
     supabase.from("guests").select("id, name").order("name"),
     supabase
@@ -443,6 +472,19 @@ export default async function EventoPage({
         {dateFormatter.format(new Date(event.event_date))}
         {event.location ? ` · ${event.location}` : ""}
         {hostName ? ` (casa de ${hostName})` : ""}
+        {eventVenue?.lat != null && eventVenue?.lng != null && (
+          <>
+            {" · "}
+            <a
+              href={`https://www.openstreetmap.org/?mlat=${eventVenue.lat}&mlon=${eventVenue.lng}#map=16/${eventVenue.lat}/${eventVenue.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-eventos hover:underline"
+            >
+              📍 Ver en el mapa
+            </a>
+          </>
+        )}
       </p>
       {event.description && (
         <p className="mt-2 text-sm text-foreground/80">
@@ -497,6 +539,8 @@ export default async function EventoPage({
         </a>
       </div>
 
+      <SectionDivider label="Evento" colorClass="text-eventos" />
+
       <RsvpSection
         title="¿Vas a la juntada?"
         eventId={eventId}
@@ -508,33 +552,6 @@ export default async function EventoPage({
         currentUserId={user?.id}
         registeredGuests={registeredGuests ?? []}
       />
-
-      {event.has_futbol && (
-        <>
-          <RsvpSection
-            title="⚽ ¿Jugás al fútbol?"
-            eventId={eventId}
-            kind="futbol"
-            myStatus={myFutbolStatus}
-            attendees={attendeesFutbol}
-            totalPeople={totalPeople}
-            guests={guestsFutbol}
-            currentUserId={user?.id}
-            registeredGuests={registeredGuests ?? []}
-          />
-          <FutbolStatsForm
-            eventId={eventId}
-            stats={futbolStats}
-            candidates={futbolCandidates}
-          />
-          <FutbolTeamsSection
-            eventId={eventId}
-            candidates={futbolTeamCandidates}
-            initialAssignment={futbolTeams}
-          />
-          <RemoveFutbolButton eventId={eventId} />
-        </>
-      )}
 
       <section className="mt-8">
         <details className="rounded-xl border border-surface-border bg-surface p-4">
@@ -604,6 +621,36 @@ export default async function EventoPage({
           )}
         </div>
       </section>
+
+      {event.has_futbol && (
+        <>
+          <SectionDivider
+            label="⚽ Fútbol"
+            colorClass="text-green-700 dark:text-green-400"
+          />
+          <RsvpSection
+            title="⚽ ¿Jugás al fútbol?"
+            eventId={eventId}
+            kind="futbol"
+            myStatus={myFutbolStatus}
+            attendees={attendeesFutbol}
+            totalPeople={totalPeople}
+            guests={guestsFutbol}
+            currentUserId={user?.id}
+            registeredGuests={registeredGuests ?? []}
+          />
+          <FutbolStatsForm
+            eventId={eventId}
+            stats={futbolStats}
+            candidates={futbolCandidates}
+          />
+          <FutbolTeamsSection
+            eventId={eventId}
+            candidates={futbolTeamCandidates}
+            initialAssignment={futbolTeams}
+          />
+        </>
+      )}
 
       <section className="mt-8">
         <h2 className="text-sm font-medium">Fotos</h2>

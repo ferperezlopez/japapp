@@ -7,7 +7,7 @@
   `group_id` su primer uso real — ver `specs/004-eventos-gastos-y-fotos.md`),
   `supabase/migrations/0005_evento_futbol.sql` (agrega `has_futbol` y
   `kind` — ver `specs/006-evento-futbol.md`)
-- **Última actualización:** 2026-09-14
+- **Última actualización:** 2026-09-17
 
 ## 1. Resumen
 
@@ -23,7 +23,9 @@ para el asado/empanadas.
   opcional.
 - Confirmar asistencia propia en 3 estados: `yes` / `no` / `maybe`,
   modificable en cualquier momento (upsert).
-- Ver la lista de quién confirmó qué, agrupada por estado, con contador.
+- Ver la lista de quién confirmó qué, agrupada por estado, con contador
+  (colapsada por defecto detrás de "Ver detalle de asistentes" — el
+  resumen y los botones de RSVP quedan siempre visibles sin abrir nada).
 - Editar un evento ya creado (solo quien lo creó): nombre, fecha/hora,
   lugar, notas y si tiene fútbol.
 - Borrar un evento (solo quien lo creó).
@@ -81,6 +83,26 @@ Puntos que el SQL no explica por sí solo:
    tomando los primeros 16 caracteres del ISO guardado (`"YYYY-MM-
    DDTHH:mm"`), sin pasar por getters de `Date` — ver la nota de zona
    horaria en la sección 6.
+6. `RsvpSection` (componente compartido por la confirmación de juntada
+   y de fútbol, ver `specs/006-evento-futbol.md`) muestra siempre el
+   resumen (barra apilada) y los botones de RSVP; las 3 listas Van/Tal
+   vez/No van y la sección de Invitados quedan dentro de un
+   `<details><summary>Ver detalle de asistentes</summary>...</details>`,
+   colapsado por defecto — mismo patrón que ya usaba "Asignación de
+   tareas". Se colapsó porque con dos secciones de RSVP (juntada +
+   fútbol) más tareas/gastos/fotos, la página se hacía muy larga para
+   solo confirmar o mirar el resumen.
+7. **Tareas/Gastos como parte de la juntada:** en `/eventos/[eventId]`,
+   el orden de secciones es header → RSVP juntada → Asignación de
+   tareas → Gastos → (si `has_futbol`) bloque de fútbol completo →
+   Fotos → Borrar evento. Tareas y Gastos pertenecen conceptualmente al
+   evento completo (la japa), no al fútbol — antes quedaban debajo del
+   bloque de fútbol y parecían parte de él; ahora están pegados a la
+   juntada, y el fútbol (si existe) va al final. Un componente
+   `SectionDivider` (línea + eyebrow en mayúsculas) marca el límite
+   entre ambos bloques: "Evento" en navy (`text-eventos`) antes de la
+   juntada, "⚽ Fútbol" en verde antes del bloque de fútbol — sin
+   tarjetas anidadas, solo un separador liviano.
 
 ## 5. Criterios de aceptación
 
@@ -106,6 +128,12 @@ Puntos que el SQL no explica por sí solo:
       viene precargado con los datos actuales del evento, y guardar
       cambios los refleja sin duplicar el evento.
 - [x] Todas las rutas de `/eventos` requieren login.
+- [x] El detalle de asistentes (listas Van/Tal vez/No van + Invitados)
+      arranca colapsado; el resumen y los botones de RSVP siguen
+      visibles sin necesidad de abrirlo.
+- [x] En un evento con fútbol, Tareas y Gastos aparecen antes del
+      bloque de fútbol (no después), con un divisor "Evento" antes de
+      la juntada y "⚽ Fútbol" antes del bloque de fútbol.
 
 ## 6. Decisiones y tradeoffs
 
@@ -116,6 +144,8 @@ Puntos que el SQL no explica por sí solo:
 | RSVP como upsert sin historial de cambios | Tabla de historial de respuestas | Solo importa el estado actual para contar gente; historizar respuestas no tiene caso de uso pedido. |
 | Edición de evento agregada reusando la policy RLS de `update` que ya existía sin usarse desde `0002` | Requerir borrar y recrear el evento para corregir un dato | Pedido explícito del usuario; la policy de autorización ya estaba lista, solo faltaba la action y la UI. |
 | Fecha del formulario de edición precargada cortando el ISO string (`slice(0, 16)`) en vez de usar getters de `Date` | `new Date(event_date).getHours()`/`getMinutes()`/etc. | Esos getters devuelven la hora en la zona horaria del proceso que corre el código (el servidor), no la del navegador de quien creó el evento originalmente — como `createEvent` tampoco hace conversión real de zona horaria (guarda tal cual lo que tipeó el navegador), cortar el string a mano es lo único que reproduce exactamente el valor original sin depender de en qué zona horaria corra el servidor. |
+| Detalle de asistentes colapsado en un `<details>`, resumen y RSVP siempre visibles | Dejar todo siempre expandido (como estaba) | Feedback del usuario: con dos RSVP (juntada + fútbol) más tareas/gastos/fotos, la página quedaba muy larga para solo confirmar o mirar el resumen. |
+| Divisor liviano (línea + eyebrow de color) entre juntada y fútbol, sin tarjetas anidadas | Envolver cada bloque en una tarjeta con borde/fondo propio | No hay un patrón de "card dentro de card" en el resto de la app; un divisor da el mismo límite visual sin sumar un nivel de anidamiento nuevo. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -131,6 +161,11 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: detalle de asistentes colapsado por defecto (`<details>`,
+  resumen y RSVP siempre visibles); Tareas y Gastos pasaron a estar
+  antes del bloque de fútbol (no después), con un `SectionDivider`
+  entre juntada y fútbol — feedback del usuario tras ver la página con
+  fútbol activado.
 - 2026-09-14: agregada la edición de evento (`updateEvent` + `EditEventForm`),
   a pedido explícito del usuario ("el owner de un evento debería poder
   modificarlo"). Se factorizaron los campos del formulario a
