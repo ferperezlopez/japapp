@@ -4,7 +4,7 @@
 - **Rutas:** `/eventos/[eventId]` (extendida)
 - **Migraciones relacionadas:** `supabase/migrations/0016_futbol_teams.sql`,
   `supabase/migrations/0017_futbol_teams_position.sql`
-- **Última actualización:** 2026-09-16
+- **Última actualización:** 2026-09-17
 
 ## 1. Resumen
 
@@ -26,11 +26,14 @@ hacerlo a mano por WhatsApp cada vez que se junta el grupo.
 - Interacción por **toque** (tocar un jugador y después la franja, o
   "Sin asignar", donde va) — sin arrastrar. Ver sección 6 para el
   porqué.
-- Camisetas grandes con el nombre abreviado del jugador (ej. "F. Perez"):
-  Equipo 1 con camiseta clara, Equipo 2 con camiseta oscura — y el
-  arquero de cualquiera de los dos equipos con un tercer color propio
-  (amarillo, el mismo que ya usa la app para "aviso/pendiente"), para
-  distinguirlo de un vistazo sin tener que fijarse en la franja.
+- Camisetas grandes con dorsal numérico (arquero siempre "1", después
+  correlativo por equipo — puramente visual, no se guarda en la base) y
+  el nombre abreviado del jugador (ej. "M. Perez") en una etiqueta
+  debajo de la camiseta: Equipo 1 con camiseta clara, Equipo 2 con
+  camiseta oscura — y el arquero de cualquiera de los dos equipos con
+  un tercer color propio (amarillo, el mismo que ya usa la app para
+  "aviso/pendiente"), para distinguirlo de un vistazo sin tener que
+  fijarse en la franja.
 - Un arquero por equipo (mover a otro jugador ahí pasa al anterior a
   defensores); defensores y delanteros sin tope estricto (se acomodan
   varios en la misma franja si la convocatoria da para más de 2).
@@ -133,14 +136,21 @@ Puntos que el SQL no explica por sí solo:
    toque de más). Mover un jugador a la franja de arquero de un equipo
    que ya tenía uno pasa al anterior a defensores (nunca lo deja sin
    equipo).
-6. Cada jugador en la cancha se muestra como una camiseta grande con su
-   nombre abreviado (SVG inline, sin dependencia nueva): inicial del
-   nombre + primer apellido (ej. "F. Perez"), calculado en el momento
-   (no se persiste, es una función pura sobre `candidate.name`). El
-   color de la camiseta depende de la posición antes que del equipo:
-   arquero siempre en el tercer color (amarillo), y solo defensores/
-   delanteros usan el color del equipo (clara para Equipo 1, oscura
-   para Equipo 2).
+6. Cada jugador en la cancha se muestra como una camiseta grande con un
+   dorsal numérico (SVG inline, sin dependencia nueva) y, debajo, una
+   etiqueta con su nombre abreviado (inicial + primer apellido, ej.
+   "M. Perez"). El dorsal se calcula con `assignJerseyNumbers`
+   (`src/lib/eventos/jerseyNumbers.ts`, función pura con test): numera
+   arquero=1 y sigue correlativo con defensores y delanteros en el
+   orden en que aparecen (alfabético por nombre, ya que `byPosition`
+   ordena así) — cada equipo numera independiente, y es puramente
+   visual (no se persiste, ni siquiera junto a `team`/`position` en
+   `futbol_teams`). No reproduce los "saltos" de una camiseta real
+   (arquero=1, defensores=4-5, delanteros=9-11): un esquema secuencial
+   simple alcanza para distinguir jugadores de un vistazo. El color de
+   la camiseta depende de la posición antes que del equipo: arquero
+   siempre en el tercer color (amarillo), y solo defensores/delanteros
+   usan el color del equipo (clara para Equipo 1, oscura para Equipo 2).
 7. "Guardar equipos" arma el array de asignaciones a partir de los
    equipos 1 y 2 (quienes quedaron en "Sin asignar" no se guardan) y
    llama a `saveFutbolTeams(eventId, assignments)`, que borra todas las
@@ -166,8 +176,9 @@ Puntos que el SQL no explica por sí solo:
       exactamente el último estado guardado, posiciones incluidas.
 - [x] Alguien que ya estaba en un equipo guardado sigue apareciendo en
       el modal aunque haya cambiado su RSVP de fútbol después.
-- [x] Las camisetas son grandes y muestran el nombre abreviado del
-      jugador (ej. "F. Perez"), no un número.
+- [x] Las camisetas son grandes y muestran un dorsal numérico (arquero
+      siempre "1"), con el nombre abreviado del jugador (ej. "M. Perez")
+      en una etiqueta debajo.
 - [x] El arquero de cualquier equipo se ve en un tercer color (amarillo),
       distinto de la camiseta clara/oscura del resto de su equipo.
 - [x] Con la mayoría de los confirmados en "Sin asignar" (las 6 franjas
@@ -181,7 +192,7 @@ Puntos que el SQL no explica por sí solo:
 | Tocar y ubicar (tocar jugador, tocar destino) | Arrastrar y soltar (drag-and-drop) | La app no tenía ninguna librería de DnD instalada ni drag nativo de HTML5 en uso; es una PWA touch-first donde el drag nativo anda mal en celular. Decisión confirmada con el usuario. |
 | Cancha vertical con formación fija (arquero, defensores, delanteros) | Cancha horizontal con solo el arquero destacado (primer diseño, PR #31) | El usuario vio el primer diseño (dos mitades lado a lado, sin formación) y pidió explícitamente cancha vertical, camisetas con dorsal por equipo (clara/oscura) y posiciones fijas, con una imagen ilustrativa de referencia conceptual. |
 | Defensores/delanteros sin tope estricto (máximo 2 por línea "recomendado") | Cupos estrictos 1-2-2 con excedente en "Sin asignar" | Decisión confirmada con el usuario: una convocatoria real de 8 a 12 personas no siempre da justo 5 por equipo: forzar el excedente a "Sin asignar" bloquearía sin necesidad a alguien que sí va a jugar. |
-| Nombre abreviado en la casaca ("F. Perez"), sin dorsal numérico | Número de camiseta | El usuario pidió explícitamente ver el nombre en la camiseta; con la casaca agrandada (a pedido del usuario, "hay espacio de sobra") entra cómodo y es más útil que un número arbitrario para identificar jugadores de un vistazo. |
+| Dorsal numérico secuencial (arquero=1, correlativo por equipo) + nombre abreviado en etiqueta debajo | (a) Nombre en la casaca sin dorsal (decisión anterior, PR #32); (b) reproducir números "estilo camiseta real" (arquero=1, defensores=4-5, delanteros=9-11) | El usuario mandó una imagen de referencia mostrando dorsal numérico y pidió puntualmente ese cambio — revierte la decisión anterior de "nombre en la casaca, sin dorsal". Se descartó (b) porque el usuario aclaró que la imagen era referencia direccional, no pixel-exacta: un esquema secuencial simple es más fácil de razonar y de testear que reproducir los huecos de una numeración real. |
 | Arquero con un tercer color (amarillo) sin importar el equipo | Mantener el color de camiseta del equipo también para el arquero | Pedido explícito del usuario ("arquero destacado con otro color"); reusa el amarillo que la app ya usa para "aviso/pendiente" (`--color-amber`) en vez de inventar un color nuevo, y se adapta solo a dark mode al ser una variable CSS. |
 | Alto mínimo chico (`min-h-9`) por franja vacía, que crece solo con contenido | Alto fijo pensado para una camiseta completa (`min-h-[6rem]`) | Con las 6 franjas (arquero/defensores/delanteros × 2 equipos) vacías al abrir el modal — el caso normal, todos arrancan en "Sin asignar" — reservar el alto de una camiseta en cada una sumaba ~575px de blanco antes de tener un solo jugador ubicado, y el modal terminaba más alto que una pantalla de celular común. |
 | Equipos guardados en la base (tabla nueva) | Herramienta de "repartamos ahora" sin persistencia | Decisión explícita del usuario: que quede guardado y visible/editable por cualquiera, igual que tareas/invitados/stats — no una pantalla que se descarta al cerrar. |
@@ -199,6 +210,12 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: la camiseta pasa a mostrar un dorsal numérico (arquero
+  siempre "1", correlativo por equipo) en vez del nombre adentro —
+  revierte la decisión de PR #32. El nombre abreviado sigue visible,
+  ahora en una etiqueta debajo de la camiseta (`assignJerseyNumbers`,
+  `src/lib/eventos/jerseyNumbers.ts`, con test). A pedido del usuario,
+  a partir de una imagen de referencia.
 - 2026-09-16: el modal quedaba más alto que una pantalla de celular
   común (feedback del usuario tras ver el PR #33) — franjas vacías con
   alto mínimo chico en vez de reservar el alto de una camiseta
