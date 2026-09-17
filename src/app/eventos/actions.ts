@@ -317,6 +317,7 @@ export async function addGuestToEvent(
 ) {
   const existingGuestId = String(formData.get("existingGuestId") ?? "").trim();
   const newGuestName = String(formData.get("newGuestName") ?? "").trim();
+  const broughtBy = String(formData.get("broughtBy") ?? "").trim();
 
   const supabase = await createClient();
   const {
@@ -340,7 +341,13 @@ export async function addGuestToEvent(
   }
 
   const { error } = await supabase.from("event_guests").upsert(
-    { event_id: eventId, guest_id: guestId, kind, added_by: user.id },
+    {
+      event_id: eventId,
+      guest_id: guestId,
+      kind,
+      added_by: user.id,
+      brought_by: broughtBy || user.id,
+    },
     { onConflict: "event_id,guest_id,kind", ignoreDuplicates: true },
   );
 

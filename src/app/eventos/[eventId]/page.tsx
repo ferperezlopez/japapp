@@ -84,30 +84,15 @@ const GROUPS: { status: "yes" | "maybe" | "no"; label: string }[] = [
 
 // "Creación del evento" y "convocatoria" no están en esta lista: se
 // asumen hechas por quien creó el evento (events.created_by), mostrado
-// por separado como "Creado por".
-const TASK_TYPES: (
-  | {
-      type: "compra_insumos" | "lavado_platos" | "orden_sede";
-      label: string;
-      multi: true;
-      futbolOnly?: boolean;
-    }
-  | {
-      type: "reserva_cancha";
-      label: string;
-      multi: false;
-      futbolOnly?: boolean;
-    }
-)[] = [
-  { type: "compra_insumos", label: "Compra de insumos", multi: true },
-  { type: "lavado_platos", label: "Lavado de platos", multi: true },
-  { type: "orden_sede", label: "Orden de la sede", multi: true },
-  {
-    type: "reserva_cancha",
-    label: "Reserva de cancha",
-    multi: false,
-    futbolOnly: true,
-  },
+// por separado como "Creado por". "Reserva de cancha" tampoco está acá:
+// es una tarea del sub-evento fútbol, se renderiza junto a él.
+const TASK_TYPES: {
+  type: "compra_insumos" | "lavado_platos" | "orden_sede";
+  label: string;
+}[] = [
+  { type: "compra_insumos", label: "Compra de insumos" },
+  { type: "lavado_platos", label: "Lavado de platos" },
+  { type: "orden_sede", label: "Orden de la sede" },
 ];
 
 type Attendee = {
@@ -123,6 +108,8 @@ type EventGuest = {
   name: string;
   addedBy: string;
   addedByName: string;
+  broughtBy: string;
+  broughtByName: string;
 };
 
 // Separador liviano (línea + eyebrow), sin tarjetas anidadas: marca dónde
@@ -161,6 +148,7 @@ function RsvpSection({
   guests,
   currentUserId,
   registeredGuests,
+  members,
 }: {
   title: string;
   eventId: string;
@@ -171,11 +159,16 @@ function RsvpSection({
   guests: EventGuest[];
   currentUserId: string | undefined;
   registeredGuests: { id: string; name: string }[];
+  members: { id: string; name: string | null; email: string }[];
 }) {
   return (
     <section className="mt-8">
       <h2 className="text-sm font-medium">{title}</h2>
-      <AttendanceSummary attendees={attendees} totalPeople={totalPeople} />
+      <AttendanceSummary
+        attendees={attendees}
+        totalPeople={totalPeople}
+        guestCount={guests.length}
+      />
       <div className="mt-3">
         <RsvpButtons eventId={eventId} kind={kind} currentStatus={myStatus} />
       </div>
@@ -186,10 +179,15 @@ function RsvpSection({
         <div className="mt-3 space-y-4">
           {GROUPS.map((group) => {
             const people = attendees.filter((a) => a.status === group.status);
+            const groupGuests = group.status === "yes" ? guests : [];
             return (
               <div key={group.status}>
                 <h3 className="text-sm font-medium text-foreground/50">
-                  {group.label} ({people.length})
+                  {group.label} ({people.length}
+                  {groupGuests.length > 0
+                    ? ` + ${groupGuests.length} invitadxs`
+                    : ""}
+                  )
                 </h3>
                 <ul className="mt-1 flex flex-wrap gap-2">
                   {people.map((p, index) => (
@@ -207,7 +205,28 @@ function RsvpSection({
                       </Link>
                     </li>
                   ))}
-                  {people.length === 0 && (
+                  {groupGuests.map((g, index) => (
+                    <li
+                      key={g.eventGuestId}
+                      className="animate-reveal flex items-center gap-1 rounded-full bg-surface py-1 pl-1 pr-2 text-xs text-foreground/80"
+                      style={{ animationDelay: `${(people.length + index) * 40}ms` }}
+                    >
+                      <Avatar src={null} name={g.name} size="sm" />
+                      <span>
+                        {g.name}{" "}
+                        <span className="text-foreground/40">
+                          (trajo: {g.broughtByName})
+                        </span>
+                      </span>
+                      {g.addedBy === currentUserId && (
+                        <RemoveGuestButton
+                          eventGuestId={g.eventGuestId}
+                          eventId={eventId}
+                        />
+                      )}
+                    </li>
+                  ))}
+                  {people.length === 0 && groupGuests.length === 0 && (
                     <li className="text-xs text-foreground/40">Nadie por ahora</li>
                   )}
                 </ul>
@@ -217,35 +236,13 @@ function RsvpSection({
         </div>
 
         <div className="mt-4">
-          <h3 className="text-sm font-medium text-foreground/50">
-            Invitados ({guests.length})
-          </h3>
-          <ul className="mt-1 flex flex-wrap gap-2">
-            {guests.map((g, index) => (
-              <li
-                key={g.eventGuestId}
-                className="animate-reveal flex items-center gap-1 rounded-full bg-surface py-1 pl-1 pr-2 text-xs text-foreground/80"
-                style={{ animationDelay: `${index * 40}ms` }}
-              >
-                <Avatar src={null} name={g.name} size="sm" />
-                <span>
-                  {g.name}{" "}
-                  <span className="text-foreground/40">
-                    (trajo: {g.addedByName})
-                  </span>
-                </span>
-                {g.addedBy === currentUserId && (
-                  <RemoveGuestButton eventGuestId={g.eventGuestId} eventId={eventId} />
-                )}
-              </li>
-            ))}
-            {guests.length === 0 && (
-              <li className="text-xs text-foreground/40">Nadie por ahora</li>
-            )}
-          </ul>
-          <div className="mt-1.5">
-            <AddGuestForm eventId={eventId} kind={kind} guests={registeredGuests} />
-          </div>
+          <AddGuestForm
+            eventId={eventId}
+            kind={kind}
+            guests={registeredGuests}
+            members={members}
+            currentUserId={currentUserId}
+          />
         </div>
       </details>
     </section>
@@ -319,7 +316,7 @@ export default async function EventoPage({
     supabase.from("guests").select("id, name").order("name"),
     supabase
       .from("event_guests")
-      .select("id, guest_id, kind, added_by, guests(name)")
+      .select("id, guest_id, kind, added_by, brought_by, guests(name)")
       .eq("event_id", eventId),
   ]);
   const [{ data: taskRows }, { data: insumoItems }] = await Promise.all([
@@ -364,6 +361,8 @@ export default async function EventoPage({
     name: g.guests?.name ?? "Desconocido",
     addedBy: g.added_by,
     addedByName: memberName(g.added_by),
+    broughtBy: g.brought_by,
+    broughtByName: memberName(g.brought_by),
   }));
   const guestsJuntada = allEventGuests.filter((g) => g.kind === "juntada");
   const guestsFutbol = allEventGuests.filter((g) => g.kind === "futbol");
@@ -588,6 +587,7 @@ export default async function EventoPage({
         guests={guestsJuntada}
         currentUserId={user?.id}
         registeredGuests={registeredGuests ?? []}
+        members={members}
       />
 
       <section className="mt-8">
@@ -599,44 +599,34 @@ export default async function EventoPage({
             Creado por: {memberName(event.created_by)}
           </p>
           <div className="mt-3 space-y-3">
-            {TASK_TYPES.filter((t) => !t.futbolOnly || event.has_futbol).map(
-              (t) => (
-                <div key={t.type}>
-                  <label className="block text-xs font-medium text-foreground/50">
-                    {t.label}
-                  </label>
-                  <div className="mt-1">
-                    {t.multi ? (
-                      <TaskAssigneesEditor
-                        eventId={eventId}
-                        taskType={t.type}
-                        assignees={(assigneesByTask.get(t.type) ?? []).map(
-                          (a) => ({
-                            id: a.id,
-                            userId: a.userId,
-                            name: memberName(a.userId),
-                            avatarUrl: memberAvatar(a.userId),
-                            itemName: itemName(a.itemId),
-                          }),
-                        )}
-                        members={members}
-                        items={
-                          t.type === "compra_insumos"
-                            ? (insumoItems ?? [])
-                            : undefined
-                        }
-                      />
-                    ) : (
-                      <TaskAssignSelect
-                        eventId={eventId}
-                        assignedTo={reservaCanchaAssignedTo}
-                        members={members}
-                      />
+            {TASK_TYPES.map((t) => (
+              <div key={t.type}>
+                <label className="block text-xs font-medium text-foreground/50">
+                  {t.label}
+                </label>
+                <div className="mt-1">
+                  <TaskAssigneesEditor
+                    eventId={eventId}
+                    taskType={t.type}
+                    assignees={(assigneesByTask.get(t.type) ?? []).map(
+                      (a) => ({
+                        id: a.id,
+                        userId: a.userId,
+                        name: memberName(a.userId),
+                        avatarUrl: memberAvatar(a.userId),
+                        itemName: itemName(a.itemId),
+                      }),
                     )}
-                  </div>
+                    members={members}
+                    items={
+                      t.type === "compra_insumos"
+                        ? (insumoItems ?? [])
+                        : undefined
+                    }
+                  />
                 </div>
-              ),
-            )}
+              </div>
+            ))}
           </div>
         </details>
       </section>
@@ -675,7 +665,20 @@ export default async function EventoPage({
             guests={guestsFutbol}
             currentUserId={user?.id}
             registeredGuests={registeredGuests ?? []}
+            members={members}
           />
+          <div className="mt-4 rounded-xl border border-surface-border bg-surface p-4">
+            <label className="block text-xs font-medium text-foreground/50">
+              Reserva de cancha
+            </label>
+            <div className="mt-1">
+              <TaskAssignSelect
+                eventId={eventId}
+                assignedTo={reservaCanchaAssignedTo}
+                members={members}
+              />
+            </div>
+          </div>
           <FutbolStatsForm
             eventId={eventId}
             stats={futbolStats}
