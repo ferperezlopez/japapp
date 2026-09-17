@@ -6,6 +6,12 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { withMinDuration } from "@/lib/withMinDuration";
+import {
+  findSimilarItem,
+  iconForInsumo,
+  matchesQuery,
+  normalize,
+} from "@/lib/eventos/insumos";
 
 const NEW_ITEM_VALUE = "__new__";
 
@@ -30,9 +36,14 @@ type Item = {
   name: string;
 };
 
-// Selector de insumo (existente + "nuevo insumo…"), compartido entre el
-// flujo de sumar una persona nueva y el de agregarle otro insumo a
-// alguien que ya está en la lista.
+// Selector de insumo: combobox de texto buscable (en vez del <select>
+// original) — tipear filtra los insumos ya cargados por substring, con su
+// ícono si aplica (iconForInsumo). Si lo tipeado no matchea exacto a
+// ninguno, se ofrece crearlo nuevo; si además se parece bastante a uno ya
+// cargado (findSimilarItem, mismo umbral que find_similar_profile_names),
+// se sugiere usar ese en vez de duplicar — no bloqueante, igual que el
+// aviso de nombre parecido en /login: la sugerencia se puede ignorar y
+// crear el insumo nuevo igual.
 function ItemPicker({
   items,
   value,
@@ -46,30 +57,95 @@ function ItemPicker({
   newName: string;
   onNewNameChange: (value: string) => void;
 }) {
+  const selectedName = items.find((it) => it.id === value)?.name ?? null;
+  const [query, setQuery] = useState(selectedName ?? newName);
+  const [open, setOpen] = useState(false);
+
+  const filtered = items.filter((it) => matchesQuery(it.name, query));
+  const trimmedQuery = query.trim();
+  const exactMatch = items.find((it) => normalize(it.name) === normalize(trimmedQuery));
+  const similar =
+    value === NEW_ITEM_VALUE && trimmedQuery && !exactMatch
+      ? findSimilarItem(items, trimmedQuery)
+      : null;
+
+  function selectExisting(item: Item) {
+    onChange(item.id);
+    onNewNameChange("");
+    setQuery(item.name);
+    setOpen(false);
+  }
+
+  function selectNew(name: string) {
+    onChange(NEW_ITEM_VALUE);
+    onNewNameChange(name);
+    setQuery(name);
+    setOpen(false);
+  }
+
   return (
-    <div>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
-      >
-        <option value="">¿Qué vas a comprar?</option>
-        {items.map((it) => (
-          <option key={it.id} value={it.id}>
-            {it.name}
-          </option>
-        ))}
-        <option value={NEW_ITEM_VALUE}>+ Nuevo insumo…</option>
-      </select>
-      {value === NEW_ITEM_VALUE && (
-        <input
-          type="text"
-          value={newName}
-          onChange={(e) => onNewNameChange(e.target.value)}
-          placeholder="Nombre del insumo"
-          autoFocus
-          className="mt-1.5 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
-        />
+    <div className="relative">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          const text = e.target.value;
+          setQuery(text);
+          setOpen(true);
+          onNewNameChange(text);
+          if (value !== NEW_ITEM_VALUE) onChange("");
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Buscar o cargar qué vas a comprar…"
+        className="w-full min-w-48 rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+      />
+      {open && (
+        <ul className="absolute z-10 mt-1 max-h-48 w-full min-w-48 overflow-auto rounded-lg border border-surface-border bg-background shadow-md">
+          {filtered.map((it) => {
+            const icon = iconForInsumo(it.name);
+            return (
+              <li key={it.id}>
+                <button
+                  type="button"
+                  onMouseDown={() => selectExisting(it)}
+                  className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-sm hover:bg-surface"
+                >
+                  {icon && <span aria-hidden="true">{icon}</span>}
+                  {it.name}
+                </button>
+              </li>
+            );
+          })}
+          {trimmedQuery && !exactMatch && (
+            <li>
+              <button
+                type="button"
+                onMouseDown={() => selectNew(trimmedQuery)}
+                className="w-full px-3 py-1.5 text-left text-sm font-medium text-eventos hover:bg-surface"
+              >
+                + Crear &quot;{trimmedQuery}&quot;
+              </button>
+            </li>
+          )}
+          {filtered.length === 0 && !trimmedQuery && (
+            <li className="px-3 py-1.5 text-xs text-foreground/40">
+              Sin insumos cargados todavía
+            </li>
+          )}
+        </ul>
+      )}
+      {similar && (
+        <p className="mt-1 text-xs text-amber-ink">
+          ¿Quisiste decir &quot;{similar.name}&quot;?{" "}
+          <button
+            type="button"
+            onClick={() => selectExisting(similar)}
+            className="font-medium underline"
+          >
+            Usar este
+          </button>
+        </p>
       )}
     </div>
   );
@@ -273,7 +349,16 @@ export function TaskAssigneesEditor({
                   key={r.rowId}
                   className="flex items-center gap-1 text-xs text-foreground/60"
                 >
-                  — {r.itemName ?? "Insumo sin nombre"}
+                  — {r.itemName ? (
+                    <>
+                      {iconForInsumo(r.itemName) && (
+                        <span aria-hidden="true">{iconForInsumo(r.itemName)} </span>
+                      )}
+                      {r.itemName}
+                    </>
+                  ) : (
+                    "Insumo sin nombre"
+                  )}
                   {removeButton(r.rowId)}
                 </li>
               ))}

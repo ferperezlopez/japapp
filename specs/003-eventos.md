@@ -117,6 +117,14 @@ Puntos que el SQL no explica por sí solo:
    estado del fútbol en vez del de la juntada. Se filtra por
    `kind === "juntada"` antes de contar — ese resumen es sobre la
    juntada, no sobre el fútbol.
+10. Si el evento tiene fútbol (`has_futbol`), la card de `/eventos` suma
+    una segunda línea "⚽ ✅ n · 🤔 n · ❌ n" debajo del resumen de la
+    juntada, contando aparte los `event_rsvps` con `kind === "futbol"`
+    (mismo `Map` que ya se armaba para el punto 9, con una segunda
+    entrada por `event_id`). Sin esa segunda línea, la card solo dejaba
+    ver cuánta gente confirmó la juntada — el usuario pidió poder ver
+    de un vistazo también cuánta gente confirmó el fútbol, sin entrar
+    al detalle del evento.
 
 ## 5. Criterios de aceptación
 
@@ -152,6 +160,9 @@ Puntos que el SQL no explica por sí solo:
       `/eventos` cuenta solo confirmaciones de la juntada — no se mezcla
       con las del fútbol, y el emoji de "tu respuesta" refleja el
       estado de la juntada.
+- [x] En un evento con fútbol, la card de `/eventos` muestra además una
+      segunda línea "⚽ ✅/🤔/❌" con el conteo de confirmaciones de
+      fútbol; en un evento sin fútbol, esa línea no aparece.
 
 ## 6. Decisiones y tradeoffs
 
@@ -165,6 +176,7 @@ Puntos que el SQL no explica por sí solo:
 | Detalle de asistentes colapsado en un `<details>`, resumen y RSVP siempre visibles | Dejar todo siempre expandido (como estaba) | Feedback del usuario: con dos RSVP (juntada + fútbol) más tareas/gastos/fotos, la página quedaba muy larga para solo confirmar o mirar el resumen. |
 | Divisor liviano (línea + eyebrow de color) entre juntada y fútbol, sin tarjetas anidadas | Envolver cada bloque en una tarjeta con borde/fondo propio | No hay un patrón de "card dentro de card" en el resto de la app; un divisor da el mismo límite visual sin sumar un nivel de anidamiento nuevo. |
 | Resumen "✅/🤔/❌" de `/eventos` filtrado por `kind === "juntada"` | Sumar todos los `event_rsvps` del evento sin importar `kind` (comportamiento anterior, con bug) | Sumar ambos tipos de RSVP mezclaba confirmaciones de la juntada con las del fútbol, dando un conteo (y un emoji de "tu respuesta") que no correspondía a ninguna de las dos cosas realmente. |
+| Segunda línea "⚽ ✅/🤔/❌" en la card, en vez de fusionar los conteos | Un solo resumen combinando juntada y fútbol | Fusionarlos sería reintroducir el mismo problema que motivó el fix anterior (mezclar dos cosas distintas); una línea aparte, condicionada a `has_futbol`, muestra ambos conteos sin perder la separación conceptual. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -180,6 +192,10 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: la card de `/eventos` de un evento con fútbol suma una
+  segunda línea "⚽ ✅/🤔/❌" con el conteo aparte de confirmaciones de
+  fútbol, a pedido del usuario (antes solo se veía el resumen de la
+  juntada, sin poder ver de un vistazo cuánta gente confirmó fútbol).
 - 2026-09-17: `AttendanceSummary` extraída a `src/components/eventos/`
   para reusarla en la landing (`specs/006-evento-futbol.md`); corregido
   el resumen "✅/🤔/❌" de `/eventos`, que mezclaba RSVPs de juntada y

@@ -6,6 +6,7 @@ import { RsvpButtons } from "@/components/eventos/RsvpButtons";
 import { AttendanceSummary } from "@/components/eventos/AttendanceSummary";
 import { DeleteEventButton } from "./DeleteEventButton";
 import { EditEventForm } from "./EditEventForm";
+import { EditVenueForm } from "./EditVenueForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
 import { FutbolTeamsSection } from "./FutbolTeamsSection";
 import { UploadPhotoForm } from "./UploadPhotoForm";
@@ -442,6 +443,11 @@ export default async function EventoPage({
           </>
         )}
       </p>
+      {eventVenue && (
+        <div className="mt-1.5">
+          <EditVenueForm venue={eventVenue} members={members} />
+        </div>
+      )}
       {event.description && (
         <p className="mt-2 text-sm text-foreground/80">
           {event.description}

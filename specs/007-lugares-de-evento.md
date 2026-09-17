@@ -4,7 +4,8 @@
 - **Rutas:** `/eventos` (formulario de alta)
 - **Migraciones relacionadas:** `supabase/migrations/0006_venues.sql`,
   `supabase/migrations/0019_venue_gps.sql` (revertida por `0021`),
-  `supabase/migrations/0021_venue_address.sql`
+  `supabase/migrations/0021_venue_address.sql`,
+  `supabase/migrations/0022_venues_update_policy.sql`
 - **Última actualización:** 2026-09-17
 
 ## 1. Resumen
@@ -33,32 +34,35 @@ muestra.
   evento muestra un link "🧭 Cómo llegar" que abre la navegación de Google
   Maps hacia esa dirección directamente en el dispositivo de quien lo
   toca (no un mapa para mirar, dispara la navegación).
+- Editar un lugar ya guardado: desde "✏️ Editar lugar" en la página del
+  evento, cualquier logueado puede cambiar el nombre, la dirección y de
+  quién es la casa de un lugar existente (no hace falta haber sido
+  quien lo cargó). Si el nombre cambia, todos los eventos que ya
+  usaban ese nombre se actualizan solos para seguir apuntando al mismo
+  lugar (ver sección 3).
 
 ### No incluye (por ahora)
 
-- Cargar o editar la dirección de un lugar **ya existente** — solo se
-  puede cargar al crear el lugar por primera vez (ver sección 6, mismo
-  criterio que `host_user_id`: sin policy de `update` en `venues`).
 - Un mapa interactivo para elegir la ubicación tocando un punto (se
   probó con Leaflet + OpenStreetMap y se sacó — ver changelog): el
   usuario no necesita ver ni marcar un mapa, solo registrar la dirección
   como texto para que la navegación se dispare sola al tocarla.
 - Geocodificar o validar la dirección tipeada — es texto libre tal cual
-  lo escribe quien crea el lugar; Google Maps resuelve direcciones de
-  texto sin necesitar coordenadas ni una API key.
-- Editar o borrar un lugar de la lista.
+  lo escribe quien crea o edita el lugar; Google Maps resuelve
+  direcciones de texto sin necesitar coordenadas ni una API key.
+- Borrar un lugar de la lista (solo se puede editar, no eliminar).
 - Autocompletar o normalizar nombres parecidos ("Casa de Fer" vs "casa de
   fer" quedan como dos lugares distintos: el `unique` de `venues.name` es
-  exacto, sin normalización de mayúsculas/espacios).
+  exacto, sin normalización de mayúsculas/espacios) — tampoco al editar.
 - Mostrar el día de la semana en ningún otro lado además del formulario de
   alta (la página del evento y el listado ya muestran la fecha completa vía
   `Intl.DateTimeFormat` con `weekday`, así que ahí ya se ve).
 
 ## 3. Modelo de datos
 
-Ver `supabase/migrations/0006_venues.sql` y `0021_venue_address.sql` para
-el detalle completo (`0019_venue_gps.sql` agregó `lat`/`lng`, que `0021`
-borró — ver changelog).
+Ver `supabase/migrations/0006_venues.sql`, `0021_venue_address.sql` y
+`0022_venues_update_policy.sql` para el detalle completo (`0019_venue_gps.sql`
+agregó `lat`/`lng`, que `0021` borró — ver changelog).
 
 Puntos que el SQL no explica por sí solo:
 
@@ -79,10 +83,17 @@ Puntos que el SQL no explica por sí solo:
   formato: es la dirección tal cual la tipeó quien creó el lugar, y
   Google Maps la resuelve como texto libre al armar el link de
   navegación (sin necesitar coordenadas).
-- Sin policies de `update`/`delete` en `venues`: no hay forma de editar o
-  borrar un lugar desde la UI todavía (no se pidió), y por eso la
-  dirección tampoco se puede agregar a un lugar ya guardado — decisión
-  confirmada con el usuario al conversar el alcance.
+- `0022_venues_update_policy.sql` suma la policy de `update` que
+  faltaba: `using (true) with check (true)`, mismo criterio de
+  confianza total que `event_tasks`/`futbol_stats` — cualquier logueado
+  puede editar cualquier lugar, no solo quien lo creó. Sigue sin haber
+  policy de `delete` (no se puede borrar un lugar, solo editarlo).
+- `events.location` es una copia de texto, no una FK: si `updateVenue`
+  cambia `venues.name`, la action también corre
+  `update events set location = <nombre nuevo> where location = <nombre
+  viejo>` en la misma llamada, para que los eventos que ya usaban el
+  nombre viejo sigan resolviendo el mismo `venue` (dirección, dueño) en
+  vez de quedar "huérfanos" por el cambio de nombre.
 
 ## 4. Diseño / flujo
 
@@ -116,6 +127,21 @@ Puntos que el SQL no explica por sí solo:
    instalada con la navegación ya armada hacia esa dirección, no un
    mapa para mirar.
 
+**Editar un lugar existente:**
+1. En `/eventos/[eventId]`, si el `venue` del evento se resuelve
+   (`eventVenue`), aparece un link "✏️ Editar lugar" debajo de la fecha/
+   lugar, visible para cualquier logueado (no solo el creador del
+   evento ni de quien cargó el lugar).
+2. `<EditVenueForm>` (mismo patrón de "abrir para revelar un form" que
+   `<EditEventForm>`) muestra nombre, dirección y "¿de quién es la
+   casa?" precargados; al guardar llama a `updateVenue(venueId,
+   formData)`.
+3. `updateVenue` actualiza `venues` (`name`, `address`, `host_user_id`)
+   y, si el nombre cambió, además corre `update events set location =
+   <nombre nuevo> where location = <nombre viejo>` para que ningún
+   evento existente quede sin poder resolver su `venue` por el cambio
+   de nombre (ver sección 3).
+
 **Día de la semana:**
 1. El input `datetime-local` del formulario de alta pasa a ser controlado
    (`value`/`onChange` con `useState`), solo para poder leer su valor y
@@ -146,6 +172,11 @@ Puntos que el SQL no explica por sí solo:
 - [x] Si el lugar del evento tiene dirección cargada, la página del
       evento muestra "🧭 Cómo llegar" con el link de navegación de
       Google Maps hacia esa dirección; si no tiene, no aparece nada.
+- [x] Cualquier logueado puede editar nombre/dirección/dueño de un lugar
+      ya guardado desde "✏️ Editar lugar" en la página del evento.
+- [x] Cambiar el nombre de un lugar actualiza `events.location` en todos
+      los eventos que ya usaban el nombre viejo, sin dejar ninguno sin
+      poder resolver su dirección/dueño.
 
 ## 6. Decisiones y tradeoffs
 
@@ -154,17 +185,23 @@ Puntos que el SQL no explica por sí solo:
 | `venues` como lista de sugerencias sin FK desde `events` | `events.venue_id` normalizado, sin columna `location` de texto | No hay caso de uso hoy que necesite la relación (filtrar eventos por lugar, editar un lugar y propagar el cambio); agregarla sería anticipar una necesidad no pedida. |
 | Día de la semana calculado en el cliente, mostrado como texto auxiliar | Intentar am `<input type="date">` custom que muestre el día en el propio calendario | El calendario del `datetime-local` es UI nativa del browser/SO, no manipulable desde CSS/JS; mostrar el dato calculado al lado es la única vía sin reemplazar el input nativo por un date-picker propio (fuera de alcance de este pedido puntual). |
 | Dirección de texto + link "Directions" de Google Maps (sin API key) | (a) Mapa Leaflet + OpenStreetMap con pin de coordenadas (probado, revertido); (b) Google Maps JavaScript API embebido | El usuario probó el mapa Leaflet y no lo necesitaba: solo quería registrar la dirección para que cualquier participante la toque y el dispositivo dispare la navegación — un mapa para mirar no resuelve eso. El link `google.com/maps/dir/?api=1&destination=...` hace exactamente eso sin necesitar coordenadas, sin API key y sin ninguna librería de mapas (se sacó `leaflet`/`react-leaflet`, quedó cero dependencias de UI externas de nuevo). Se descartó la opción (b) porque exige una API key con facturación que el usuario tendría que crear y mantener, y además el usuario aclaró que no necesita ver un mapa embebido en la app. |
-| Dirección solo al crear un lugar nuevo, sin poder agregarla a uno ya existente | Sumar policy de `update` + una pantalla para editar la dirección de lugares guardados | Mismo criterio que `host_user_id`: no hay policy de `update` en `venues` hoy, y agregarla solo para esto sería una feature aparte no pedida. Confirmado con el usuario. |
+| Cualquier logueado puede editar cualquier lugar (nombre, dirección, dueño) | Restringir a quien lo creó (`created_by`) | Pedido explícito del usuario, mismo criterio de confianza total que `event_tasks`/`futbol_stats`: no hay necesidad real de restringir esto dentro de un grupo de amigos. |
+| Cambio de nombre cascadea a `events.location` en la misma action | (a) Bloquear el cambio de nombre si hay eventos que lo usan; (b) agregar `venue_id` como FK real en `events` | (a) frustraría el pedido del usuario sin necesidad; (b) es un cambio de modelo más grande de lo pedido (afectaría el mensaje de WhatsApp, la card del listado, etc., que hoy leen `event.location` como texto). La cascada de texto resuelve el caso real (mantener la dirección/dueño accesibles) sin normalizar el modelo entero. |
 
 ## 7. Futuro / fuera de alcance
 
-- Cargar/editar la dirección de un lugar ya existente (necesitaría
-  policy de `update` en `venues`).
-- Editar/borrar lugares de la lista.
+- Borrar lugares de la lista (solo se pueden editar).
 - Normalización de nombres para evitar duplicados casi-iguales.
+- Un `venue_id` normalizado en `events` (hoy sigue siendo texto libre
+  con cascada manual al renombrar, ver sección 6).
 
 ## 8. Changelog
 
+- 2026-09-17: cualquier logueado puede editar un lugar ya guardado
+  (nombre, dirección, dueño) desde "✏️ Editar lugar" en la página del
+  evento (`0022_venues_update_policy.sql` + `updateVenue`); si el
+  nombre cambia, se propaga a `events.location` en los eventos que ya
+  lo usaban para no perder la dirección/dueño asociados.
 - 2026-09-17: revertidas las coordenadas GPS/mapa Leaflet (agregadas
   más temprano el mismo día) a pedido del usuario — probó el mapa y no
   lo necesitaba, solo poder registrar la dirección y que cualquier
