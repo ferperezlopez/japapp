@@ -4,7 +4,9 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { NavigationProgress } from "@/components/NavigationProgress";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { createClient } from "@/lib/supabase/server";
+import { getImpersonationTarget } from "@/lib/supabase/actingUser";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,12 +51,19 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         .maybeSingle()
     : { data: null };
 
+  const impersonationTarget = user ? await getImpersonationTarget(supabase) : null;
+
   return (
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
+        {impersonationTarget && (
+          <ImpersonationBanner
+            targetName={impersonationTarget.name ?? impersonationTarget.email}
+          />
+        )}
         <NavigationProgress />
         <Header
           user={user}

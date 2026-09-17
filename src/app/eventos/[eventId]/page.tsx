@@ -17,6 +17,7 @@ import { RemoveGuestButton } from "./RemoveGuestButton";
 import { TaskAssignSelect } from "./TaskAssignSelect";
 import { TaskAssigneesEditor } from "./TaskAssigneesEditor";
 import { buildMapsLink } from "@/lib/eventos/mapsLink";
+import { getActingUser } from "@/lib/supabase/actingUser";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "long",
@@ -260,6 +261,13 @@ export default async function EventoPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // getActingUser en vez de user.id directo, solo para "tu respuesta"
+  // (myStatus/myFutbolStatus más abajo): si un admin está "actuando como"
+  // otro usuario, debe reflejar el estado de esa persona. El resto de los
+  // permisos de esta página (editar/borrar evento, sacar invitados) siguen
+  // atados a `user` real, ya que esas acciones todavía no están cableadas
+  // a getActingUser (ver specs/016-admin.md, "Futuro").
+  const actor = await getActingUser(supabase);
 
   const { data: event } = await supabase
     .from("events")
@@ -431,13 +439,13 @@ export default async function EventoPage({
   ];
 
   const myStatus =
-    (attendeesJuntada.find((a) => a.userId === user?.id)?.status as
+    (attendeesJuntada.find((a) => a.userId === actor?.id)?.status as
       | "yes"
       | "no"
       | "maybe"
       | undefined) ?? null;
   const myFutbolStatus =
-    (attendeesFutbol.find((a) => a.userId === user?.id)?.status as
+    (attendeesFutbol.find((a) => a.userId === actor?.id)?.status as
       | "yes"
       | "no"
       | "maybe"

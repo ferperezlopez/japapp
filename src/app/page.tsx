@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { RsvpButtons } from "@/components/eventos/RsvpButtons";
 import { AttendanceSummary } from "@/components/eventos/AttendanceSummary";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
+import { getActingUser } from "@/lib/supabase/actingUser";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "short",
@@ -151,7 +152,13 @@ export default async function Home() {
       attendeesJuntada = (eventRsvps ?? []).filter((r) => r.kind === "juntada");
       attendeesFutbol = (eventRsvps ?? []).filter((r) => r.kind === "futbol");
 
-      const myRsvps = (eventRsvps ?? []).filter((r) => r.user_id === user.id);
+      // getActingUser en vez de user.id directo: si un admin está
+      // "actuando como" otro usuario, "tu respuesta" debe reflejar el
+      // estado de esa persona, no el del admin real.
+      const actor = await getActingUser(supabase);
+      const myRsvps = (eventRsvps ?? []).filter(
+        (r) => r.user_id === actor?.id,
+      );
       myStatus =
         (myRsvps.find((r) => r.kind === "juntada")?.status as
           | "yes"
