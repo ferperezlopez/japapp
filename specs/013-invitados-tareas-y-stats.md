@@ -1,7 +1,7 @@
 # 013 - Invitados, tareas del evento, sede con dueño y estadísticas de asistencia
 
 - **Estado:** Implemented
-- **Rutas:** `/eventos` (extendida), `/eventos/[eventId]` (extendida), `/perfil` (extendida), `/perfil/[userId]` (extendida)
+- **Rutas:** `/eventos` (extendida), `/eventos/[eventId]` (extendida), `/perfil` (extendida), `/perfil/[userId]` (extendida), `/miembros` (nueva)
 - **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`, `supabase/migrations/0014_event_tasks_multi_item_per_person.sql`
 - **Última actualización:** 2026-09-17
 
@@ -41,6 +41,9 @@ asistencia de cada persona en su perfil.
 - Estadísticas de asistencia en el perfil (propio y de otros):
   porcentaje de asistencias a la JAPA y al fútbol, calculado sobre las
   respuestas ya dadas.
+- `/miembros`: directorio de todo el grupo, cada uno con su avatar,
+  nombre y esas mismas estadísticas de asistencia, para no tener que
+  entrar de a uno a `/perfil/[userId]` para verlas.
 - Selector de insumo buscable: tipear filtra los insumos ya cargados
   (`insumo_items`) por substring, cada uno con un ícono si su nombre
   matchea una palabra clave conocida (carne, bebida, hielo, etc.). Si
@@ -239,13 +242,29 @@ Puntos que el SQL no explica por sí solo:
    `'maybe'` y la ausencia de respuesta no suman a ningún lado (no hay
    señal clara de si la persona fue o no). `porcentaje` es `null`
    cuando no hay señal en absoluto (0 asistencias + 0 ausencias).
-2. `<AttendanceStatsCard>` (compartido) renderiza la tarjeta, omitiendo
-   el bloque de fútbol si la persona nunca tuvo un RSVP de
-   `kind='futbol'`, y sin renderizar nada si no hay ninguna señal en
+2. `src/components/eventos/AttendanceStatsCard.tsx` exporta dos
+   componentes sobre el mismo cálculo: `<AttendanceStatsLines>` (solo
+   las líneas de texto, sin tarjeta propia) y `<AttendanceStatsCard>`
+   (esas mismas líneas envueltas en su propia card con borde). Ambos
+   omiten el bloque de fútbol si la persona nunca tuvo un RSVP de
+   `kind='futbol'`, y no renderizan nada si no hay ninguna señal en
    absoluto (persona sin ningún RSVP todavía).
-3. Se usa tanto en `/perfil` (uno mismo) como en `/perfil/[userId]`
-   (de solo lectura, de otra persona) — decisión explícita del usuario
-   de mostrarlo en ambos lados.
+3. `<AttendanceStatsCard>` se usa tanto en `/perfil` (uno mismo) como
+   en `/perfil/[userId]` (de solo lectura, de otra persona) — decisión
+   explícita del usuario de mostrarlo en ambos lados.
+4. `/miembros` (nueva): trae todos los `profiles` (ordenados por
+   nombre) y todos los `event_rsvps` en un único `Promise.all`,
+   agrupando estos últimos por `user_id` en un `Map` — mismo patrón que
+   ya usan `/eventos` (agrupar RSVPs por evento) y `/gastos/[groupId]`
+   (agrupar por persona). Cada miembro es una `Card` (mismo estilo que
+   las cards de `/eventos`) con avatar, nombre y `<AttendanceStatsLines>`
+   — no `<AttendanceStatsCard>`, para no anidar una card con borde
+   dentro de otra card (mismo criterio ya documentado en
+   `specs/003-eventos.md`: sin "card dentro de card" en el repo). Cada
+   fila linkea a `/perfil/[userId]`, incluso para uno mismo: esa ruta ya
+   redirige a `/perfil` cuando el id es el propio, así que no hace falta
+   distinguirlo acá (mismo criterio que la lista de "Miembros" de
+   `/gastos/[groupId]`).
 
 ## 5. Criterios de aceptación
 
@@ -286,6 +305,11 @@ Puntos que el SQL no explica por sí solo:
 - [x] Si lo tipeado se parece bastante a un insumo ya cargado (sin ser
       igual), se sugiere usar ese existente; ignorar la sugerencia y
       crear el nuevo igual sigue funcionando.
+- [x] `/miembros` lista a todos los del grupo, ordenados por nombre,
+      cada uno con su avatar y sus estadísticas de asistencia; alguien
+      sin ningún RSVP todavía se ve sin esa línea (no rota ni "0%").
+- [x] Tocar un miembro en `/miembros` lleva a `/perfil/[userId]` (o a
+      `/perfil` si es uno mismo).
 
 ## 6. Decisiones y tradeoffs
 
@@ -306,6 +330,7 @@ Puntos que el SQL no explica por sí solo:
 | Prevención de duplicados en `addTaskAssignee` vía `select` + `insert` en la action | Una unique key más ancha (sumando `item_id`) a nivel de base | Postgres no distingue duplicados de `null` en una unique key, y una unique key parcial no sirve como target de `upsert` en PostgREST/supabase-js — ver sección 3. |
 | Búsqueda/ícono/sugerencia de insumo resueltos en JS puro en el cliente | Un RPC `pg_trgm` como `find_similar_profile_names` | El catálogo completo de `insumo_items` ya viaja al cliente (no hay problema de RLS como con perfiles al crear cuenta sin sesión todavía); resolverlo en el browser da feedback instantáneo mientras se tipea, sin ida y vuelta al servidor. |
 | Sugerencia de insumo parecido no bloqueante (se puede crear el nuevo igual) | Bloquear la creación si hay un insumo muy parecido | Pedido explícito del usuario, mismo criterio de "aviso, no bloqueo" que el resto de la app (ver el aviso de nombre parecido en `/login`). |
+| `/miembros` como directorio propio, con `<AttendanceStatsLines>` (sin card propia) dentro de la card de cada fila | Reusar `<AttendanceStatsCard>` tal cual (con su propio borde) dentro de cada fila | Habría anidado una card con borde dentro de otra card — patrón que el resto de la app evita (ver `specs/003-eventos.md`); separar las líneas de texto del wrapper con borde permite reusar el cálculo sin duplicar el problema. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -322,6 +347,15 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: nueva página `/miembros` — directorio de todo el grupo
+  con avatar, nombre y estadísticas de asistencia de cada uno, a
+  pedido del usuario ("hacé una sección donde pueda ver a todos los
+  miembros y sus estadísticas"), en vez de tener que entrar de a uno a
+  `/perfil/[userId]`. Se agregó como cuarta card en la landing.
+  `AttendanceStatsCard` se partió en `<AttendanceStatsLines>` (el
+  cálculo, sin tarjeta propia) y `<AttendanceStatsCard>` (esas mismas
+  líneas con su borde), para reusar el cálculo en `/miembros` sin
+  anidar cards.
 - 2026-09-17: el selector de insumo de "compra de insumos" pasó de
   `<select>` a un combobox buscable, con ícono por palabra clave y
   sugerencia no bloqueante de insumo parecido al cargar uno nuevo

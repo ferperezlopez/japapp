@@ -128,8 +128,10 @@ Puntos que el SQL no explica por sí solo:
 11. **Rediseño visual del resumen de cada card** (a partir de una
     imagen de referencia del usuario, "direccional, no pixel-exacta"):
     el texto chico "✅ 6 · 🤔 0 · ❌ 4" pasó a un `StatusBadge` (círculo
-    de color + glifo blanco: ✓/?/✕) por cada estado, con el número
-    grande al lado y una caption chica abajo (ej. "confirmados"),
+    de color + glifo blanco: ✓/?/✕) por cada estado, con el número al
+    lado (mismo tamaño/peso —`text-base font-medium`— que ya usa el
+    nombre del evento en la misma card, para no introducir una
+    tipografía nueva) y una caption chica abajo (ej. "confirmados"),
     separados por una línea vertical. El bloque "Juntada" lleva un
     ícono de personas; el bloque "Fútbol 5" (si aplica) va envuelto en
     `bg-surface` para diferenciarse visualmente, con su propio ícono
@@ -214,6 +216,12 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: fix de feedback sobre el rediseño anterior — el número
+  de cada `StatItem` pasó de `text-lg font-bold` a `text-base
+  font-medium` (mismo tamaño/peso que el nombre del evento en la
+  misma card). El usuario probó el resultado y sintió que "la fuente
+  cambió"; badges de color y bloques Juntada/Fútbol se mantuvieron
+  igual, solo se corrigió la tipografía del número.
 - 2026-09-17: rediseño del resumen de cada card de `/eventos` a partir
   de una imagen de referencia del usuario — badges de color (círculo +
   glifo) en vez de emoji suelto, bloques "Juntada"/"Fútbol 5" con

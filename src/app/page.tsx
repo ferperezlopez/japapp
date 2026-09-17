@@ -51,6 +51,20 @@ const FEATURES = [
       </>
     ),
   },
+  {
+    href: "/miembros",
+    title: "Miembros",
+    description: "Todos del grupo y su asistencia a la JAPA.",
+    colorClasses: "bg-brand-soft text-brand",
+    icon: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 6.75a2.5 2.5 0 1 1 0 5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.5 15.25c2.3.3 4 1.8 4 4.25" />
+      </>
+    ),
+  },
 ] as const;
 
 export default async function Home() {
