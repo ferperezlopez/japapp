@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { AttendanceStatsLines } from "@/components/eventos/AttendanceStatsCard";
 import { calcularAsistencia, type RsvpForAttendance } from "@/lib/eventos/attendance";
+import { startImpersonation } from "@/app/actions/impersonation";
 
 export default async function MiembrosPage() {
   const supabase = await createClient();
@@ -21,13 +22,15 @@ export default async function MiembrosPage() {
     );
   }
 
-  const [{ data: members }, { data: rsvps }] = await Promise.all([
+  const [{ data: me }, { data: members }, { data: rsvps }] = await Promise.all([
+    supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle(),
     supabase
       .from("profiles")
       .select("id, name, email, avatar_url")
       .order("name"),
     supabase.from("event_rsvps").select("user_id, kind, status"),
   ]);
+  const isAdmin = me?.is_admin ?? false;
 
   // Cada persona linkea a /perfil/[userId] — esa ruta ya redirige a /perfil
   // cuando el id es el propio, así que acá no hace falta distinguir "uno
@@ -55,18 +58,37 @@ export default async function MiembrosPage() {
         {(members ?? []).map((m, index) => {
           const attendance = calcularAsistencia(rsvpsByUser.get(m.id) ?? []);
           return (
-            <Link key={m.id} href={`/perfil/${m.id}`} className="block">
-              <Card
-                className="animate-reveal flex items-center gap-3 px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:bg-brand-soft hover:shadow-md"
-                style={{ animationDelay: `${index * 60}ms` }}
+            <Card
+              key={m.id}
+              className="animate-reveal flex items-center gap-3 px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:bg-brand-soft hover:shadow-md"
+              style={{ animationDelay: `${index * 60}ms` }}
+            >
+              <Link
+                href={`/perfil/${m.id}`}
+                className="flex flex-1 items-center gap-3"
               >
                 <Avatar src={m.avatar_url} name={m.name ?? m.email} size="md" />
                 <div>
                   <p className="font-medium">{m.name ?? m.email}</p>
                   <AttendanceStatsLines attendance={attendance} />
                 </div>
-              </Card>
-            </Link>
+              </Link>
+              {isAdmin && m.id !== user.id && (
+                <form
+                  action={async () => {
+                    "use server";
+                    await startImpersonation(m.id);
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-full border border-surface-border px-3 py-1.5 text-xs font-medium text-foreground/60 transition-colors duration-200 hover:bg-surface"
+                  >
+                    Actuar como
+                  </button>
+                </form>
+              )}
+            </Card>
           );
         })}
         {(members ?? []).length === 0 && (

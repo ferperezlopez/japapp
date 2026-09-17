@@ -5,6 +5,8 @@ import { ZoomableAvatar } from "@/components/ui/ZoomableAvatar";
 import { CopyableText } from "@/components/ui/CopyableText";
 import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
 import { calcularAsistencia } from "@/lib/eventos/attendance";
+import { AdminEditProfileForm } from "./AdminEditProfileForm";
+import { AdminUploadAvatarForm } from "./AdminUploadAvatarForm";
 
 export default async function UserProfilePage({
   params,
@@ -20,7 +22,8 @@ export default async function UserProfilePage({
   // solo lectura de uno mismo.
   if (userId === user.id) redirect("/perfil");
 
-  const [{ data: profile }, { data: rsvps }] = await Promise.all([
+  const [{ data: me }, { data: profile }, { data: rsvps }] = await Promise.all([
+    supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle(),
     supabase
       .from("profiles")
       .select("name, email, alias, avatar_url")
@@ -31,6 +34,7 @@ export default async function UserProfilePage({
 
   if (!profile) notFound();
 
+  const isAdmin = me?.is_admin ?? false;
   const attendance = calcularAsistencia(rsvps ?? []);
 
   return (
@@ -39,25 +43,43 @@ export default async function UserProfilePage({
         Perfil
       </p>
       <div className="mt-4 flex items-center gap-4 rounded-xl border border-surface-border bg-surface p-5">
-        <ZoomableAvatar
-          src={profile.avatar_url}
-          name={profile.name}
-          size="lg"
-        />
-        <div>
-          <p className="font-heading text-xl font-semibold text-foreground">
-            {profile.name ?? profile.email}
-          </p>
-          {profile.alias && (
-            <p className="text-xs text-foreground/50">
-              Alias de pago:{" "}
-              <CopyableText text={profile.alias} className="text-foreground/70">
-                {profile.alias}
-              </CopyableText>
-            </p>
-          )}
-        </div>
+        {isAdmin ? (
+          <AdminUploadAvatarForm
+            targetUserId={userId}
+            name={profile.name}
+            avatarUrl={profile.avatar_url}
+          />
+        ) : (
+          <>
+            <ZoomableAvatar
+              src={profile.avatar_url}
+              name={profile.name}
+              size="lg"
+            />
+            <div>
+              <p className="font-heading text-xl font-semibold text-foreground">
+                {profile.name ?? profile.email}
+              </p>
+              {profile.alias && (
+                <p className="text-xs text-foreground/50">
+                  Alias de pago:{" "}
+                  <CopyableText text={profile.alias} className="text-foreground/70">
+                    {profile.alias}
+                  </CopyableText>
+                </p>
+              )}
+            </div>
+          </>
+        )}
       </div>
+
+      {isAdmin && (
+        <AdminEditProfileForm
+          userId={userId}
+          defaultName={profile.name ?? ""}
+          defaultAlias={profile.alias ?? ""}
+        />
+      )}
 
       <AttendanceStatsCard attendance={attendance} />
     </div>

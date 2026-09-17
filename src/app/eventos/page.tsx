@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { CreateEventForm } from "./CreateEventForm";
+import { getActingUser } from "@/lib/supabase/actingUser";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "short",
@@ -89,9 +90,10 @@ function PeopleIcon() {
 
 export default async function EventosPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getActingUser en vez de auth.getUser().user.id directo: si un admin
+  // está "actuando como" otro usuario, el emoji de "tu respuesta" debe
+  // reflejar el estado de esa persona, no el del admin real.
+  const actor = await getActingUser(supabase);
 
   const [{ data: events }, { data: rsvps }, { data: venues }, { data: members }] =
     await Promise.all([
@@ -148,7 +150,7 @@ export default async function EventosPage() {
     let myStatus: string | undefined;
     for (const r of eventRsvps) {
       counts[r.status as keyof typeof counts]++;
-      if (r.userId === user?.id) myStatus = r.status;
+      if (r.userId === actor?.id) myStatus = r.status;
     }
 
     const futbolCounts = { yes: 0, maybe: 0, no: 0 };

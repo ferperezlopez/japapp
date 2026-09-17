@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getActingUser } from "@/lib/supabase/actingUser";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -163,15 +164,16 @@ export async function setRsvp(
   kind: "juntada" | "futbol" = "juntada",
 ) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No estás logueado." };
+  // getActingUser en vez de auth.getUser() directo: si un admin está
+  // "actuando como" otro usuario (ver src/app/actions/impersonation.ts),
+  // el RSVP se guarda a nombre de esa persona, no del admin real.
+  const actor = await getActingUser(supabase);
+  if (!actor) return { error: "No estás logueado." };
 
   const { error } = await supabase.from("event_rsvps").upsert(
     {
       event_id: eventId,
-      user_id: user.id,
+      user_id: actor.id,
       status,
       kind,
       responded_at: new Date().toISOString(),
