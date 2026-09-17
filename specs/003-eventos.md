@@ -103,6 +103,20 @@ Puntos que el SQL no explica por sí solo:
    entre ambos bloques: "Evento" en navy (`text-eventos`) antes de la
    juntada, "⚽ Fútbol" en verde antes del bloque de fútbol — sin
    tarjetas anidadas, solo un separador liviano.
+8. `AttendanceSummary` (la barra apilada Van/Tal vez/No van) se movió a
+   `src/components/eventos/AttendanceSummary.tsx` para poder reusarla
+   también en la landing (`/`, ver `specs/006-evento-futbol.md`), mismo
+   criterio que ya se usó para `RsvpButtons`. Su prop `attendees` se
+   relajó a `{ status: string }[]` (antes exigía el shape completo de
+   `Attendee` con nombre/avatar, que la landing no tiene armado).
+9. **Bug corregido:** el listado de `/eventos` (`page.tsx`, distinto de
+   `/eventos/[eventId]`) traía `event_rsvps` sin filtrar por `kind`, así
+   que en un evento con fútbol el resumen "✅/🤔/❌" de cada card mezclaba
+   las confirmaciones de la juntada con las del fútbol (dos filas por
+   persona), y el emoji de "tu respuesta" podía terminar mostrando el
+   estado del fútbol en vez del de la juntada. Se filtra por
+   `kind === "juntada"` antes de contar — ese resumen es sobre la
+   juntada, no sobre el fútbol.
 
 ## 5. Criterios de aceptación
 
@@ -134,6 +148,10 @@ Puntos que el SQL no explica por sí solo:
 - [x] En un evento con fútbol, Tareas y Gastos aparecen antes del
       bloque de fútbol (no después), con un divisor "Evento" antes de
       la juntada y "⚽ Fútbol" antes del bloque de fútbol.
+- [x] En un evento con fútbol, el resumen "✅/🤔/❌" de cada card en
+      `/eventos` cuenta solo confirmaciones de la juntada — no se mezcla
+      con las del fútbol, y el emoji de "tu respuesta" refleja el
+      estado de la juntada.
 
 ## 6. Decisiones y tradeoffs
 
@@ -146,6 +164,7 @@ Puntos que el SQL no explica por sí solo:
 | Fecha del formulario de edición precargada cortando el ISO string (`slice(0, 16)`) en vez de usar getters de `Date` | `new Date(event_date).getHours()`/`getMinutes()`/etc. | Esos getters devuelven la hora en la zona horaria del proceso que corre el código (el servidor), no la del navegador de quien creó el evento originalmente — como `createEvent` tampoco hace conversión real de zona horaria (guarda tal cual lo que tipeó el navegador), cortar el string a mano es lo único que reproduce exactamente el valor original sin depender de en qué zona horaria corra el servidor. |
 | Detalle de asistentes colapsado en un `<details>`, resumen y RSVP siempre visibles | Dejar todo siempre expandido (como estaba) | Feedback del usuario: con dos RSVP (juntada + fútbol) más tareas/gastos/fotos, la página quedaba muy larga para solo confirmar o mirar el resumen. |
 | Divisor liviano (línea + eyebrow de color) entre juntada y fútbol, sin tarjetas anidadas | Envolver cada bloque en una tarjeta con borde/fondo propio | No hay un patrón de "card dentro de card" en el resto de la app; un divisor da el mismo límite visual sin sumar un nivel de anidamiento nuevo. |
+| Resumen "✅/🤔/❌" de `/eventos` filtrado por `kind === "juntada"` | Sumar todos los `event_rsvps` del evento sin importar `kind` (comportamiento anterior, con bug) | Sumar ambos tipos de RSVP mezclaba confirmaciones de la juntada con las del fútbol, dando un conteo (y un emoji de "tu respuesta") que no correspondía a ninguna de las dos cosas realmente. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -161,6 +180,10 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: `AttendanceSummary` extraída a `src/components/eventos/`
+  para reusarla en la landing (`specs/006-evento-futbol.md`); corregido
+  el resumen "✅/🤔/❌" de `/eventos`, que mezclaba RSVPs de juntada y
+  fútbol por no filtrar por `kind`.
 - 2026-09-17: detalle de asistentes colapsado por defecto (`<details>`,
   resumen y RSVP siempre visibles); Tareas y Gastos pasaron a estar
   antes del bloque de fútbol (no después), con un `SectionDivider`

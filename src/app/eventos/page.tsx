@@ -29,13 +29,18 @@ export default async function EventosPage() {
         .from("events")
         .select("id, name, event_date, location, has_futbol")
         .order("event_date", { ascending: true }),
-      supabase.from("event_rsvps").select("event_id, user_id, status"),
+      supabase.from("event_rsvps").select("event_id, user_id, status, kind"),
       supabase.from("venues").select("id, name").order("name"),
       supabase.from("profiles").select("id, name, email").order("name"),
     ]);
 
+  // Solo la confirmación de la juntada (kind="juntada") entra en el resumen
+  // de cada card — un evento con fútbol tiene una segunda fila de RSVP por
+  // persona (kind="futbol") que no debe sumarse acá ni pisar el emoji de
+  // "tu respuesta", que es sobre la juntada, no sobre el fútbol.
   const rsvpsByEvent = new Map<string, { userId: string; status: string }[]>();
   for (const r of rsvps ?? []) {
+    if (r.kind !== "juntada") continue;
     const list = rsvpsByEvent.get(r.event_id) ?? [];
     list.push({ userId: r.user_id, status: r.status });
     rsvpsByEvent.set(r.event_id, list);

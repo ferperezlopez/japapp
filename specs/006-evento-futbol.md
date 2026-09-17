@@ -104,6 +104,16 @@ Puntos que el SQL no explica por sí solo:
    - `RsvpButtons` para la juntada, con el estado actual del usuario
      logueado ya resuelto server-side.
    - Si `has_futbol`, un segundo `RsvpButtons` para el fútbol.
+   - `<AttendanceSummary>` (`src/components/eventos/AttendanceSummary.tsx`,
+     compartida con `/eventos/[eventId]`) sobre cada `RsvpButtons`,
+     mostrando cuánta gente del grupo confirmó — no solo el estado
+     propio del usuario logueado. Para armarla, se trae **todos** los
+     `event_rsvps` del próximo evento (no solo los del usuario actual)
+     junto con el total de perfiles registrados
+     (`profiles` con `count: "exact", head: true`), separados por
+     `kind`. Antes la landing solo mostraba el propio estado de RSVP;
+     el usuario pidió ver el estado de confirmación del grupo, no solo
+     el suyo.
    No hay estado "evento en curso" en el sentido estricto de "está
    pasando ahora mismo" (no hay hora de fin en el modelo): es el
    próximo evento agendado, que es lo que el usuario pidió resolver
@@ -136,6 +146,9 @@ Puntos que el SQL no explica por sí solo:
 - [x] En un evento con fútbol, el bloque de fútbol aparece al final de
       la página, después de Tareas y Gastos, con un divisor "⚽ Fútbol"
       antes.
+- [x] La card "Evento en curso" de la landing muestra cuánta gente del
+      grupo confirmó (no solo el estado propio) para la juntada y,
+      si aplica, para el fútbol.
 
 ## 6. Decisiones y tradeoffs
 
@@ -146,6 +159,7 @@ Puntos que el SQL no explica por sí solo:
 | "Evento en curso" en la landing = próximo evento por fecha, no un estado en tiempo real | Modelar `event_date` + `ends_at` para saber si está pasando "ahora" | No hay caso de uso que necesite distinguir "en curso" de "el próximo agendado"; agregar una columna de fin solo para esto sería sobre-ingeniería sin pedido explícito. |
 | `RsvpButtons` movido a `src/components/eventos/` | Duplicar el componente para la landing, o importarlo desde la carpeta de la ruta de evento | Sigue el patrón ya establecido en el repo (`src/components/gastos/`) para componentes reusados entre rutas distintas. |
 | Bloque de fútbol al final de la página (después de Tareas/Gastos de la juntada), con divisor verde | Dejarlo pegado debajo del RSVP de la juntada, como estaba | El usuario pidió separar visualmente la japa del fútbol, y que Tareas/Gastos se vean como parte de la juntada, no del fútbol — moverlos antes del bloque de fútbol y sumar un divisor resuelve ambos pedidos a la vez (detalle en `specs/003-eventos.md`). |
+| `AttendanceSummary` en la landing con el conteo real del grupo | Dejar solo el estado propio (como estaba) | El usuario pidió ver el estado de confirmación del grupo en "Evento en curso", no solo si uno mismo ya respondió. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -157,6 +171,9 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: la card "Evento en curso" de la landing ahora muestra
+  `AttendanceSummary` (conteo real del grupo) además del RSVP propio,
+  a pedido del usuario.
 - 2026-09-17: revertido el botón "el fútbol no se hace más" (PR #33) a
   pedido del usuario — alcanza con "Editar evento". El bloque de fútbol
   se movió al final de la página, después de Tareas/Gastos, con un
