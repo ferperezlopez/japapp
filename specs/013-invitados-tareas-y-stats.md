@@ -3,7 +3,7 @@
 - **Estado:** Implemented
 - **Rutas:** `/eventos` (extendida), `/eventos/[eventId]` (extendida), `/perfil` (extendida), `/perfil/[userId]` (extendida)
 - **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`, `supabase/migrations/0014_event_tasks_multi_item_per_person.sql`
-- **Última actualización:** 2026-09-16
+- **Última actualización:** 2026-09-17
 
 ## 1. Resumen
 
@@ -41,6 +41,13 @@ asistencia de cada persona en su perfil.
 - Estadísticas de asistencia en el perfil (propio y de otros):
   porcentaje de asistencias a la JAPA y al fútbol, calculado sobre las
   respuestas ya dadas.
+- Selector de insumo buscable: tipear filtra los insumos ya cargados
+  (`insumo_items`) por substring, cada uno con un ícono si su nombre
+  matchea una palabra clave conocida (carne, bebida, hielo, etc.). Si
+  lo tipeado no coincide con ninguno, se ofrece cargarlo como insumo
+  nuevo; si además se parece bastante a uno ya cargado, se sugiere
+  usar ese en vez de crear un duplicado (sugerencia no bloqueante, se
+  puede ignorar y cargar el nuevo igual).
 
 ### No incluye (por ahora)
 
@@ -59,8 +66,6 @@ asistencia de cada persona en su perfil.
 - Insumo obligatorio en "lavado de platos" u "orden de la sede" — no
   hay un "insumo" que elegir ahí, el selector de ítem es exclusivo de
   "compra de insumos".
-- Editar el dueño de un lugar ya existente — el selector de dueño solo
-  aparece al cargar un lugar nuevo.
 
 ## 3. Modelo de datos
 
@@ -182,6 +187,29 @@ Puntos que el SQL no explica por sí solo:
    (o sin `item_id` para lavado_platos/orden_sede) y solo inserta si no
    existe ya esa fila exacta — reemplaza al `upsert` con `onConflict`
    que usaba antes de `0014` (ver sección 3).
+7. `ItemPicker` (dentro de `TaskAssigneesEditor.tsx`) dejó de ser un
+   `<select>` nativo y pasó a ser un combobox de texto: como
+   `insumo_items` ya viaja completo al cliente (todo el catálogo, en
+   `page.tsx`), la búsqueda, el ícono y la sugerencia de duplicado se
+   resuelven 100% en el browser, sin ida y vuelta al servidor —
+   `src/lib/eventos/insumos.ts` (con test) expone las funciones puras:
+   - `matchesQuery(itemName, query)`: filtra la lista mientras se
+     tipea, por substring sin distinguir mayúsculas/tildes.
+   - `iconForInsumo(name)`: emoji si el nombre contiene una palabra
+     clave conocida (carne, bebida, hielo, vino, etc.), `null` si no
+     matchea ninguna — se usa tanto en la lista de sugerencias del
+     picker como en los chips de insumos ya asignados.
+   - `similarity`/`findSimilarItem`: coeficiente de Dice sobre
+     trigramas (reimplementación en JS puro de la misma idea que
+     `pg_trgm`'s `similarity()`, usada en `find_similar_profile_names`
+     de `specs/014-login-tradicional.md`), mismo umbral `0.4`. Si lo
+     tipeado no matchea exacto a ningún insumo existente, se le hace
+     `findSimilarItem` contra el catálogo; si supera el umbral, se
+     muestra "¿Quisiste decir 'X'? [Usar este]" — no bloqueante, igual
+     que el aviso de nombre parecido en `/login`.
+   - Si lo tipeado no matchea ningún insumo exacto, la lista de
+     sugerencias del picker suma una fila "+ Crear '...'" al final para
+     cargarlo como insumo nuevo.
 
 ### Sede con dueño
 
@@ -191,10 +219,14 @@ Puntos que el SQL no explica por sí solo:
    (opcional)").
 2. `resolveVenueLocation` guarda `host_user_id` al hacer el `upsert` de
    un lugar nuevo. Elegir un lugar ya existente no permite cambiar su
-   dueño desde acá (fuera de alcance, ver sección 2).
+   dueño desde el formulario de alta/edición de evento.
 3. En `/eventos/[eventId]`, se busca el `venue` cuyo `name` coincide
    con `event.location` y se muestra su dueño entre paréntesis junto a
    la fecha/lugar del evento.
+4. `host_user_id` de un lugar ya guardado sí se puede cambiar después,
+   junto con su nombre y dirección, desde "✏️ Editar lugar" en la
+   página del evento — ver `specs/007-lugares-de-evento.md` sección 4,
+   que documenta ese flujo (no se duplica acá).
 
 ### Estadísticas de asistencia
 
@@ -247,6 +279,13 @@ Puntos que el SQL no explica por sí solo:
       mostrado en `/perfil` y `/perfil/[userId]`.
 - [x] El bloque de fútbol no aparece si la persona nunca respondió un
       RSVP de fútbol.
+- [x] Tipear en el selector de insumo filtra la lista de insumos ya
+      cargados por substring, con su ícono si aplica.
+- [x] Si lo tipeado no matchea ningún insumo existente, aparece la
+      opción de cargarlo como nuevo.
+- [x] Si lo tipeado se parece bastante a un insumo ya cargado (sin ser
+      igual), se sugiere usar ese existente; ignorar la sugerencia y
+      crear el nuevo igual sigue funcionando.
 
 ## 6. Decisiones y tradeoffs
 
@@ -265,11 +304,11 @@ Puntos que el SQL no explica por sí solo:
 | Catálogo `insumo_items` reusable entre eventos (mismo patrón que `guests`) | Texto libre por asignación, sin catálogo | Pedido explícito del usuario: poder elegir de una lista ítems ya cargados antes, con opción de agregar uno nuevo. |
 | Una persona puede traer varios insumos en "compra de insumos" | Un insumo por persona (como quedó en `0013`) | Feedback del usuario tras probar el PR: alguien puede comprar más de una cosa (ej. carne y hielo). |
 | Prevención de duplicados en `addTaskAssignee` vía `select` + `insert` en la action | Una unique key más ancha (sumando `item_id`) a nivel de base | Postgres no distingue duplicados de `null` en una unique key, y una unique key parcial no sirve como target de `upsert` en PostgREST/supabase-js — ver sección 3. |
+| Búsqueda/ícono/sugerencia de insumo resueltos en JS puro en el cliente | Un RPC `pg_trgm` como `find_similar_profile_names` | El catálogo completo de `insumo_items` ya viaja al cliente (no hay problema de RLS como con perfiles al crear cuenta sin sesión todavía); resolverlo en el browser da feedback instantáneo mientras se tipea, sin ida y vuelta al servidor. |
+| Sugerencia de insumo parecido no bloqueante (se puede crear el nuevo igual) | Bloquear la creación si hay un insumo muy parecido | Pedido explícito del usuario, mismo criterio de "aviso, no bloqueo" que el resto de la app (ver el aviso de nombre parecido en `/login`). |
 
 ## 7. Futuro / fuera de alcance
 
-- Editar el dueño de un lugar ya existente (hoy solo se setea al
-  crearlo).
 - Proxy-RSVP entre miembros registrados.
 - Historial/tabla de invitados frecuentes con cuántas veces vino cada
   uno.
@@ -283,6 +322,12 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: el selector de insumo de "compra de insumos" pasó de
+  `<select>` a un combobox buscable, con ícono por palabra clave y
+  sugerencia no bloqueante de insumo parecido al cargar uno nuevo
+  (`src/lib/eventos/insumos.ts`). Se sacó de "No incluye"/"Futuro" la
+  restricción de no poder editar el dueño de un lugar ya existente —
+  ahora se puede, ver `specs/007-lugares-de-evento.md`.
 - 2026-09-16: creada e implementada.
 - 2026-09-16: feedback sobre PR #25 — sección de tareas colapsada por
   defecto, "convocatoria" sacada de la lista de tareas seteables, y

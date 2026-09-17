@@ -34,16 +34,22 @@ export default async function EventosPage() {
       supabase.from("profiles").select("id, name, email").order("name"),
     ]);
 
-  // Solo la confirmación de la juntada (kind="juntada") entra en el resumen
-  // de cada card — un evento con fútbol tiene una segunda fila de RSVP por
-  // persona (kind="futbol") que no debe sumarse acá ni pisar el emoji de
-  // "tu respuesta", que es sobre la juntada, no sobre el fútbol.
+  // La confirmación de la juntada (kind="juntada") es la que define el
+  // emoji de "tu respuesta" de cada card — el fútbol tiene su propio
+  // contador aparte (ver futbolRsvpsByEvent) para no pisar ese emoji ni
+  // mezclarse en el resumen principal.
   const rsvpsByEvent = new Map<string, { userId: string; status: string }[]>();
+  const futbolRsvpsByEvent = new Map<string, { status: string }[]>();
   for (const r of rsvps ?? []) {
-    if (r.kind !== "juntada") continue;
-    const list = rsvpsByEvent.get(r.event_id) ?? [];
-    list.push({ userId: r.user_id, status: r.status });
-    rsvpsByEvent.set(r.event_id, list);
+    if (r.kind === "juntada") {
+      const list = rsvpsByEvent.get(r.event_id) ?? [];
+      list.push({ userId: r.user_id, status: r.status });
+      rsvpsByEvent.set(r.event_id, list);
+    } else if (r.kind === "futbol") {
+      const list = futbolRsvpsByEvent.get(r.event_id) ?? [];
+      list.push({ status: r.status });
+      futbolRsvpsByEvent.set(r.event_id, list);
+    }
   }
 
   // Route is already forced dynamic by the cookie-based auth call above,
@@ -75,6 +81,11 @@ export default async function EventosPage() {
       if (r.userId === user?.id) myStatus = r.status;
     }
 
+    const futbolCounts = { yes: 0, maybe: 0, no: 0 };
+    for (const r of futbolRsvpsByEvent.get(event.id) ?? []) {
+      futbolCounts[r.status as keyof typeof futbolCounts]++;
+    }
+
     return (
       <Link key={event.id} href={`/eventos/${event.id}`} className="block">
         <Card
@@ -101,6 +112,12 @@ export default async function EventosPage() {
             {STATUS_EMOJI.yes} {counts.yes} · {STATUS_EMOJI.maybe}{" "}
             {counts.maybe} · {STATUS_EMOJI.no} {counts.no}
           </p>
+          {event.has_futbol && (
+            <p className="mt-0.5 text-xs text-foreground/50">
+              ⚽ {STATUS_EMOJI.yes} {futbolCounts.yes} · {STATUS_EMOJI.maybe}{" "}
+              {futbolCounts.maybe} · {STATUS_EMOJI.no} {futbolCounts.no}
+            </p>
+          )}
         </Card>
       </Link>
     );

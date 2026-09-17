@@ -20,8 +20,7 @@ async function resolveVenueLocation(
   const venueSelection = String(formData.get("venue") ?? "");
   const newVenueName = String(formData.get("newVenueName") ?? "").trim();
   const newVenueHostUserId = String(formData.get("newVenueHostUserId") ?? "").trim();
-  const newVenueLat = String(formData.get("newVenueLat") ?? "").trim();
-  const newVenueLng = String(formData.get("newVenueLng") ?? "").trim();
+  const newVenueAddress = String(formData.get("newVenueAddress") ?? "").trim();
 
   if (venueSelection === "__new__") {
     if (!newVenueName) return null;
@@ -30,8 +29,7 @@ async function resolveVenueLocation(
         name: newVenueName,
         created_by: userId,
         host_user_id: newVenueHostUserId || null,
-        lat: newVenueLat ? Number(newVenueLat) : null,
-        lng: newVenueLng ? Number(newVenueLng) : null,
+        address: newVenueAddress || null,
       },
       { onConflict: "name", ignoreDuplicates: true },
     );
@@ -39,6 +37,48 @@ async function resolveVenueLocation(
   }
 
   return venueSelection || null;
+}
+
+// Editar un lugar ya guardado (nombre, dirección, dueño de casa). Cualquier
+// logueado puede hacerlo (policy "using (true)" en el update, ver 0022) —
+// mismo criterio que event_tasks/futbol_stats. Como `events.location` es una
+// copia de texto del nombre del lugar (no una FK, ver spec 007), si el
+// nombre cambia hay que propagar el cambio a todos los eventos que ya
+// apuntaban al nombre viejo, o quedarían "huérfanos" (sin poder resolver
+// `eventVenue` para mostrar dirección/dueño).
+export async function updateVenue(venueId: string, formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const address = String(formData.get("address") ?? "").trim();
+  const hostUserId = String(formData.get("hostUserId") ?? "").trim();
+
+  if (!name) return { error: "Poné un nombre para el lugar." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { data: existing } = await supabase
+    .from("venues")
+    .select("name")
+    .eq("id", venueId)
+    .maybeSingle();
+  if (!existing) return { error: "Lugar no encontrado." };
+
+  const { error } = await supabase
+    .from("venues")
+    .update({ name, address: address || null, host_user_id: hostUserId || null })
+    .eq("id", venueId);
+  if (error) return { error: error.message };
+
+  if (existing.name !== name) {
+    await supabase.from("events").update({ location: name }).eq("location", existing.name);
+  }
+
+  revalidatePath("/eventos");
+  revalidatePath("/");
+  return { ok: true };
 }
 
 export async function createEvent(formData: FormData) {
