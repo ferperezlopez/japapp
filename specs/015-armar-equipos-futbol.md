@@ -170,6 +170,9 @@ Puntos que el SQL no explica por sí solo:
       jugador (ej. "F. Perez"), no un número.
 - [x] El arquero de cualquier equipo se ve en un tercer color (amarillo),
       distinto de la camiseta clara/oscura del resto de su equipo.
+- [x] Con la mayoría de los confirmados en "Sin asignar" (las 6 franjas
+      vacías), el modal entra en una pantalla de celular común sin
+      scrollear en exceso, y "Guardar equipos" queda alcanzable.
 
 ## 6. Decisiones y tradeoffs
 
@@ -180,6 +183,7 @@ Puntos que el SQL no explica por sí solo:
 | Defensores/delanteros sin tope estricto (máximo 2 por línea "recomendado") | Cupos estrictos 1-2-2 con excedente en "Sin asignar" | Decisión confirmada con el usuario: una convocatoria real de 8 a 12 personas no siempre da justo 5 por equipo: forzar el excedente a "Sin asignar" bloquearía sin necesidad a alguien que sí va a jugar. |
 | Nombre abreviado en la casaca ("F. Perez"), sin dorsal numérico | Número de camiseta | El usuario pidió explícitamente ver el nombre en la camiseta; con la casaca agrandada (a pedido del usuario, "hay espacio de sobra") entra cómodo y es más útil que un número arbitrario para identificar jugadores de un vistazo. |
 | Arquero con un tercer color (amarillo) sin importar el equipo | Mantener el color de camiseta del equipo también para el arquero | Pedido explícito del usuario ("arquero destacado con otro color"); reusa el amarillo que la app ya usa para "aviso/pendiente" (`--color-amber`) en vez de inventar un color nuevo, y se adapta solo a dark mode al ser una variable CSS. |
+| Alto mínimo chico (`min-h-9`) por franja vacía, que crece solo con contenido | Alto fijo pensado para una camiseta completa (`min-h-[6rem]`) | Con las 6 franjas (arquero/defensores/delanteros × 2 equipos) vacías al abrir el modal — el caso normal, todos arrancan en "Sin asignar" — reservar el alto de una camiseta en cada una sumaba ~575px de blanco antes de tener un solo jugador ubicado, y el modal terminaba más alto que una pantalla de celular común. |
 | Equipos guardados en la base (tabla nueva) | Herramienta de "repartamos ahora" sin persistencia | Decisión explícita del usuario: que quede guardado y visible/editable por cualquiera, igual que tareas/invitados/stats — no una pantalla que se descarta al cerrar. |
 | Guardar como reemplazo completo (borrar + insertar) | Reconciliar fila por fila (upsert incremental) | El modal ya maneja el estado entero en memoria y hace un solo submit; reconciliar fila por fila sumaría complejidad sin ningún beneficio real acá (a diferencia de invitados/tareas, que se agregan/sacan de a uno con la página siempre montada). |
 | Aviso no bloqueante si un equipo tiene menos de 4 | Bloquear el guardado | Mismo criterio de confianza total que el resto de la app: la convocatoria real puede no dar para 5 vs 5, y la app nunca le impide a alguien guardar lo que decidió. |
@@ -195,6 +199,11 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-16: el modal quedaba más alto que una pantalla de celular
+  común (feedback del usuario tras ver el PR #33) — franjas vacías con
+  alto mínimo chico en vez de reservar el alto de una camiseta
+  completa, y `max-h-[90dvh]` en vez de `90vh` para que el límite
+  coincida con lo que el celular realmente muestra.
 - 2026-09-16: ajustes visuales a pedido del usuario tras ver el PR #32
   — camisetas más grandes, nombre abreviado en la casaca en vez de
   dorsal numérico, arquero en un tercer color (amarillo) sin importar

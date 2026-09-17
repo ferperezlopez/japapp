@@ -234,7 +234,7 @@ export function TeamBuilderModal({
         event.stopPropagation();
         moveSelectedTo({ team, position });
       }}
-      className="relative min-h-[6rem] cursor-pointer px-1 pb-1 pt-3.5"
+      className="relative min-h-9 cursor-pointer px-1 pb-1 pt-3.5"
     >
       <span className="absolute left-1 top-0.5 text-[9px] font-medium uppercase tracking-wide text-white/60">
         {POSITION_LABELS[position]}
@@ -311,7 +311,7 @@ export function TeamBuilderModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-background p-5"
+        className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-2xl bg-background p-5"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">⚽ Armar equipos</h3>
