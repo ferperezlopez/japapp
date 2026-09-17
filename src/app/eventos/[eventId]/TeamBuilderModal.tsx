@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { saveFutbolTeams } from "../actions";
 import { withMinDuration } from "@/lib/withMinDuration";
+import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 
@@ -36,21 +37,21 @@ const JERSEY_COLORS: Record<
   },
 };
 
-// "F. Perez" a partir de "Fernando Pérez López" — inicial del nombre +
-// el primer apellido (no todos), para que entre cómodo en la casaca.
-function nameOnJersey(name: string) {
+// "M. Perez" a partir de "Fernando Pérez López" — inicial del nombre +
+// el primer apellido (no todos), para la etiqueta debajo de la camiseta.
+function nameLabel(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return { initial: "", surname: parts[0] ?? "" };
-  return { initial: `${parts[0][0]}.`, surname: parts[1] };
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts[0][0]}. ${parts[1]}`;
 }
 
-// Camiseta con nombre, SVG inline (sin dependencia nueva): clara para el
-// Equipo 1, oscura para el Equipo 2, y un tercer color (arquero) sin
-// importar el equipo — para que el arquero se distinga de un vistazo.
-function Jersey({ name, variant }: { name: string; variant: JerseyVariant }) {
+// Camiseta con dorsal numérico, SVG inline (sin dependencia nueva): clara
+// para el Equipo 1, oscura para el Equipo 2, y un tercer color (arquero)
+// sin importar el equipo — para que el arquero se distinga de un vistazo.
+// El número es puramente visual (no se guarda en la base, ver
+// assignJerseyNumbers): el nombre va aparte, en una etiqueta debajo.
+function Jersey({ number, variant }: { number: number; variant: JerseyVariant }) {
   const { fill, stroke, text } = JERSEY_COLORS[variant];
-  const { initial, surname } = nameOnJersey(name);
-  const surnameFontSize = surname.length > 7 ? 7 : 9;
   return (
     <svg viewBox="0 0 64 64" className="h-20 w-16 shrink-0">
       <path
@@ -60,27 +61,15 @@ function Jersey({ name, variant }: { name: string; variant: JerseyVariant }) {
         strokeWidth="2"
         strokeLinejoin="round"
       />
-      {initial && (
-        <text
-          x="32"
-          y="33"
-          textAnchor="middle"
-          fontSize="9"
-          fontWeight="700"
-          fill={text}
-        >
-          {initial}
-        </text>
-      )}
       <text
         x="32"
-        y={initial ? "46" : "40"}
+        y="38"
         textAnchor="middle"
-        fontSize={surnameFontSize}
+        fontSize="20"
         fontWeight="700"
         fill={text}
       >
-        {surname}
+        {number}
       </text>
     </svg>
   );
@@ -193,11 +182,13 @@ export function TeamBuilderModal({
 
   const team1 = teamOf(1);
   const team2 = teamOf(2);
+  const team1Numbers = assignJerseyNumbers([team1.gk, team1.def, team1.fwd]);
+  const team2Numbers = assignJerseyNumbers([team2.gk, team2.def, team2.fwd]);
   const unassigned = candidates.filter(
     (c) => playerState[c.userId]?.location === "unassigned",
   );
 
-  const renderPitchChip = (c: Candidate, variant: JerseyVariant) => {
+  const renderPitchChip = (c: Candidate, variant: JerseyVariant, number: number) => {
     const isSelected = selectedUserId === c.userId;
     return (
       <div
@@ -219,7 +210,10 @@ export function TeamBuilderModal({
           isSelected ? "bg-white/30 ring-2 ring-white" : "hover:bg-white/10"
         }`}
       >
-        <Jersey name={c.name} variant={variant} />
+        <Jersey number={number} variant={variant} />
+        <span className="rounded-full bg-black/40 px-1.5 py-0.5 text-[9px] font-medium text-white">
+          {nameLabel(c.name)}
+        </span>
       </div>
     );
   };
@@ -228,24 +222,31 @@ export function TeamBuilderModal({
     team: 1 | 2,
     position: Position,
     players: Candidate[],
-  ) => (
-    <div
-      onClick={(event) => {
-        event.stopPropagation();
-        moveSelectedTo({ team, position });
-      }}
-      className="relative min-h-9 cursor-pointer px-1 pb-1 pt-3.5"
-    >
-      <span className="absolute left-1 top-0.5 text-[9px] font-medium uppercase tracking-wide text-white/60">
-        {POSITION_LABELS[position]}
-      </span>
-      <div className="flex flex-wrap items-center justify-center gap-1">
-        {players.map((c) =>
-          renderPitchChip(c, position === "gk" ? "gk" : team === 2 ? "dark" : "light"),
-        )}
+  ) => {
+    const numbers = team === 1 ? team1Numbers : team2Numbers;
+    return (
+      <div
+        onClick={(event) => {
+          event.stopPropagation();
+          moveSelectedTo({ team, position });
+        }}
+        className="relative min-h-9 cursor-pointer px-1 pb-1 pt-3.5"
+      >
+        <span className="absolute left-1 top-0.5 text-[9px] font-medium uppercase tracking-wide text-white/60">
+          {POSITION_LABELS[position]}
+        </span>
+        <div className="flex flex-wrap items-center justify-center gap-1">
+          {players.map((c) =>
+            renderPitchChip(
+              c,
+              position === "gk" ? "gk" : team === 2 ? "dark" : "light",
+              numbers.get(c.userId) ?? 0,
+            ),
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderUnassignedChip = (c: Candidate) => {
     const isSelected = selectedUserId === c.userId;

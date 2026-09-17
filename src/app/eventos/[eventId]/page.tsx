@@ -26,6 +26,55 @@ const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   minute: "2-digit",
 });
 
+// Separados del dateFormatter de arriba (que sigue usándose tal cual para
+// el mensaje de WhatsApp) para poder mostrar fecha y hora cada una al lado
+// de su propio ícono en el encabezado del evento.
+const dateOnlyFormatter = new Intl.DateTimeFormat("es-AR", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+const timeOnlyFormatter = new Intl.DateTimeFormat("es-AR", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0" aria-hidden="true">
+      <rect x="3.75" y="5" width="16.5" height="15" rx="2" strokeLinejoin="round" />
+      <path strokeLinecap="round" d="M3.75 9.5h16.5M8 3v3.5M16 3v3.5" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.25" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
+function PinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-6.5-5.7-6.5-11a6.5 6.5 0 1 1 13 0c0 5.3-6.5 11-6.5 11Z" />
+      <circle cx="12" cy="10" r="2.25" />
+    </svg>
+  );
+}
+
+function MapIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5 4 6.5v13l5-2 6 2 5-2v-13l-5 2-6-2Z" />
+      <path strokeLinecap="round" d="M9 4.5v13M15 6.5v13" />
+    </svg>
+  );
+}
+
 const GROUPS: { status: "yes" | "maybe" | "no"; label: string }[] = [
   { status: "yes", label: "Van" },
   { status: "maybe", label: "Tal vez" },
@@ -426,24 +475,41 @@ export default async function EventoPage({
       <h1 className="mt-1 font-heading text-2xl font-semibold text-foreground">
         {event.name}
       </h1>
-      <p className="mt-1 text-sm text-foreground/60">
-        {dateFormatter.format(new Date(event.event_date))}
-        {event.location ? ` · ${event.location}` : ""}
-        {hostName ? ` (casa de ${hostName})` : ""}
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-foreground/60">
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarIcon />
+          {dateOnlyFormatter.format(new Date(event.event_date))}
+        </span>
+        <span className="h-4 w-px bg-surface-border" aria-hidden="true" />
+        <span className="inline-flex items-center gap-1.5">
+          <ClockIcon />
+          {timeOnlyFormatter.format(new Date(event.event_date))}
+        </span>
+        {event.location && (
+          <>
+            <span className="h-4 w-px bg-surface-border" aria-hidden="true" />
+            <span className="inline-flex items-center gap-1.5">
+              <PinIcon />
+              {event.location}
+              {hostName ? ` (casa de ${hostName})` : ""}
+            </span>
+          </>
+        )}
         {eventVenue?.address && (
           <>
-            {" · "}
+            <span className="h-4 w-px bg-surface-border" aria-hidden="true" />
             <a
               href={buildMapsLink(eventVenue.address)}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-eventos hover:underline"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-eventos-soft px-3 py-1.5 text-sm font-medium text-eventos transition-colors duration-200 hover:bg-eventos-mid/40"
             >
-              🧭 Cómo llegar
+              <MapIcon />
+              Cómo llegar
             </a>
           </>
         )}
-      </p>
+      </div>
       {eventVenue && (
         <div className="mt-1.5">
           <EditVenueForm venue={eventVenue} members={members} />

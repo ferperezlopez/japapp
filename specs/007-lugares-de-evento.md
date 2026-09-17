@@ -31,9 +31,10 @@ muestra.
   día de la semana calculado a partir del valor elegido.
 - Dirección opcional de texto libre (`venues.address`) cargada al crear un
   lugar **nuevo**. Si el lugar del evento tiene dirección, la página del
-  evento muestra un link "🧭 Cómo llegar" que abre la navegación de Google
+  evento muestra un botón "Cómo llegar" que abre la navegación de Google
   Maps hacia esa dirección directamente en el dispositivo de quien lo
-  toca (no un mapa para mirar, dispara la navegación).
+  toca (no un mapa para mirar, dispara la navegación). Fecha, hora y
+  lugar tienen cada uno su propio icono (calendario/reloj/pin).
 - Editar un lugar ya guardado: desde "✏️ Editar lugar" en la página del
   evento, cualquier logueado puede cambiar el nombre, la dirección y de
   quién es la casa de un lugar existente (no hace falta haber sido
@@ -119,9 +120,14 @@ Puntos que el SQL no explica por sí solo:
 2. `resolveVenueLocation` (`actions.ts`) lee ese campo y lo suma al
    `upsert` de `venues` — sin cambios en `createEvent`/`updateEvent`,
    que ya llaman a esa función sin conocer sus detalles internos.
-3. En `/eventos/[eventId]`, si el `venue` resuelto (`eventVenue`) tiene
-   `address`, aparece un link "🧭 Cómo llegar" junto a la fecha/lugar,
-   apuntando a `buildMapsLink(eventVenue.address)`.
+3. En `/eventos/[eventId]`, la fecha, hora y lugar del evento se
+   muestran cada uno con su propio ícono (calendario/reloj/pin,
+   SVG inline, mismo estilo que los íconos de `FEATURES` en la
+   landing), separados por una línea vertical. Si el `venue` resuelto
+   (`eventVenue`) tiene `address`, se suma un botón "Cómo llegar"
+   (fondo `bg-eventos-soft`, texto `text-eventos` — reusa la paleta de
+   Eventos en vez de inventar un color nuevo) apuntando a
+   `buildMapsLink(eventVenue.address)`.
 4. `buildMapsLink` (`src/lib/eventos/mapsLink.ts`, con test) acepta dos
    formatos de texto en `venues.address`, sin exigir ninguno de los
    dos en particular:
@@ -225,6 +231,10 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
   envolverlo; los placeholders del campo de dirección (alta y edición)
   ahora aclaran que sirve tanto una dirección de texto como un link de
   Maps.
+- 2026-09-17: rediseño visual (a partir de una imagen de referencia del
+  usuario) — "Cómo llegar" pasa de link de texto subrayado a botón
+  (`bg-eventos-soft`/`text-eventos`), y fecha/hora/lugar suman
+  iconitos propios, separados por líneas verticales.
 - 2026-09-17: cualquier logueado puede editar un lugar ya guardado
   (nombre, dirección, dueño) desde "✏️ Editar lugar" en la página del
   evento (`0022_venues_update_policy.sql` + `updateVenue`); si el

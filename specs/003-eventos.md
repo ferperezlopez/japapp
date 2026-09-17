@@ -118,13 +118,31 @@ Puntos que el SQL no explica por sí solo:
    `kind === "juntada"` antes de contar — ese resumen es sobre la
    juntada, no sobre el fútbol.
 10. Si el evento tiene fútbol (`has_futbol`), la card de `/eventos` suma
-    una segunda línea "⚽ ✅ n · 🤔 n · ❌ n" debajo del resumen de la
-    juntada, contando aparte los `event_rsvps` con `kind === "futbol"`
-    (mismo `Map` que ya se armaba para el punto 9, con una segunda
-    entrada por `event_id`). Sin esa segunda línea, la card solo dejaba
-    ver cuánta gente confirmó la juntada — el usuario pidió poder ver
-    de un vistazo también cuánta gente confirmó el fútbol, sin entrar
-    al detalle del evento.
+    un segundo bloque "Fútbol 5" debajo del resumen de la juntada,
+    contando aparte los `event_rsvps` con `kind === "futbol"` (mismo
+    `Map` que ya se armaba para el punto 9, con una segunda entrada por
+    `event_id`). Sin ese bloque, la card solo dejaba ver cuánta gente
+    confirmó la juntada — el usuario pidió poder ver de un vistazo
+    también cuánta gente confirmó el fútbol, sin entrar al detalle del
+    evento.
+11. **Rediseño visual del resumen de cada card** (a partir de una
+    imagen de referencia del usuario, "direccional, no pixel-exacta"):
+    el texto chico "✅ 6 · 🤔 0 · ❌ 4" pasó a un `StatusBadge` (círculo
+    de color + glifo blanco: ✓/?/✕) por cada estado, con el número
+    grande al lado y una caption chica abajo (ej. "confirmados"),
+    separados por una línea vertical. El bloque "Juntada" lleva un
+    ícono de personas; el bloque "Fútbol 5" (si aplica) va envuelto en
+    `bg-surface` para diferenciarse visualmente, con su propio ícono
+    (⚽ en un círculo navy) y el subtítulo "Para los que se suman a
+    jugar". El badge de "tu respuesta" (arriba a la derecha de la card)
+    reusa el mismo `StatusBadge`, en vez del emoji suelto que tenía
+    antes. El ⚽ que antes iba al lado del nombre del evento se sacó:
+    el bloque "Fútbol 5" ya lo indica con más claridad.
+    Colores: sin agregar tokens nuevos a `globals.css` — "sí"/"no"
+    reusan clases crudas de Tailwind `green-600`/`red-600` (con
+    variante dark), mismo criterio que ya usa el repo para rojo
+    (mensajes de error, borde de la cancha en `TeamBuilderModal`); "tal
+    vez" reusa el token `--color-amber` que ya existía.
 
 ## 5. Criterios de aceptación
 
@@ -160,9 +178,12 @@ Puntos que el SQL no explica por sí solo:
       `/eventos` cuenta solo confirmaciones de la juntada — no se mezcla
       con las del fútbol, y el emoji de "tu respuesta" refleja el
       estado de la juntada.
-- [x] En un evento con fútbol, la card de `/eventos` muestra además una
-      segunda línea "⚽ ✅/🤔/❌" con el conteo de confirmaciones de
-      fútbol; en un evento sin fútbol, esa línea no aparece.
+- [x] En un evento con fútbol, la card de `/eventos` muestra además un
+      bloque "Fútbol 5" con el conteo de confirmaciones de fútbol; en un
+      evento sin fútbol, ese bloque no aparece.
+- [x] Los 3 conteos de cada bloque se ven como círculo de color + número
+      grande + caption chica, no como texto emoji suelto; "sí" es
+      verde, "tal vez" ámbar, "no" rojo.
 
 ## 6. Decisiones y tradeoffs
 
@@ -177,6 +198,7 @@ Puntos que el SQL no explica por sí solo:
 | Divisor liviano (línea + eyebrow de color) entre juntada y fútbol, sin tarjetas anidadas | Envolver cada bloque en una tarjeta con borde/fondo propio | No hay un patrón de "card dentro de card" en el resto de la app; un divisor da el mismo límite visual sin sumar un nivel de anidamiento nuevo. |
 | Resumen "✅/🤔/❌" de `/eventos` filtrado por `kind === "juntada"` | Sumar todos los `event_rsvps` del evento sin importar `kind` (comportamiento anterior, con bug) | Sumar ambos tipos de RSVP mezclaba confirmaciones de la juntada con las del fútbol, dando un conteo (y un emoji de "tu respuesta") que no correspondía a ninguna de las dos cosas realmente. |
 | Segunda línea "⚽ ✅/🤔/❌" en la card, en vez de fusionar los conteos | Un solo resumen combinando juntada y fútbol | Fusionarlos sería reintroducir el mismo problema que motivó el fix anterior (mezclar dos cosas distintas); una línea aparte, condicionada a `has_futbol`, muestra ambos conteos sin perder la separación conceptual. |
+| Badges de color (`green-600`/`red-600` crudos de Tailwind + `--color-amber` existente) para el resumen de cada card | Definir tokens semánticos nuevos (ej. `--color-confirmed`) | Mismo criterio ya usado en el repo para rojo (mensajes de error, borde de la cancha de `TeamBuilderModal`): no hace falta un token nuevo para un uso puntual; el semáforo verde/ámbar/rojo ya estaba insinuado por `STATUS_EMOJI` (✅🤔❌), esto solo le da peso visual real. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -192,6 +214,12 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: rediseño del resumen de cada card de `/eventos` a partir
+  de una imagen de referencia del usuario — badges de color (círculo +
+  glifo) en vez de emoji suelto, bloques "Juntada"/"Fútbol 5" con
+  ícono y subtítulo propios, y el badge de "tu respuesta" con el mismo
+  estilo. Se sacó el ⚽ que iba al lado del nombre del evento (el
+  bloque "Fútbol 5" ya lo indica).
 - 2026-09-17: la card de `/eventos` de un evento con fútbol suma una
   segunda línea "⚽ ✅/🤔/❌" con el conteo aparte de confirmaciones de
   fútbol, a pedido del usuario (antes solo se veía el resumen de la
