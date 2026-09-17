@@ -114,18 +114,35 @@ Puntos que el SQL no explica por sí solo:
 **Dirección del lugar:**
 1. Al elegir "+ Nuevo lugar…", además del nombre y "¿de quién es la
    casa?" aparece un `<input name="newVenueAddress">` de texto libre
-   ("Dirección (opcional, para que se pueda navegar)").
+   ("Dirección o link de Google Maps (opcional)"), con una aclaración
+   abajo de qué formatos sirven (ver punto 4).
 2. `resolveVenueLocation` (`actions.ts`) lee ese campo y lo suma al
    `upsert` de `venues` — sin cambios en `createEvent`/`updateEvent`,
    que ya llaman a esa función sin conocer sus detalles internos.
 3. En `/eventos/[eventId]`, si el `venue` resuelto (`eventVenue`) tiene
    `address`, aparece un link "🧭 Cómo llegar" junto a la fecha/lugar,
-   apuntando a
-   `https://www.google.com/maps/dir/?api=1&destination=<address codificada>`
-   — el link "Directions" oficial de Google Maps (sin API key: es solo
-   una URL), que en el celular de quien lo toca abre la app de mapas
-   instalada con la navegación ya armada hacia esa dirección, no un
-   mapa para mirar.
+   apuntando a `buildMapsLink(eventVenue.address)`.
+4. `buildMapsLink` (`src/lib/eventos/mapsLink.ts`, con test) acepta dos
+   formatos de texto en `venues.address`, sin exigir ninguno de los
+   dos en particular:
+   - **Texto plano** (una dirección real, ej. "Av. Cabildo 2394,
+     CABA"): se arma el link "Directions" oficial de Google Maps
+     (`https://www.google.com/maps/dir/?api=1&destination=<texto
+     codificado>`, sin API key), que Google geocodifica al abrirlo.
+   - **Un link de Google Maps ya armado** (los que da "Compartir
+     ubicación" desde la app, tipo `https://maps.app.goo.gl/...` o
+     `https://www.google.com/maps/place/...`): se usa tal cual, sin
+     envolverlo en `destination=`. Esto existía como bug real: pegar
+     un link de Maps en el campo de dirección hacía que Google tratara
+     la URL entera como texto literal a buscar, dando "No se encuentra
+     una ruta para llegar a ese destino" — ver changelog.
+   - La detección es simple: si el texto empieza con `http://` o
+     `https://`, se lo trata como link y se usa directo; si no, se
+     arma el link de `destination=`.
+
+En el celular de quien toca "Cómo llegar", cualquiera de los dos casos
+abre la app de mapas instalada (deep link nativo de `google.com/maps`
+y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 
 **Editar un lugar existente:**
 1. En `/eventos/[eventId]`, si el `venue` del evento se resuelve
@@ -187,6 +204,7 @@ Puntos que el SQL no explica por sí solo:
 | Dirección de texto + link "Directions" de Google Maps (sin API key) | (a) Mapa Leaflet + OpenStreetMap con pin de coordenadas (probado, revertido); (b) Google Maps JavaScript API embebido | El usuario probó el mapa Leaflet y no lo necesitaba: solo quería registrar la dirección para que cualquier participante la toque y el dispositivo dispare la navegación — un mapa para mirar no resuelve eso. El link `google.com/maps/dir/?api=1&destination=...` hace exactamente eso sin necesitar coordenadas, sin API key y sin ninguna librería de mapas (se sacó `leaflet`/`react-leaflet`, quedó cero dependencias de UI externas de nuevo). Se descartó la opción (b) porque exige una API key con facturación que el usuario tendría que crear y mantener, y además el usuario aclaró que no necesita ver un mapa embebido en la app. |
 | Cualquier logueado puede editar cualquier lugar (nombre, dirección, dueño) | Restringir a quien lo creó (`created_by`) | Pedido explícito del usuario, mismo criterio de confianza total que `event_tasks`/`futbol_stats`: no hay necesidad real de restringir esto dentro de un grupo de amigos. |
 | Cambio de nombre cascadea a `events.location` en la misma action | (a) Bloquear el cambio de nombre si hay eventos que lo usan; (b) agregar `venue_id` como FK real en `events` | (a) frustraría el pedido del usuario sin necesidad; (b) es un cambio de modelo más grande de lo pedido (afectaría el mensaje de WhatsApp, la card del listado, etc., que hoy leen `event.location` como texto). La cascada de texto resuelve el caso real (mantener la dirección/dueño accesibles) sin normalizar el modelo entero. |
+| `venues.address` acepta texto plano O un link de Google Maps, detectado por si empieza con `http(s)://` | Exigir un único formato (solo texto, o solo link) | En la práctica, la forma más natural de "conseguir una dirección" desde el celular es compartir la ubicación desde la app de Maps, que da un link corto, no texto plano — bloquear ese caso hubiera dejado a la mayoría de los usuarios sin poder cargar nada útil. Aceptar los dos formatos cubre a quien tipea una dirección a mano y a quien comparte un pin. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -197,6 +215,16 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: **bug reportado por el usuario** (con captura: "No se
+  encuentra una ruta para llegar a ese destino") — había pegado un link
+  de "Compartir ubicación" de Google Maps en el campo de dirección; el
+  link viajaba tal cual dentro de `destination=`, y Google Maps
+  interpretaba la URL entera como texto literal a geocodificar, no
+  como un lugar. `buildMapsLink` ahora detecta si `venues.address` ya
+  es un link (empieza con `http(s)://`) y lo usa directo en vez de
+  envolverlo; los placeholders del campo de dirección (alta y edición)
+  ahora aclaran que sirve tanto una dirección de texto como un link de
+  Maps.
 - 2026-09-17: cualquier logueado puede editar un lugar ya guardado
   (nombre, dirección, dueño) desde "✏️ Editar lugar" en la página del
   evento (`0022_venues_update_policy.sql` + `updateVenue`); si el
