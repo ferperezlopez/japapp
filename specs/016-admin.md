@@ -2,7 +2,8 @@
 
 - **Estado:** Implemented (parcial — ver sección 7, "Futuro")
 - **Rutas:** `/miembros` (extendida), `/perfil/[userId]` (extendida)
-- **Migraciones relacionadas:** `supabase/migrations/0023_admin_role.sql`
+- **Migraciones relacionadas:** `supabase/migrations/0023_admin_role.sql`,
+  `supabase/migrations/0025_admin_delete_any_guest.sql`
 - **Última actualización:** 2026-09-17
 
 ## 1. Resumen
@@ -44,6 +45,15 @@ Un solo usuario tiene el rol hoy: **Fernando Pérez López**
   (`japapp_impersonating_as`, 8 horas de duración) — sin generar
   sesiones reales ni tocar Supabase Auth, y sin usar la service role
   key (el usuario descartó explícitamente esa opción).
+- **Sacar cualquier invitado de un evento**: además de quien sumó al
+  invitado, un admin puede sacar cualquiera desde
+  `/eventos/[eventId]` (policy nueva en `event_guests`, ver sección 3).
+  Surgió porque un admin vio en la lista de confirmados a alguien que
+  no reconocía y no podía sacarlo por no haberlo sumado él.
+- **Ver el email de registro en la ficha de otro**: `/perfil/[userId]`
+  muestra "Email de registro: {email}" cuando el viewer es admin — para
+  poder identificar de quién se trata una entrada rara en una lista de
+  confirmados (ver caso real en sección 6).
 
 ### No incluye (por ahora)
 
@@ -92,6 +102,13 @@ completo. Puntos que el SQL no explica por sí solo:
   impersonando), así que sin esta policy el `(storage.foldername
   (name))[1] = auth.uid()::text` de la policy original bloquearía la
   subida.
+- `0025_admin_delete_any_guest.sql` suma una policy de `delete` sobre
+  `event_guests` con `using (public.is_admin(auth.uid()))`, aditiva a
+  la existente `"Quien sumo al invitado lo puede sacar"` (`added_by =
+  auth.uid()`, `0011_guests_tasks_venue_host.sql`) — mismo criterio de
+  OR entre policies que el resto de esta spec. No se tocó `brought_by`
+  (`0024_event_guests_brought_by.sql`): sigue siendo solo informativo,
+  sin efecto en permisos.
 
 ## 4. Diseño / flujo
 
@@ -143,6 +160,19 @@ completo. Puntos que el SQL no explica por sí solo:
    devuelve algo — visible en cualquier página mientras dura. El
    `Header` no cambia: sigue mostrando la identidad real del admin.
 
+### Sacar cualquier invitado + email en la ficha
+
+1. `/eventos/[eventId]/page.tsx` consulta el `is_admin` del viewer real
+   (no del `getActingUser`, mismo criterio que el resto de los permisos
+   de esa página) y lo pasa a `RsvpSection`.
+2. El botón "sacar invitado" (`RemoveGuestButton`) se muestra si
+   `g.addedBy === currentUserId || isAdmin` — la action
+   `removeGuestFromEvent` no cambia, la policy RLS nueva es la barrera
+   real.
+3. `/perfil/[userId]/page.tsx` ya traía `profile.email` en su query;
+   ahora lo renderiza como "Email de registro: {email}" dentro del
+   bloque que ya solo se muestra a admins.
+
 ## 5. Criterios de aceptación
 
 - [x] Un usuario sin `is_admin` no ve el botón "Actuar como" en
@@ -160,6 +190,11 @@ completo. Puntos que el SQL no explica por sí solo:
       real de inmediato.
 - [x] Sin impersonar, el admin sigue viendo y confirmando su propio
       estado normalmente.
+- [x] Como admin, el botón "sacar invitado" aparece en cualquier
+      invitado de un evento, no solo en los que uno mismo sumó; como
+      no-admin, sigue apareciendo solo en los propios.
+- [x] Como admin, `/perfil/[userId]` de otra persona muestra su email
+      de registro; como no-admin, no se muestra.
 
 ## 6. Decisiones y tradeoffs
 
@@ -171,6 +206,8 @@ completo. Puntos que el SQL no explica por sí solo:
 | Alcance de "actuar como" limitado a RSVP en esta entrega | Cablear las ~15 server actions de la app de una sola vez | Cada acción necesita su propia policy "espejo" con `public.is_admin(auth.uid())` — hacerlas todas de una sería un PR enorme y de alto riesgo de revisar. RSVP es el caso de uso insignia ("confirmar en nombre de alguien"); el resto queda documentado como extensión mecánica futura. |
 | Sin auditoría de qué se hizo impersonando | Sumar una columna `impersonated_by` a las tablas afectadas | Mismo criterio de confianza total que ya rige el resto de la app (nada se audita más allá de los `created_by`/`updated_by` que ya existían); agregar auditoría no fue pedido y hubiera sumado columnas a varias tablas para un caso de uso de un solo admin. |
 | Policies de storage `avatars` admin sin restringir por carpeta | Que el admin solo pueda subir dentro de su propia carpeta (como hoy) | `AdminUploadAvatarForm` sube al path del *target*, corriendo con la sesión real del admin (no impersonando) — sin esta policy la subida fallaría contra la carpeta ajena. |
+| Admin puede sacar cualquier invitado (no solo el que sumó) | Dejarlo limitado a `added_by`, como hasta ahora | Caso real: un admin no reconoció una entrada en la lista de "Van" del fútbol (resultó ser un perfil duplicado, no un invitado) y no tenía forma de sacarla por no haberla sumado él. Se descartó extender el poder a borrar perfiles/cuentas completas — el usuario lo acotó explícitamente a invitados. |
+| Email de registro visible solo para admin en `/perfil/[userId]` | Mostrarlo a cualquier miembro que mire el perfil | El pedido fue puntual para que un admin pueda identificar a alguien raro en una lista de confirmados; se sumó donde ya existía el gate `isAdmin`, sin exponer el email de nadie al resto del grupo. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -193,3 +230,8 @@ completo. Puntos que el SQL no explica por sí solo:
 
 - 2026-09-17: creada e implementada (alcance: editar perfiles de otros
   + "actuar como" para RSVP), a pedido explícito del usuario.
+- 2026-09-17: sumado "sacar cualquier invitado de un evento" y "ver
+  email de registro en la ficha de perfil de otro", a raíz de un
+  perfil duplicado que un admin no podía identificar ni sacar del
+  fútbol (esa cuenta duplicada se borró aparte, como limpieza puntual
+  de datos, no como parte de esta feature).
