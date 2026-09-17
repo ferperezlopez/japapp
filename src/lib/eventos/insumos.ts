@@ -60,6 +60,13 @@ export function iconForInsumo(name: string): string | null {
   return null;
 }
 
+// El emoji guardado en la base (editable por admin, insumo_items.icon)
+// tiene prioridad sobre el derivado por palabra clave — este último
+// queda como fallback para ítems viejos que nunca se editaron a mano.
+export function resolveIcon(item: { name: string; icon: string | null }): string | null {
+  return item.icon ?? iconForInsumo(item.name);
+}
+
 // true si `itemName` es un resultado válido para el texto de búsqueda
 // `query` (substring, sin importar mayúsculas/tildes). Un query vacío
 // matchea cualquier cosa (lista completa mientras no se tipeó nada).

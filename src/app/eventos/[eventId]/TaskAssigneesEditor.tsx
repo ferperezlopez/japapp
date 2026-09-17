@@ -6,14 +6,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { withMinDuration } from "@/lib/withMinDuration";
-import {
-  findSimilarItem,
-  iconForInsumo,
-  matchesQuery,
-  normalize,
-} from "@/lib/eventos/insumos";
-
-const NEW_ITEM_VALUE = "__new__";
+import { ItemPicker, NEW_ITEM_VALUE, type PickerItem } from "@/components/ItemPicker";
+import { resolveIcon } from "@/lib/eventos/insumos";
 
 type TaskType = "compra_insumos" | "lavado_platos" | "orden_sede";
 
@@ -31,125 +25,7 @@ type Member = {
   email: string;
 };
 
-type Item = {
-  id: string;
-  name: string;
-};
-
-// Selector de insumo: combobox de texto buscable (en vez del <select>
-// original) — tipear filtra los insumos ya cargados por substring, con su
-// ícono si aplica (iconForInsumo). Si lo tipeado no matchea exacto a
-// ninguno, se ofrece crearlo nuevo; si además se parece bastante a uno ya
-// cargado (findSimilarItem, mismo umbral que find_similar_profile_names),
-// se sugiere usar ese en vez de duplicar — no bloqueante, igual que el
-// aviso de nombre parecido en /login: la sugerencia se puede ignorar y
-// crear el insumo nuevo igual.
-function ItemPicker({
-  items,
-  value,
-  onChange,
-  newName,
-  onNewNameChange,
-}: {
-  items: Item[];
-  value: string;
-  onChange: (value: string) => void;
-  newName: string;
-  onNewNameChange: (value: string) => void;
-}) {
-  const selectedName = items.find((it) => it.id === value)?.name ?? null;
-  const [query, setQuery] = useState(selectedName ?? newName);
-  const [open, setOpen] = useState(false);
-
-  const filtered = items.filter((it) => matchesQuery(it.name, query));
-  const trimmedQuery = query.trim();
-  const exactMatch = items.find((it) => normalize(it.name) === normalize(trimmedQuery));
-  const similar =
-    value === NEW_ITEM_VALUE && trimmedQuery && !exactMatch
-      ? findSimilarItem(items, trimmedQuery)
-      : null;
-
-  function selectExisting(item: Item) {
-    onChange(item.id);
-    onNewNameChange("");
-    setQuery(item.name);
-    setOpen(false);
-  }
-
-  function selectNew(name: string) {
-    onChange(NEW_ITEM_VALUE);
-    onNewNameChange(name);
-    setQuery(name);
-    setOpen(false);
-  }
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => {
-          const text = e.target.value;
-          setQuery(text);
-          setOpen(true);
-          onNewNameChange(text);
-          if (value !== NEW_ITEM_VALUE) onChange("");
-        }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Buscar o cargar qué vas a comprar…"
-        className="w-full min-w-48 rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
-      />
-      {open && (
-        <ul className="absolute z-10 mt-1 max-h-48 w-full min-w-48 overflow-auto rounded-lg border border-surface-border bg-background shadow-md">
-          {filtered.map((it) => {
-            const icon = iconForInsumo(it.name);
-            return (
-              <li key={it.id}>
-                <button
-                  type="button"
-                  onMouseDown={() => selectExisting(it)}
-                  className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-sm hover:bg-surface"
-                >
-                  {icon && <span aria-hidden="true">{icon}</span>}
-                  {it.name}
-                </button>
-              </li>
-            );
-          })}
-          {trimmedQuery && !exactMatch && (
-            <li>
-              <button
-                type="button"
-                onMouseDown={() => selectNew(trimmedQuery)}
-                className="w-full px-3 py-1.5 text-left text-sm font-medium text-eventos hover:bg-surface"
-              >
-                + Crear &quot;{trimmedQuery}&quot;
-              </button>
-            </li>
-          )}
-          {filtered.length === 0 && !trimmedQuery && (
-            <li className="px-3 py-1.5 text-xs text-foreground/40">
-              Sin insumos cargados todavía
-            </li>
-          )}
-        </ul>
-      )}
-      {similar && (
-        <p className="mt-1 text-xs text-amber-ink">
-          ¿Quisiste decir &quot;{similar.name}&quot;?{" "}
-          <button
-            type="button"
-            onClick={() => selectExisting(similar)}
-            className="font-medium underline"
-          >
-            Usar este
-          </button>
-        </p>
-      )}
-    </div>
-  );
-}
+type Item = PickerItem;
 
 // Mismo patrón visual que la sección de Invitados: chips/filas con X
 // para sacar, más un "+ Agregar" que revela un <select> de los
@@ -168,12 +44,14 @@ export function TaskAssigneesEditor({
   assignees,
   members,
   items,
+  isAdmin = false,
 }: {
   eventId: string;
   taskType: TaskType;
   assignees: Assignee[];
   members: Member[];
   items?: Item[];
+  isAdmin?: boolean;
 }) {
   // addTarget: null (cerrado), "__new__" (sumar una persona nueva, con
   // selector de miembro) o un userId (sumarle otro insumo a alguien
@@ -334,6 +212,11 @@ export function TaskAssigneesEditor({
     group.rows.push({ rowId: a.id, itemName: a.itemName ?? null });
   }
 
+  const iconForItemName = (itemName: string) => {
+    const found = items?.find((it) => it.name === itemName);
+    return found ? resolveIcon(found) : resolveIcon({ name: itemName, icon: null });
+  };
+
   return (
     <div>
       <ul className="space-y-2">
@@ -351,8 +234,8 @@ export function TaskAssigneesEditor({
                 >
                   — {r.itemName ? (
                     <>
-                      {iconForInsumo(r.itemName) && (
-                        <span aria-hidden="true">{iconForInsumo(r.itemName)} </span>
+                      {iconForItemName(r.itemName) && (
+                        <span aria-hidden="true">{iconForItemName(r.itemName)} </span>
                       )}
                       {r.itemName}
                     </>
@@ -371,6 +254,7 @@ export function TaskAssigneesEditor({
                   onChange={setItemSelection}
                   newName={newItemName}
                   onNewNameChange={setNewItemName}
+                  isAdmin={isAdmin}
                 />
                 <Button
                   type="button"
@@ -429,6 +313,7 @@ export function TaskAssigneesEditor({
             onChange={setItemSelection}
             newName={newItemName}
             onNewNameChange={setNewItemName}
+            isAdmin={isAdmin}
           />
           <Button
             type="button"

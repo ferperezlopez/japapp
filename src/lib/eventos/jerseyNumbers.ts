@@ -7,13 +7,13 @@
 // alcanza. Cada equipo se numera de forma independiente (llamar una vez
 // por equipo).
 export function assignJerseyNumbers(
-  groups: { userId: string }[][],
+  groups: { id: string }[][],
 ): Map<string, number> {
   const numbers = new Map<string, number>();
   let next = 1;
   for (const group of groups) {
     for (const player of group) {
-      numbers.set(player.userId, next);
+      numbers.set(player.id, next);
       next++;
     }
   }

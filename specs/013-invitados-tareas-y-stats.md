@@ -151,8 +151,19 @@ Puntos que el SQL no explica por sí solo:
    `kind` se listan fusionados dentro del grupo "Van" (junto a los
    miembros que respondieron "Voy"), mostrando "trajo: X" (el
    `brought_by` elegido) y una X para sacarlo (visible solo a quien lo
-   sumó, `added_by`). El contador del grupo se ve como
-   "Van (N + M invitadxs)" cuando hay invitados.
+   sumó, `added_by`, o a un admin — ver `specs/016-admin.md`). El
+   contador del grupo se ve como "Van (N + M invitadxs)" cuando hay
+   invitados. `AttendanceSummary` (`src/components/eventos/AttendanceSummary.tsx`)
+   suma `guestCount` al numerador real (`counts.yes + guestCount`), no
+   solo como sufijo de texto — así la barra y el "N de M confirmaron
+   (%)" reflejan a los invitados, no solo el detalle debajo del
+   `<details>`.
+1.1. Los invitados al fútbol también son elegibles para "Armar
+   equipos" (no para MVP/goleador, que son individuales y no tiene
+   sentido para alguien sin cuenta): `futbolTeamCandidates` en
+   `page.tsx` los suma con id `g:<eventGuestId>`, junto a los miembros
+   confirmados con id `u:<userId>` — ver `specs/015-armar-equipos-futbol.md`
+   para el detalle de esquema y de `TeamBuilderModal`.
 2. `<AddGuestForm>` ofrece un `<select>` con los invitados ya
    registrados (traídos en la misma query de la página) más una opción
    "Nueva persona…" que revela un input de texto — mismo patrón que el
@@ -218,18 +229,24 @@ Puntos que el SQL no explica por sí solo:
    (o sin `item_id` para lavado_platos/orden_sede) y solo inserta si no
    existe ya esa fila exacta — reemplaza al `upsert` con `onConflict`
    que usaba antes de `0014` (ver sección 3).
-7. `ItemPicker` (dentro de `TaskAssigneesEditor.tsx`) dejó de ser un
-   `<select>` nativo y pasó a ser un combobox de texto: como
-   `insumo_items` ya viaja completo al cliente (todo el catálogo, en
-   `page.tsx`), la búsqueda, el ícono y la sugerencia de duplicado se
-   resuelven 100% en el browser, sin ida y vuelta al servidor —
-   `src/lib/eventos/insumos.ts` (con test) expone las funciones puras:
+7. `ItemPicker` dejó de ser un `<select>` nativo y pasó a ser un
+   combobox de texto: como `insumo_items` ya viaja completo al cliente
+   (todo el catálogo, en `page.tsx`), la búsqueda, el ícono y la
+   sugerencia de duplicado se resuelven 100% en el browser, sin ida y
+   vuelta al servidor — `src/lib/eventos/insumos.ts` (con test) expone
+   las funciones puras:
    - `matchesQuery(itemName, query)`: filtra la lista mientras se
      tipea, por substring sin distinguir mayúsculas/tildes.
    - `iconForInsumo(name)`: emoji si el nombre contiene una palabra
      clave conocida (carne, bebida, hielo, vino, etc.), `null` si no
-     matchea ninguna — se usa tanto en la lista de sugerencias del
-     picker como en los chips de insumos ya asignados.
+     matchea ninguna.
+   - `resolveIcon(item)`: el ícono efectivo a mostrar — prioriza
+     `item.icon` (guardado en la base, editable por admin, ver más
+     abajo) y solo cae a `iconForInsumo(item.name)` si no está seteado
+     (compatibilidad con ítems viejos que nunca se editaron a mano).
+     Se usa en la lista de sugerencias del picker y en los chips de
+     insumos ya asignados, en vez de llamar a `iconForInsumo`
+     directamente.
    - `similarity`/`findSimilarItem`: coeficiente de Dice sobre
      trigramas (reimplementación en JS puro de la misma idea que
      `pg_trgm`'s `similarity()`, usada en `find_similar_profile_names`
@@ -241,6 +258,18 @@ Puntos que el SQL no explica por sí solo:
    - Si lo tipeado no matchea ningún insumo exacto, la lista de
      sugerencias del picker suma una fila "+ Crear '...'" al final para
      cargarlo como insumo nuevo.
+8. `ItemPicker` se extrajo de `TaskAssigneesEditor.tsx` a
+   `src/components/ItemPicker.tsx` (dejó de ser
+   `eventos`-específico): Gastos lo reusa contra el mismo catálogo
+   `insumo_items` (ver `specs/002-gastos.md`). `insumo_items.icon`
+   (`0027_insumo_items_icon.sql`) es editable por un admin desde el
+   propio picker — cada fila de la lista desplegable suma un botón
+   "✏️" (visible solo si `isAdmin`) que abre un input inline de emoji +
+   "Guardar", llamando a `updateInsumoItemIcon(itemId, icon)`
+   (`src/app/eventos/actions.ts`, mismo patrón `requireAdmin` +
+   `revalidatePath` que `adminUpdateProfile`). No existía ninguna
+   policy de `update` sobre `insumo_items` antes de esto — la nueva es
+   la primera, acotada a admin (`using (public.is_admin(auth.uid()))`).
 
 ### Sede con dueño
 
@@ -338,6 +367,15 @@ Puntos que el SQL no explica por sí solo:
       sin ningún RSVP todavía se ve sin esa línea (no rota ni "0%").
 - [x] Tocar un miembro en `/miembros` lleva a `/perfil/[userId]` (o a
       `/perfil` si es uno mismo).
+- [x] Sumar un invitado al fútbol hace que el contador "N de M
+      confirmaron (%)" y la barra de `AttendanceSummary` lo cuenten,
+      no solo el texto "+N invitadxs".
+- [x] Un invitado al fútbol aparece como candidato en "Armar equipos"
+      y se lo puede mover a un equipo/posición igual que a un miembro;
+      no aparece como candidato a MVP/goleador.
+- [x] Como admin, editar el emoji de un insumo desde el picker (en
+      Tareas o en Gastos) lo actualiza en el otro lado; como no-admin,
+      no aparece la opción de editar.
 
 ## 6. Decisiones y tradeoffs
 
@@ -360,6 +398,9 @@ Puntos que el SQL no explica por sí solo:
 | Búsqueda/ícono/sugerencia de insumo resueltos en JS puro en el cliente | Un RPC `pg_trgm` como `find_similar_profile_names` | El catálogo completo de `insumo_items` ya viaja al cliente (no hay problema de RLS como con perfiles al crear cuenta sin sesión todavía); resolverlo en el browser da feedback instantáneo mientras se tipea, sin ida y vuelta al servidor. |
 | Sugerencia de insumo parecido no bloqueante (se puede crear el nuevo igual) | Bloquear la creación si hay un insumo muy parecido | Pedido explícito del usuario, mismo criterio de "aviso, no bloqueo" que el resto de la app (ver el aviso de nombre parecido en `/login`). |
 | `/miembros` como directorio propio, con `<AttendanceStatsLines>` (sin card propia) dentro de la card de cada fila | Reusar `<AttendanceStatsCard>` tal cual (con su propio borde) dentro de cada fila | Habría anidado una card con borde dentro de otra card — patrón que el resto de la app evita (ver `specs/003-eventos.md`); separar las líneas de texto del wrapper con borde permite reusar el cálculo sin duplicar el problema. |
+| `AttendanceSummary` suma `guestCount` al numerador, no solo como texto | Dejar la barra/contador solo con `event_rsvps` y el "+N invitadxs" como nota aparte | Pedido explícito del usuario: los invitados no sumaban al contador de confirmados, aunque ya significaban "confirmado que viene" en el modelo de datos. |
+| `insumo_items.icon` explícito y editable por admin, con `resolveIcon` priorizándolo sobre `iconForInsumo` | Dejar el ícono siempre derivado por palabra clave, sin persistir ni poder editarlo | Pedido explícito del usuario: poder corregir/asignar el emoji de un ítem a mano, no solo depender del matching automático. |
+| `ItemPicker` extraído a `src/components/ItemPicker.tsx`, compartido con Gastos contra el mismo catálogo `insumo_items` | Un catálogo de ítems separado para Gastos | Decisión del usuario (`AskUserQuestion`): un emoji cargado de un lado se ve del otro, sin duplicar el concepto de "ítem con ícono". |
 
 ## 7. Futuro / fuera de alcance
 

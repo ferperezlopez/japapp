@@ -3,7 +3,8 @@
 - **Estado:** Implemented
 - **Rutas:** `/eventos/[eventId]` (extendida)
 - **Migraciones relacionadas:** `supabase/migrations/0016_futbol_teams.sql`,
-  `supabase/migrations/0017_futbol_teams_position.sql`
+  `supabase/migrations/0017_futbol_teams_position.sql`,
+  `supabase/migrations/0026_futbol_teams_guests.sql`
 - **Última actualización:** 2026-09-17
 
 ## 1. Resumen
@@ -40,6 +41,10 @@ hacerlo a mano por WhatsApp cada vez que se junta el grupo.
 - Aviso no bloqueante si un equipo queda con menos de 4 jugadores.
 - Los equipos armados se guardan en la base y quedan visibles/editables
   por cualquier miembro logueado, igual que el resto de la app.
+- Los invitados al fútbol (`event_guests`, kind `futbol`) también son
+  candidatos elegibles: pueden entrar a un equipo/posición igual que
+  un miembro confirmado, con camiseta y dorsal como cualquier jugador
+  (sin avatar real ni link a perfil, porque no tienen cuenta).
 
 ### No incluye (por ahora)
 
@@ -62,6 +67,9 @@ hacerlo a mano por WhatsApp cada vez que se junta el grupo.
 - Bloquear el guardado si un equipo tiene menos de 4 jugadores — mismo
   criterio de confianza total que el resto de la app: se avisa, nunca
   se bloquea.
+- Invitados como candidatos a MVP/goleador (`futbolCandidates`,
+  `FutbolStatsForm`) — sigue siendo solo miembros con cuenta, a
+  diferencia del armador de equipos (`futbolTeamCandidates`).
 
 ## 3. Modelo de datos
 
@@ -73,7 +81,24 @@ Puntos que el SQL no explica por sí solo:
 - No se reusó `futbol_stats`: esa tabla tiene `event_id` como primary
   key (una fila por evento, pensada para resultado/MVP/goleador a nivel
   de partido), así que no hay lugar ahí para una fila por jugador.
-  `futbol_teams` usa `(event_id, user_id)` como primary key compuesta.
+  `futbol_teams` usaba originalmente `(event_id, user_id)` como primary
+  key compuesta; `0026_futbol_teams_guests.sql` la reemplaza por un
+  `id` propio (`uuid`) porque un invitado no tiene `user_id` — ver
+  siguiente punto.
+- `0026`: para que un invitado (sin fila en `profiles`) pueda quedar en
+  un equipo, `user_id` pasa a ser nullable y se suma `event_guest_id`
+  (`references event_guests(id) on delete cascade` — si se saca al
+  invitado del evento, su fila en `futbol_teams` se borra sola). Un
+  `check ((user_id is not null) <> (event_guest_id is not null))`
+  exige que la fila tenga exactamente una de las dos identidades,
+  nunca ambas ni ninguna. Dos índices únicos parciales (`where user_id
+  is not null` / `where event_guest_id is not null`) reemplazan a la
+  vieja primary key compuesta, uno por cada identidad posible.
+  `src/app/eventos/actions.ts` (`saveFutbolTeams`) y `page.tsx` usan un
+  `id` genérico de string con prefijo (`u:<userId>` / `g:<eventGuestId>`)
+  de punta a punta en la UI (`Candidate`, `TeamBuilderModal`,
+  `FutbolTeamsSection`, `assignJerseyNumbers`), y lo desarman recién al
+  insertar en la base.
 - `position text check (position in ('gk', 'def', 'fwd'))`: reemplaza
   al `is_goalkeeper boolean` original de la `0016`. El primer diseño
   del modal (PR #31) solo destacaba al arquero dentro de una lista
@@ -107,10 +132,13 @@ Puntos que el SQL no explica por sí solo:
    `event.has_futbol`, junto con `futbol_stats` en el mismo
    `Promise.all`).
 2. El pool de jugadores del modal (`futbolTeamCandidates`) no es
-   exactamente `futbolCandidates` (confirmados "Voy" al fútbol): también
-   incluye a cualquiera que ya esté guardado en `futbol_teams` aunque
-   haya cambiado su RSVP después, resuelto contra `members` para no
-   hacerlo desaparecer silenciosamente del equipo ya armado.
+   exactamente `futbolCandidates` (confirmados "Voy" al fútbol, usado
+   para MVP/goleador): además suma a los invitados al fútbol
+   (`guestsFutbol`, con id `g:<eventGuestId>`) y a cualquiera que ya
+   esté guardado en `futbol_teams` aunque haya cambiado su RSVP
+   después (resuelto contra `members`, con id `u:<userId>`) o dejado
+   de estar en `guestsFutbol`, para no hacerlo desaparecer
+   silenciosamente del equipo ya armado.
 3. `<FutbolTeamsSection>` (mismo criterio visual que `FutbolStatsForm`:
    resumen de solo lectura + botón para editar) muestra "Todavía no se
    armaron los equipos" o, si ya hay datos guardados, los dos equipos
@@ -122,9 +150,10 @@ Puntos que el SQL no explica por sí solo:
    guardado (o todos los candidatos en "Sin asignar" si no hay nada
    guardado todavía).
 5. Dentro del modal, el estado de cada jugador (`unassigned`, equipo 1
-   o 2 + posición) vive en un mapa por `userId`, no en arrays separados
-   — evita tener que sincronizar manualmente de dónde sale un jugador
-   cuando se mueve. La cancha es **vertical**: Equipo 1 (camiseta
+   o 2 + posición) vive en un mapa por `id` (genérico, de miembro o de
+   invitado — ver Modelo de datos), no en arrays separados — evita
+   tener que sincronizar manualmente de dónde sale un jugador cuando se
+   mueve. La cancha es **vertical**: Equipo 1 (camiseta
    clara) ocupa la mitad de abajo con su arco propio en la base;
    Equipo 2 (camiseta oscura) ocupa la mitad de arriba, espejado, con
    su arco propio arriba del todo — los dos quedan enfrentados a través
@@ -151,11 +180,14 @@ Puntos que el SQL no explica por sí solo:
    la camiseta depende de la posición antes que del equipo: arquero
    siempre en el tercer color (amarillo), y solo defensores/delanteros
    usan el color del equipo (clara para Equipo 1, oscura para Equipo 2).
-7. "Guardar equipos" arma el array de asignaciones a partir de los
-   equipos 1 y 2 (quienes quedaron en "Sin asignar" no se guardan) y
-   llama a `saveFutbolTeams(eventId, assignments)`, que borra todas las
-   filas del evento en `futbol_teams` y vuelve a insertar las nuevas
-   con su `team` y `position`. Al terminar, cierra el modal.
+7. "Guardar equipos" arma el array de asignaciones (`{ id, team,
+   position }`) a partir de los equipos 1 y 2 (quienes quedaron en
+   "Sin asignar" no se guardan) y llama a
+   `saveFutbolTeams(eventId, assignments)`, que borra todas las filas
+   del evento en `futbol_teams` y vuelve a insertar las nuevas: por
+   cada `id`, si empieza con `"u:"` va a `user_id`, si empieza con
+   `"g:"` va a `event_guest_id` (el otro campo queda `null`). Al
+   terminar, cierra el modal.
 
 ## 5. Criterios de aceptación
 
@@ -184,6 +216,10 @@ Puntos que el SQL no explica por sí solo:
 - [x] Con la mayoría de los confirmados en "Sin asignar" (las 6 franjas
       vacías), el modal entra en una pantalla de celular común sin
       scrollear en exceso, y "Guardar equipos" queda alcanzable.
+- [x] Un invitado al fútbol aparece en el pool de "Armar equipos" y se
+      lo puede mover a un equipo/posición igual que a un miembro;
+      guardar y recargar persiste su asignación.
+- [x] Un invitado NO aparece como candidato a MVP/goleador.
 
 ## 6. Decisiones y tradeoffs
 
@@ -198,6 +234,8 @@ Puntos que el SQL no explica por sí solo:
 | Equipos guardados en la base (tabla nueva) | Herramienta de "repartamos ahora" sin persistencia | Decisión explícita del usuario: que quede guardado y visible/editable por cualquiera, igual que tareas/invitados/stats — no una pantalla que se descarta al cerrar. |
 | Guardar como reemplazo completo (borrar + insertar) | Reconciliar fila por fila (upsert incremental) | El modal ya maneja el estado entero en memoria y hace un solo submit; reconciliar fila por fila sumaría complejidad sin ningún beneficio real acá (a diferencia de invitados/tareas, que se agregan/sacan de a uno con la página siempre montada). |
 | Aviso no bloqueante si un equipo tiene menos de 4 | Bloquear el guardado | Mismo criterio de confianza total que el resto de la app: la convocatoria real puede no dar para 5 vs 5, y la app nunca le impide a alguien guardar lo que decidió. |
+| Invitados elegibles para armar equipos, pero no para MVP/goleador | Excluir invitados de armar equipos también, mismo criterio que MVP/goleador | Pedido explícito del usuario, acotado a equipos: MVP/goleador es un reconocimiento individual sobre alguien con cuenta en la app, mientras que "quién juega en qué equipo" es información del partido en sí, sin esa restricción. |
+| `id` genérico con prefijo (`u:`/`g:`) en vez de una unión discriminada tipada | Un tipo `Candidate` con campos `kind`/`userId`/`guestId` separados | Mismo espíritu que `NEW_GUEST_VALUE` ya usado en `AddGuestForm.tsx`: un string simple evita tocar la forma de todos los mapas/comparaciones (`playerState`, `byPosition`, `assignJerseyNumbers`) que ya asumían una clave string plana. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -210,6 +248,12 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-17: los invitados al fútbol pasan a ser candidatos elegibles
+  para armar equipos (no para MVP/goleador). `futbol_teams` cambia su
+  primary key de `(event_id, user_id)` a un `id` propio, con `user_id`
+  ahora nullable y `event_guest_id` nuevo (`0026_futbol_teams_guests.sql`);
+  la UI usa un `id` genérico con prefijo (`u:`/`g:`) de punta a punta.
+  A pedido explícito del usuario.
 - 2026-09-17: la camiseta pasa a mostrar un dorsal numérico (arquero
   siempre "1", correlativo por equipo) en vez del nombre adentro —
   revierte la decisión de PR #32. El nombre abreviado sigue visible,

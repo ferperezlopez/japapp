@@ -331,7 +331,7 @@ export default async function EventoPage({
       .from("event_tasks")
       .select("id, task_type, assigned_to, item_id")
       .eq("event_id", eventId),
-    supabase.from("insumo_items").select("id, name").order("name"),
+    supabase.from("insumo_items").select("id, name, icon").order("name"),
   ]);
   const totalPeople = allProfiles?.length ?? 0;
   const members = allProfiles ?? [];
@@ -392,8 +392,11 @@ export default async function EventoPage({
     mvpUserId: string | null;
     goleadorUserId: string | null;
   } | null = null;
+  // id genérico prefijado ("u:"/"g:") — ver saveFutbolTeams en actions.ts:
+  // un jugador guardado puede ser un miembro (user_id) o un invitado al
+  // fútbol (event_guest_id), nunca los dos.
   let futbolTeams: {
-    userId: string;
+    id: string;
     team: 1 | 2;
     position: "gk" | "def" | "fwd";
   }[] = [];
@@ -407,7 +410,7 @@ export default async function EventoPage({
         .maybeSingle(),
       supabase
         .from("futbol_teams")
-        .select("user_id, team, position")
+        .select("user_id, event_guest_id, team, position")
         .eq("event_id", eventId),
     ]);
 
@@ -420,7 +423,7 @@ export default async function EventoPage({
     }
 
     futbolTeams = (teamRows ?? []).map((t) => ({
-      userId: t.user_id,
+      id: t.user_id ? `u:${t.user_id}` : `g:${t.event_guest_id}`,
       team: t.team as 1 | 2,
       position: t.position as "gk" | "def" | "fwd",
     }));
@@ -430,17 +433,36 @@ export default async function EventoPage({
     .filter((a) => a.status === "yes")
     .map((a) => ({ userId: a.userId, name: a.name, avatarUrl: a.avatarUrl }));
 
-  // El pool del armador de equipos no es solo los confirmados actuales: si
-  // alguien ya quedó guardado en un equipo y después cambió su RSVP, sigue
-  // apareciendo (resuelto contra `members`) para no hacerlo desaparecer.
+  // El pool del armador de equipos suma, además de los confirmados
+  // actuales (con id "u:<userId>"), a los invitados al fútbol (id
+  // "g:<eventGuestId>") — no son elegibles para MVP/goleador
+  // (futbolCandidates, arriba, que sigue siendo solo miembros), pero sí
+  // para armar equipos. También sigue incluyendo a quien ya quedó
+  // guardado en un equipo y después cambió su RSVP, para no hacerlo
+  // desaparecer.
+  const futbolTeamMemberCandidates = futbolCandidates.map((c) => ({
+    id: `u:${c.userId}`,
+    name: c.name,
+    avatarUrl: c.avatarUrl,
+  }));
+  const futbolTeamGuestCandidates = guestsFutbol.map((g) => ({
+    id: `g:${g.eventGuestId}`,
+    name: g.name,
+    avatarUrl: null,
+  }));
   const futbolTeamCandidates = [
-    ...futbolCandidates,
+    ...futbolTeamMemberCandidates,
+    ...futbolTeamGuestCandidates,
     ...futbolTeams
-      .filter((t) => !futbolCandidates.some((c) => c.userId === t.userId))
+      .filter(
+        (t) =>
+          !futbolTeamMemberCandidates.some((c) => c.id === t.id) &&
+          !futbolTeamGuestCandidates.some((c) => c.id === t.id),
+      )
       .map((t) => ({
-        userId: t.userId,
-        name: memberName(t.userId),
-        avatarUrl: memberAvatar(t.userId),
+        id: t.id,
+        name: t.id.startsWith("u:") ? memberName(t.id.slice(2)) : "Invitado",
+        avatarUrl: t.id.startsWith("u:") ? memberAvatar(t.id.slice(2)) : null,
       })),
   ];
 
@@ -631,6 +653,7 @@ export default async function EventoPage({
                         ? (insumoItems ?? [])
                         : undefined
                     }
+                    isAdmin={isAdmin}
                   />
                 </div>
               </div>

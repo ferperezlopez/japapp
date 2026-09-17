@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
+import { resolveIcon } from "@/lib/eventos/insumos";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { CopyableText } from "@/components/ui/CopyableText";
@@ -40,24 +41,34 @@ export default async function GroupPage({
     .eq("group_id", groupId)
     .maybeSingle();
 
-  const [{ data: membershipRows }, { data: allProfiles }, { data: rsvpRows }] =
-    await Promise.all([
-      supabase
-        .from("group_members")
-        .select("user_id, profiles(id, name, email, avatar_url)")
-        .eq("group_id", groupId),
-      supabase
-        .from("profiles")
-        .select("id, name, email, alias, avatar_url")
-        .order("name"),
-      linkedEvent
-        ? supabase
-            .from("event_rsvps")
-            .select("user_id, status")
-            .eq("event_id", linkedEvent.id)
-            .eq("kind", "juntada")
-        : Promise.resolve({ data: null }),
-    ]);
+  const [
+    { data: membershipRows },
+    { data: allProfiles },
+    { data: rsvpRows },
+    { data: insumoItems },
+    { data: me },
+  ] = await Promise.all([
+    supabase
+      .from("group_members")
+      .select("user_id, profiles(id, name, email, avatar_url)")
+      .eq("group_id", groupId),
+    supabase
+      .from("profiles")
+      .select("id, name, email, alias, avatar_url")
+      .order("name"),
+    linkedEvent
+      ? supabase
+          .from("event_rsvps")
+          .select("user_id, status")
+          .eq("event_id", linkedEvent.id)
+          .eq("kind", "juntada")
+      : Promise.resolve({ data: null }),
+    supabase.from("insumo_items").select("id, name, icon").order("name"),
+    user
+      ? supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const isAdmin = me?.is_admin ?? false;
 
   const members = (membershipRows ?? [])
     .map((row) => row.profiles)
@@ -98,10 +109,20 @@ export default async function GroupPage({
   const memberAvatar = (id: string) =>
     profiles.find((p) => p.id === id)?.avatar_url ?? null;
 
+  // Solo se muestra ícono cuando el gasto está ligado a un ítem del
+  // catálogo (item_id) — a diferencia de "compra de insumos", una
+  // descripción de gasto en texto libre no pasa por matching de palabra
+  // clave (ver specs/002-gastos.md): sería raro que "Cuota cancha marzo"
+  // saque un emoji por casualidad.
+  const expenseIcon = (itemId: string | null) => {
+    const item = itemId ? insumoItems?.find((i) => i.id === itemId) : null;
+    return item ? resolveIcon(item) : null;
+  };
+
   const { data: expenses } = await supabase
     .from("expenses")
     .select(
-      "id, description, amount, expense_date, paid_by, created_by, expense_shares(user_id, share_amount)",
+      "id, description, item_id, amount, expense_date, paid_by, created_by, expense_shares(user_id, share_amount)",
     )
     .eq("group_id", groupId)
     .order("expense_date", { ascending: false })
@@ -263,6 +284,8 @@ export default async function GroupPage({
               groupId={groupId}
               people={payerOptions}
               defaultParticipantIds={expenseParticipantDefaults}
+              items={insumoItems ?? []}
+              isAdmin={isAdmin}
             />
           )}
         </div>
@@ -274,7 +297,12 @@ export default async function GroupPage({
           {(expenses ?? []).map((e) => (
             <li key={e.id} className="flex items-center justify-between py-2 text-sm">
               <div>
-                <p className="font-medium">{e.description}</p>
+                <p className="font-medium">
+                  {expenseIcon(e.item_id) && (
+                    <span aria-hidden="true">{expenseIcon(e.item_id)} </span>
+                  )}
+                  {e.description}
+                </p>
                 <p className="text-xs text-foreground/50">
                   {e.expense_date} · pagó {memberName(e.paid_by)}
                 </p>

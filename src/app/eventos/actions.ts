@@ -452,6 +452,36 @@ export async function removeTaskAssignee(taskId: string, eventId: string) {
   return { ok: true };
 }
 
+// Mismo patrón que adminUpdateProfile (perfil/actions.ts): la policy RLS
+// "Un admin puede editar el ícono de un insumo" (0027_insumo_items_icon.sql)
+// es la barrera real, acá se revalida por las dudas para un mensaje claro.
+// insumo_items se comparte entre "compra de insumos" y Gastos, así que se
+// revalidan ambas rutas que podrían tener el picker abierto.
+export async function updateInsumoItemIcon(itemId: string, icon: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!me?.is_admin) return { error: "No tenés permisos de administrador." };
+
+  const { error } = await supabase
+    .from("insumo_items")
+    .update({ icon: icon || null })
+    .eq("id", itemId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/eventos", "layout");
+  revalidatePath("/gastos", "layout");
+  return { ok: true };
+}
+
 // "Reserva de cancha" es la única tarea de una sola persona a la vez:
 // reasignar es sacar la fila anterior y sumar la nueva, no un update
 // (event_tasks ya no tiene una fila fija por task_type).
@@ -491,10 +521,14 @@ export async function setReservaCanchaAssignee(
 // una sola vez al guardar — se reemplaza todo en vez de reconciliar fila
 // por fila, mismo criterio de "borrar y volver a insertar" que
 // setReservaCanchaAssignee.
+// `id` viene prefijado (ver page.tsx): "u:<userId>" para un miembro
+// registrado, "g:<eventGuestId>" para un invitado al fútbol (que no
+// tiene fila en profiles, así que no puede ir en user_id) — mismo
+// espíritu que NEW_GUEST_VALUE en AddGuestForm.tsx.
 export async function saveFutbolTeams(
   eventId: string,
   assignments: {
-    userId: string;
+    id: string;
     team: 1 | 2;
     position: "gk" | "def" | "fwd";
   }[],
@@ -515,7 +549,8 @@ export async function saveFutbolTeams(
     const { error } = await supabase.from("futbol_teams").insert(
       assignments.map((a) => ({
         event_id: eventId,
-        user_id: a.userId,
+        user_id: a.id.startsWith("u:") ? a.id.slice(2) : null,
+        event_guest_id: a.id.startsWith("g:") ? a.id.slice(2) : null,
         team: a.team,
         position: a.position,
         updated_by: user.id,
