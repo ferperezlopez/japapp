@@ -60,7 +60,7 @@ function StatItem({
     <div className="flex flex-1 items-center gap-2 px-2 first:pl-0 last:pr-0">
       <StatusBadge status={status} />
       <div>
-        <p className="text-lg font-bold leading-none text-foreground">
+        <p className="text-base font-medium leading-none text-foreground">
           {value}
         </p>
         <p className="text-[10px] text-foreground/50">{label}</p>
