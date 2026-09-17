@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { VenueLocationPicker } from "./VenueLocationPicker";
 
 const weekdayFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "long",
@@ -37,6 +38,8 @@ export function EventFormFields({
 }) {
   const [eventDateValue, setEventDateValue] = useState(defaultEventDate);
   const [venueSelection, setVenueSelection] = useState(defaultVenueValue);
+  const [newVenueLat, setNewVenueLat] = useState<number | null>(null);
+  const [newVenueLng, setNewVenueLng] = useState<number | null>(null);
 
   return (
     <>
@@ -114,6 +117,16 @@ export function EventFormFields({
                   </option>
                 ))}
               </select>
+              <input type="hidden" name="newVenueLat" value={newVenueLat ?? ""} />
+              <input type="hidden" name="newVenueLng" value={newVenueLng ?? ""} />
+              <VenueLocationPicker
+                lat={newVenueLat}
+                lng={newVenueLng}
+                onChange={(lat, lng) => {
+                  setNewVenueLat(lat);
+                  setNewVenueLng(lng);
+                }}
+              />
             </>
           )}
         </div>

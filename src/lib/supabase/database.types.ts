@@ -11,10 +11,6 @@ export interface Database {
         Args: { candidate_name: string };
         Returns: { name: string }[];
       };
-      remove_event_futbol: {
-        Args: { p_event_id: string };
-        Returns: undefined;
-      };
     };
     Tables: {
       profiles: {
@@ -291,6 +287,8 @@ export interface Database {
           created_by: string;
           created_at: string;
           host_user_id: string | null;
+          lat: number | null;
+          lng: number | null;
         };
         Insert: {
           id?: string;
@@ -298,6 +296,8 @@ export interface Database {
           created_by: string;
           created_at?: string;
           host_user_id?: string | null;
+          lat?: number | null;
+          lng?: number | null;
         };
         Update: {
           id?: string;
@@ -305,6 +305,8 @@ export interface Database {
           created_by?: string;
           created_at?: string;
           host_user_id?: string | null;
+          lat?: number | null;
+          lng?: number | null;
         };
         Relationships: [
           {

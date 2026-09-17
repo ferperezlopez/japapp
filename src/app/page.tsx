@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RsvpButtons } from "@/components/eventos/RsvpButtons";
+import { AttendanceSummary } from "@/components/eventos/AttendanceSummary";
 import { PhotoCarousel } from "@/components/PhotoCarousel";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
@@ -69,6 +70,9 @@ export default async function Home() {
   let myStatus: "yes" | "no" | "maybe" | null = null;
   let myFutbolStatus: "yes" | "no" | "maybe" | null = null;
   let recentMembers: { id: string; name: string | null; email: string }[] = [];
+  let attendeesJuntada: { status: string }[] = [];
+  let attendeesFutbol: { status: string }[] = [];
+  let totalPeople = 0;
 
   if (user) {
     // Sin login de Google, alguien nuevo no tiene forma de avisarle al
@@ -121,20 +125,27 @@ export default async function Home() {
     upcomingEvent = nextEvent;
 
     if (upcomingEvent) {
-      const { data: myRsvps } = await supabase
-        .from("event_rsvps")
-        .select("kind, status")
-        .eq("event_id", upcomingEvent.id)
-        .eq("user_id", user.id);
+      const [{ data: eventRsvps }, { count: profilesCount }] = await Promise.all([
+        supabase
+          .from("event_rsvps")
+          .select("kind, status, user_id")
+          .eq("event_id", upcomingEvent.id),
+        supabase.from("profiles").select("id", { count: "exact", head: true }),
+      ]);
 
+      totalPeople = profilesCount ?? 0;
+      attendeesJuntada = (eventRsvps ?? []).filter((r) => r.kind === "juntada");
+      attendeesFutbol = (eventRsvps ?? []).filter((r) => r.kind === "futbol");
+
+      const myRsvps = (eventRsvps ?? []).filter((r) => r.user_id === user.id);
       myStatus =
-        (myRsvps?.find((r) => r.kind === "juntada")?.status as
+        (myRsvps.find((r) => r.kind === "juntada")?.status as
           | "yes"
           | "no"
           | "maybe"
           | undefined) ?? null;
       myFutbolStatus =
-        (myRsvps?.find((r) => r.kind === "futbol")?.status as
+        (myRsvps.find((r) => r.kind === "futbol")?.status as
           | "yes"
           | "no"
           | "maybe"
@@ -201,6 +212,10 @@ export default async function Home() {
                     {upcomingEvent.location ? ` · ${upcomingEvent.location}` : ""}
                   </p>
                 </Link>
+                <AttendanceSummary
+                  attendees={attendeesJuntada}
+                  totalPeople={totalPeople}
+                />
 
                 <div className="mt-4">
                   <p className="text-xs font-medium text-foreground/50">
@@ -220,6 +235,10 @@ export default async function Home() {
                     <p className="text-xs font-medium text-foreground/50">
                       ⚽ ¿Jugás al fútbol?
                     </p>
+                    <AttendanceSummary
+                      attendees={attendeesFutbol}
+                      totalPeople={totalPeople}
+                    />
                     <div className="mt-1.5">
                       <RsvpButtons
                         eventId={upcomingEvent.id}
