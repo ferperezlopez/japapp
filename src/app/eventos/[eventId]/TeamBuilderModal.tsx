@@ -219,6 +219,10 @@ export function TeamBuilderModal({
     );
   };
 
+  // Las 3 posiciones van en columnas lado a lado (no apiladas): con la
+  // cancha vertical, apilar arquero/defensores/delanteros dentro de cada
+  // equipo desperdiciaba todo el ancho disponible a los costados y hacía
+  // que el modal no entrara en la pantalla — ver specs/015-armar-equipos-futbol.md.
   const renderZone = (
     team: 1 | 2,
     position: Position,
@@ -231,9 +235,9 @@ export function TeamBuilderModal({
           event.stopPropagation();
           moveSelectedTo({ team, position });
         }}
-        className="relative min-h-9 cursor-pointer px-1 pb-1 pt-3.5"
+        className="flex min-h-16 min-w-0 flex-1 cursor-pointer flex-col items-center gap-1 px-1 py-1.5"
       >
-        <span className="absolute left-1 top-0.5 text-[9px] font-medium uppercase tracking-wide text-white/60">
+        <span className="text-[9px] font-medium uppercase tracking-wide text-white/60">
           {POSITION_LABELS[position]}
         </span>
         <div className="flex flex-wrap items-center justify-center gap-1">
@@ -313,7 +317,7 @@ export function TeamBuilderModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-2xl bg-background p-5"
+        className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl bg-background p-5"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">⚽ Armar equipos</h3>
@@ -345,27 +349,28 @@ export function TeamBuilderModal({
               className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/40"
             />
 
-            {/* Equipo 2 (oscuro) — mitad de arriba, espejado: arquero
-                arriba del todo, delanteros pegados a la línea de medio
-                campo. */}
-            <div className="flex flex-col-reverse p-2">
+            {/* Equipo 2 (oscuro) — mitad de arriba. */}
+            <div className="p-2">
               <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-white">
                 Equipo 2 ({team2.total})
               </p>
-              {renderZone(2, "fwd", team2.fwd)}
-              {renderZone(2, "def", team2.def)}
-              {renderZone(2, "gk", team2.gk)}
+              <div className="flex divide-x divide-white/20">
+                {renderZone(2, "gk", team2.gk)}
+                {renderZone(2, "def", team2.def)}
+                {renderZone(2, "fwd", team2.fwd)}
+              </div>
             </div>
 
-            {/* Equipo 1 (claro) — mitad de abajo: delanteros pegados a
-                la línea de medio campo, arquero abajo del todo. */}
-            <div className="flex flex-col p-2">
+            {/* Equipo 1 (claro) — mitad de abajo. */}
+            <div className="p-2">
               <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-white">
                 Equipo 1 ({team1.total})
               </p>
-              {renderZone(1, "fwd", team1.fwd)}
-              {renderZone(1, "def", team1.def)}
-              {renderZone(1, "gk", team1.gk)}
+              <div className="flex divide-x divide-white/20">
+                {renderZone(1, "gk", team1.gk)}
+                {renderZone(1, "def", team1.def)}
+                {renderZone(1, "fwd", team1.fwd)}
+              </div>
             </div>
           </div>
         </div>
