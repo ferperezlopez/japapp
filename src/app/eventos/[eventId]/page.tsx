@@ -84,30 +84,15 @@ const GROUPS: { status: "yes" | "maybe" | "no"; label: string }[] = [
 
 // "Creación del evento" y "convocatoria" no están en esta lista: se
 // asumen hechas por quien creó el evento (events.created_by), mostrado
-// por separado como "Creado por".
-const TASK_TYPES: (
-  | {
-      type: "compra_insumos" | "lavado_platos" | "orden_sede";
-      label: string;
-      multi: true;
-      futbolOnly?: boolean;
-    }
-  | {
-      type: "reserva_cancha";
-      label: string;
-      multi: false;
-      futbolOnly?: boolean;
-    }
-)[] = [
-  { type: "compra_insumos", label: "Compra de insumos", multi: true },
-  { type: "lavado_platos", label: "Lavado de platos", multi: true },
-  { type: "orden_sede", label: "Orden de la sede", multi: true },
-  {
-    type: "reserva_cancha",
-    label: "Reserva de cancha",
-    multi: false,
-    futbolOnly: true,
-  },
+// por separado como "Creado por". "Reserva de cancha" tampoco está acá:
+// es una tarea del sub-evento fútbol, se renderiza junto a él.
+const TASK_TYPES: {
+  type: "compra_insumos" | "lavado_platos" | "orden_sede";
+  label: string;
+}[] = [
+  { type: "compra_insumos", label: "Compra de insumos" },
+  { type: "lavado_platos", label: "Lavado de platos" },
+  { type: "orden_sede", label: "Orden de la sede" },
 ];
 
 type Attendee = {
@@ -614,44 +599,34 @@ export default async function EventoPage({
             Creado por: {memberName(event.created_by)}
           </p>
           <div className="mt-3 space-y-3">
-            {TASK_TYPES.filter((t) => !t.futbolOnly || event.has_futbol).map(
-              (t) => (
-                <div key={t.type}>
-                  <label className="block text-xs font-medium text-foreground/50">
-                    {t.label}
-                  </label>
-                  <div className="mt-1">
-                    {t.multi ? (
-                      <TaskAssigneesEditor
-                        eventId={eventId}
-                        taskType={t.type}
-                        assignees={(assigneesByTask.get(t.type) ?? []).map(
-                          (a) => ({
-                            id: a.id,
-                            userId: a.userId,
-                            name: memberName(a.userId),
-                            avatarUrl: memberAvatar(a.userId),
-                            itemName: itemName(a.itemId),
-                          }),
-                        )}
-                        members={members}
-                        items={
-                          t.type === "compra_insumos"
-                            ? (insumoItems ?? [])
-                            : undefined
-                        }
-                      />
-                    ) : (
-                      <TaskAssignSelect
-                        eventId={eventId}
-                        assignedTo={reservaCanchaAssignedTo}
-                        members={members}
-                      />
+            {TASK_TYPES.map((t) => (
+              <div key={t.type}>
+                <label className="block text-xs font-medium text-foreground/50">
+                  {t.label}
+                </label>
+                <div className="mt-1">
+                  <TaskAssigneesEditor
+                    eventId={eventId}
+                    taskType={t.type}
+                    assignees={(assigneesByTask.get(t.type) ?? []).map(
+                      (a) => ({
+                        id: a.id,
+                        userId: a.userId,
+                        name: memberName(a.userId),
+                        avatarUrl: memberAvatar(a.userId),
+                        itemName: itemName(a.itemId),
+                      }),
                     )}
-                  </div>
+                    members={members}
+                    items={
+                      t.type === "compra_insumos"
+                        ? (insumoItems ?? [])
+                        : undefined
+                    }
+                  />
                 </div>
-              ),
-            )}
+              </div>
+            ))}
           </div>
         </details>
       </section>
@@ -692,6 +667,18 @@ export default async function EventoPage({
             registeredGuests={registeredGuests ?? []}
             members={members}
           />
+          <div className="mt-4 rounded-xl border border-surface-border bg-surface p-4">
+            <label className="block text-xs font-medium text-foreground/50">
+              Reserva de cancha
+            </label>
+            <div className="mt-1">
+              <TaskAssignSelect
+                eventId={eventId}
+                assignedTo={reservaCanchaAssignedTo}
+                members={members}
+              />
+            </div>
+          </div>
           <FutbolStatsForm
             eventId={eventId}
             stats={futbolStats}

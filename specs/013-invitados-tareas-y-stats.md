@@ -172,20 +172,24 @@ Puntos que el SQL no explica por sí solo:
 
 ### Tareas
 
-1. Debajo de las secciones de RSVP, un `<details>` nativo colapsado por
-   defecto ("Asignación de tareas") muestra "Creado por: X" (de
-   `events.created_by`) y, para cada tipo de tarea (3 si el evento no
-   tiene fútbol, 4 si sí), su editor de asignación.
+1. Debajo de la sección de RSVP de la juntada, un `<details>` nativo
+   colapsado por defecto ("Asignación de tareas") muestra "Creado por:
+   X" (de `events.created_by`) y, para cada una de las 3 tareas de la
+   juntada (compra de insumos, lavado de platos, orden de la sede), su
+   editor de asignación. "Reserva de cancha" no está acá: es una tarea
+   del sub-evento fútbol (solo tiene sentido si hay partido), así que
+   se muestra dentro del bloque "⚽ Fútbol", pegada a su sección de
+   RSVP, no adentro del `<details>` de tareas de la juntada.
 2. Para "compra de insumos", "lavado de platos" y "orden de la sede":
    `<TaskAssigneesEditor>` — mismo patrón visual que la sección de
    Invitados (chips con `Avatar` + nombre + X para sacar, más un
    "+ Agregar" que revela un `<select>` con los miembros que todavía no
    están asignados a esa tarea, para no poder sumar a la misma persona
    dos veces). Llama a `addTaskAssignee`/`removeTaskAssignee`.
-3. Para "reserva de cancha": `<TaskAssignSelect>` sigue siendo un
-   único `<select>` con auto-submit al cambiar la selección, pero
-   ahora llama a `setReservaCanchaAssignee` — que borra la fila
-   anterior de `(event_id, 'reserva_cancha')` e inserta la nueva,
+3. Para "reserva de cancha" (dentro de `⚽ Fútbol`): `<TaskAssignSelect>`
+   sigue siendo un único `<select>` con auto-submit al cambiar la
+   selección, pero llama a `setReservaCanchaAssignee` — que borra la
+   fila anterior de `(event_id, 'reserva_cancha')` e inserta la nueva,
    reemplazando en vez de sumar.
 4. `addTaskAssignee(eventId, taskType, userId, item?)`: `upsert` en
    `event_tasks` con `onConflict: "event_id,task_type,assigned_to",
