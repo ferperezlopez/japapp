@@ -95,7 +95,7 @@ export default async function EventosPage() {
   // reflejar el estado de esa persona, no el del admin real.
   const actor = await getActingUser(supabase);
 
-  const [{ data: events }, { data: rsvps }, { data: venues }, { data: members }] =
+  const [{ data: events }, { data: rsvps }, { data: venues }, { data: members }, { data: eventGuests }] =
     await Promise.all([
       supabase
         .from("events")
@@ -104,6 +104,7 @@ export default async function EventosPage() {
       supabase.from("event_rsvps").select("event_id, user_id, status, kind"),
       supabase.from("venues").select("id, name").order("name"),
       supabase.from("profiles").select("id, name, email").order("name"),
+      supabase.from("event_guests").select("event_id, kind"),
     ]);
 
   // La confirmación de la juntada (kind="juntada") es la que define el
@@ -122,6 +123,16 @@ export default async function EventosPage() {
       list.push({ status: r.status });
       futbolRsvpsByEvent.set(r.event_id, list);
     }
+  }
+
+  // Un invitado ya significa "confirmado que viene" (ver
+  // specs/013-invitados-tareas-y-stats.md), así que suma al contador de
+  // "confirmados"/"juegan" de cada tipo — mismo criterio que
+  // AttendanceSummary en /eventos/[eventId].
+  const guestCountByEventKind = new Map<string, number>();
+  for (const g of eventGuests ?? []) {
+    const key = `${g.event_id}:${g.kind}`;
+    guestCountByEventKind.set(key, (guestCountByEventKind.get(key) ?? 0) + 1);
   }
 
   // Route is already forced dynamic by the cookie-based auth call above,
@@ -152,11 +163,13 @@ export default async function EventosPage() {
       counts[r.status as keyof typeof counts]++;
       if (r.userId === actor?.id) myStatus = r.status;
     }
+    counts.yes += guestCountByEventKind.get(`${event.id}:juntada`) ?? 0;
 
     const futbolCounts = { yes: 0, maybe: 0, no: 0 };
     for (const r of futbolRsvpsByEvent.get(event.id) ?? []) {
       futbolCounts[r.status as keyof typeof futbolCounts]++;
     }
+    futbolCounts.yes += guestCountByEventKind.get(`${event.id}:futbol`) ?? 0;
 
     return (
       <Link key={event.id} href={`/eventos/${event.id}`} className="block">
