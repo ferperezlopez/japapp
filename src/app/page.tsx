@@ -88,6 +88,8 @@ export default async function Home() {
   let attendeesJuntada: { status: string }[] = [];
   let attendeesFutbol: { status: string }[] = [];
   let totalPeople = 0;
+  let guestCountJuntada = 0;
+  let guestCountFutbol = 0;
 
   if (user) {
     // Sin login de Google, alguien nuevo no tiene forma de avisarle al
@@ -140,17 +142,21 @@ export default async function Home() {
     upcomingEvent = nextEvent;
 
     if (upcomingEvent) {
-      const [{ data: eventRsvps }, { count: profilesCount }] = await Promise.all([
-        supabase
-          .from("event_rsvps")
-          .select("kind, status, user_id")
-          .eq("event_id", upcomingEvent.id),
-        supabase.from("profiles").select("id", { count: "exact", head: true }),
-      ]);
+      const [{ data: eventRsvps }, { count: profilesCount }, { data: eventGuests }] =
+        await Promise.all([
+          supabase
+            .from("event_rsvps")
+            .select("kind, status, user_id")
+            .eq("event_id", upcomingEvent.id),
+          supabase.from("profiles").select("id", { count: "exact", head: true }),
+          supabase.from("event_guests").select("kind").eq("event_id", upcomingEvent.id),
+        ]);
 
       totalPeople = profilesCount ?? 0;
       attendeesJuntada = (eventRsvps ?? []).filter((r) => r.kind === "juntada");
       attendeesFutbol = (eventRsvps ?? []).filter((r) => r.kind === "futbol");
+      guestCountJuntada = (eventGuests ?? []).filter((g) => g.kind === "juntada").length;
+      guestCountFutbol = (eventGuests ?? []).filter((g) => g.kind === "futbol").length;
 
       // getActingUser en vez de user.id directo: si un admin está
       // "actuando como" otro usuario, "tu respuesta" debe reflejar el
@@ -236,6 +242,7 @@ export default async function Home() {
                 <AttendanceSummary
                   attendees={attendeesJuntada}
                   totalPeople={totalPeople}
+                  guestCount={guestCountJuntada}
                 />
 
                 <div className="mt-4">
@@ -259,6 +266,7 @@ export default async function Home() {
                     <AttendanceSummary
                       attendees={attendeesFutbol}
                       totalPeople={totalPeople}
+                      guestCount={guestCountFutbol}
                     />
                     <div className="mt-1.5">
                       <RsvpButtons

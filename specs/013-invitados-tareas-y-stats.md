@@ -157,7 +157,14 @@ Puntos que el SQL no explica por sí solo:
    suma `guestCount` al numerador real (`counts.yes + guestCount`), no
    solo como sufijo de texto — así la barra y el "N de M confirmaron
    (%)" reflejan a los invitados, no solo el detalle debajo del
-   `<details>`.
+   `<details>`. El mismo criterio se aplica en los otros dos lugares
+   que resumen asistencia: la card de cada evento en `/eventos`
+   (`futbolCounts.yes`/`counts.yes` en `page.tsx`, sumando
+   `event_guests` por `event_id` + `kind`) y "Evento en curso" en la
+   landing (`/`, pasando `guestCount` a `AttendanceSummary`) — antes
+   solo se había arreglado en `/eventos/[eventId]`, dejando esos dos
+   resúmenes desactualizados (feedback del usuario con captura de
+   pantalla).
 1.1. Los invitados al fútbol también son elegibles para "Armar
    equipos" (no para MVP/goleador, que son individuales y no tiene
    sentido para alguien sin cuenta): `futbolTeamCandidates` en
