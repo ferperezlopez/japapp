@@ -7,7 +7,7 @@ export function ShareButton() {
 
   const handleShare = async () => {
     const url = window.location.origin;
-    const shareData = { title: "JAPapp", text: "Sumate a JAPapp", url };
+    const shareData = { title: "JAPApp", text: "Sumate a JAPApp", url };
 
     if (navigator.share) {
       try {
@@ -27,8 +27,8 @@ export function ShareButton() {
     <button
       onClick={handleShare}
       className="rounded-full p-2 text-foreground/50 transition-colors duration-200 hover:bg-surface hover:text-foreground"
-      title={copied ? "¡Copiado!" : "Compartir JAPapp"}
-      aria-label="Compartir JAPapp"
+      title={copied ? "¡Copiado!" : "Compartir JAPApp"}
+      aria-label="Compartir JAPApp"
     >
       <svg
         viewBox="0 0 24 24"

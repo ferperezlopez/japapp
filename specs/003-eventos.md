@@ -191,7 +191,7 @@ Puntos que el SQL no explica por sí solo:
 
 | Decisión | Alternativa descartada | Por qué |
 |---|---|---|
-| Eventos visibles a cualquier usuario logueado, no scopeados a un grupo | Requerir pertenecer a un `group` para ver/crear eventos | Se asume que cualquiera con cuenta en JAPapp es del mismo grupo de amigos (acceso ya está cerrado por invitación a la app); scopear a grupos de gastos agregaría fricción sin beneficio real hoy. |
+| Eventos visibles a cualquier usuario logueado, no scopeados a un grupo | Requerir pertenecer a un `group` para ver/crear eventos | Se asume que cualquiera con cuenta en JAPApp es del mismo grupo de amigos (acceso ya está cerrado por invitación a la app); scopear a grupos de gastos agregaría fricción sin beneficio real hoy. |
 | `group_id` nullable agregado ya en esta migración, sin UI que lo use | Agregar la columna recién cuando se construya estadísticas | Evita una migración de schema futura solo para agregar un FK; el costo de tenerla ociosa es mínimo (una columna nullable). |
 | RSVP como upsert sin historial de cambios | Tabla de historial de respuestas | Solo importa el estado actual para contar gente; historizar respuestas no tiene caso de uso pedido. |
 | Edición de evento agregada reusando la policy RLS de `update` que ya existía sin usarse desde `0002` | Requerir borrar y recrear el evento para corregir un dato | Pedido explícito del usuario; la policy de autorización ya estaba lista, solo faltaba la action y la UI. |

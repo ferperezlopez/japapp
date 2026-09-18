@@ -49,7 +49,7 @@ export async function addMemberByEmail(groupId: string, formData: FormData) {
   if (!profile) {
     return {
       error:
-        "Esa persona todavía no inició sesión en JAPapp con Google. Pedile que entre una vez y volvé a intentar.",
+        "Esa persona todavía no inició sesión en JAPApp con Google. Pedile que entre una vez y volvé a intentar.",
     };
   }
 

@@ -27,7 +27,7 @@ const fredoka = Fredoka({
 });
 
 export const metadata: Metadata = {
-  title: "JAPapp",
+  title: "JAPApp",
   description: "Asado, empanadas y gastos compartidos entre amigos.",
 };
 
@@ -58,21 +58,23 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
-        {impersonationTarget && (
-          <ImpersonationBanner
-            targetName={impersonationTarget.name ?? impersonationTarget.email}
-          />
-        )}
         <NavigationProgress />
-        <Header
-          user={user}
-          profile={
-            profile
-              ? { name: profile.name, avatarUrl: profile.avatar_url }
-              : null
-          }
-          isAdmin={profile?.is_admin ?? false}
-        />
+        <div className="sticky top-0 z-40 bg-background">
+          {impersonationTarget && (
+            <ImpersonationBanner
+              targetName={impersonationTarget.name ?? impersonationTarget.email}
+            />
+          )}
+          <Header
+            user={user}
+            profile={
+              profile
+                ? { name: profile.name, avatarUrl: profile.avatar_url }
+                : null
+            }
+            isAdmin={profile?.is_admin ?? false}
+          />
+        </div>
         <div className="flex flex-1 flex-col">{children}</div>
       </body>
     </html>

@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "JAPapp",
-    short_name: "JAPapp",
+    name: "JAPApp",
+    short_name: "JAPApp",
     description: "Asado, empanadas y gastos compartidos entre amigos.",
     start_url: "/",
     display: "standalone",

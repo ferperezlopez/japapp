@@ -95,6 +95,15 @@ base (ver sección 7).
 - `public.prune_push_subscription(p_endpoint text)`: mismo criterio,
   para poder borrar una suscripción ajena que quedó inválida al
   intentar enviarle un push.
+- `public.get_push_subscriber_ids()` (`0029_admin_list_push_subscribers.sql`):
+  a diferencia de las dos funciones de arriba (pensadas solo para
+  *enviar*, sin exponer más de lo necesario), esta expone directamente
+  "qué usuarios activaron notificaciones" — información sobre
+  terceros, no solo un medio para contactarlos — así que valida
+  `is_admin(auth.uid())` **adentro de la función** en vez de confiar en
+  que el caller ya se filtró en la UI (`select ... where
+  is_admin(auth.uid())`: si no es admin, devuelve 0 filas en vez de
+  error).
 
 ## 4. Diseño / flujo
 
@@ -148,10 +157,18 @@ base (ver sección 7).
    compartido — mismo criterio que el resto del repo, cada
    `actions.ts` repite su propio chequeo) — si no es admin, muestra un
    mensaje en vez del formulario. Trae la lista de `profiles`
-   (`id, name, email`) para el selector de miembros.
-2. `<AdminCommsForm>` (client component): título + mensaje + link
+   (`id, name, email`) y, vía `get_push_subscriber_ids`, el set de
+   `user_id` con al menos una suscripción activa.
+2. Antes del formulario, una tarjeta "Quién recibe notificaciones"
+   lista a todos los miembros con "🔔 Activadas"/"🔕 No activadas" y un
+   contador "N de M miembros activaron las notificaciones" — pedido
+   explícito para saber de antemano a quién le va a llegar algo antes
+   de mandarlo.
+3. `<AdminCommsForm>` (client component): título + mensaje + link
    opcional + radio "Todos los miembros" / "Elegir miembros" (con
-   checkboxes que solo se muestran en ese segundo caso).
+   checkboxes que solo se muestran en ese segundo caso; cada fila
+   marca "sin notificaciones" si esa persona no está suscripta, para
+   no elegir a ciegas a alguien a quien no le va a llegar nada).
 3. Al enviar, `sendAdminPush` (`src/app/comunicaciones/actions.ts`)
    revalida `is_admin` en el servidor, resuelve la lista de
    `targetIds` (todos los `profiles.id`, o los ids marcados) y llama
@@ -187,6 +204,10 @@ base (ver sección 7).
       miembros" con 2 de 5 marcados solo le llega a esos 2.
 - [x] El formulario muestra cuántos miembros y cuántos dispositivos
       suscriptos recibieron el intento de envío después de mandar.
+- [x] `/comunicaciones` muestra, para cada miembro, si tiene las
+      notificaciones activadas o no, con un contador "N de M"; esa
+      misma info se ve junto a cada checkbox del selector de
+      destinatarios.
 
 ## 6. Decisiones y tradeoffs
 
@@ -223,6 +244,13 @@ sección 4):
 
 ## 8. Changelog
 
+- 2026-09-18: `/comunicaciones` suma una tarjeta "Quién recibe
+  notificaciones" (lista de miembros con 🔔/🔕 + contador) y anota cada
+  checkbox del selector de destinatarios con "sin notificaciones" si
+  esa persona no está suscripta — pedido explícito del usuario. Nueva
+  función `get_push_subscriber_ids` (`0029`) porque el `select` directo
+  contra `push_subscriptions` solo devolvía la propia fila del admin
+  por RLS.
 - 2026-09-18: sumada la sección `/comunicaciones` (solo admin) para
   mandar push a demanda a todos los miembros o a un subconjunto
   elegido, a pedido explícito del usuario tras la primera entrega.

@@ -8,13 +8,13 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "JAPapp", body: event.data.text() };
+    payload = { title: "JAPApp", body: event.data.text() };
   }
 
   const { title, body, url } = payload;
 
   event.waitUntil(
-    self.registration.showNotification(title || "JAPapp", {
+    self.registration.showNotification(title || "JAPApp", {
       body,
       icon: "/icon-192.png",
       badge: "/icon-192.png",

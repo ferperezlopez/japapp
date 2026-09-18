@@ -12,7 +12,7 @@
 Como usuario, quiero que toda la app se sienta como una sola cosa (no un
 detalle de evento con estilo nuevo y el resto sin tocar), tener una pantalla
 de inicio que liste las funcionalidades pensada para el celular, y poder
-"instalar" JAPapp en la pantalla de inicio de mi teléfono como si fuera una
+"instalar" JAPApp en la pantalla de inicio de mi teléfono como si fuera una
 app nativa.
 
 `specs/004-eventos-gastos-y-fotos.md` había aplicado a propósito la paleta
@@ -141,6 +141,20 @@ de Next.js (no van en `supabase/migrations/`):
 
 ## 8. Changelog
 
+- 2026-09-18: nombre de marca corregido de "JAPapp" a "JAPApp" en todo
+  el texto visible de la app (`<title>`, manifest, About, compartir,
+  notificaciones push, avisos de nuevo miembro) — pedido explícito del
+  usuario. El logo del `Header` (`JAP` + `App` en dos `<span>`) ya
+  renderizaba la casing correcta, no necesitó cambios.
+- 2026-09-18: `Header` (con `SectionsMenu`, el logo y los accesos de
+  perfil/salir) pasa a quedar fijo arriba al scrollear páginas largas
+  — pedido explícito del usuario, antes desaparecía como cualquier
+  contenido normal. En `layout.tsx`, `Header` y `ImpersonationBanner`
+  ahora comparten un mismo wrapper `sticky top-0 z-40` (antes cada uno
+  tenía su propia clase sticky por separado, lo que los hacía competir
+  por la misma posición al scrollear en vez de pegarse juntos como una
+  sola franja) — `ImpersonationBanner` perdió sus clases `sticky`/`z-*`
+  propias, ahora las hereda del wrapper.
 - 2026-09-18: `BottomNav` (barra fija inferior con 4 accesos) se
   reemplazó por `SectionsMenu`, un ícono de hamburguesa en el `Header`
   que despliega un modal con las 5 secciones (se sumó "Miembros", que

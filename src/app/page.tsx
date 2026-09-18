@@ -202,11 +202,11 @@ export default async function Home() {
         )}
         <div className="animate-reveal relative mx-auto w-full max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
-            {user ? "Bienvenido de vuelta" : "JAPapp"}
+            {user ? "Bienvenido de vuelta" : "JAPApp"}
           </p>
           <h1 className="mt-1 font-heading text-4xl font-semibold text-foreground">
             Hola{user ? "" : ", bienvenido a "}
-            {!user && <span className="text-brand">JAPapp</span>}
+            {!user && <span className="text-brand">JAPApp</span>}
           </h1>
           <p className="mt-3 max-w-md text-sm text-foreground/60">
             Organizá juntadas, calculá cantidades de asado y empanadas, y
@@ -220,7 +220,7 @@ export default async function Home() {
           <div className="mt-2 flex flex-col gap-3">
             {recentMembers.length > 0 && (
               <Card className="animate-reveal p-4 text-sm">
-                🎉 Se sumó{recentMembers.length > 1 ? "n" : ""} a JAPapp:{" "}
+                🎉 Se sumó{recentMembers.length > 1 ? "n" : ""} a JAPApp:{" "}
                 {recentMembers.map((m) => m.name ?? m.email).join(", ")}
               </Card>
             )}
