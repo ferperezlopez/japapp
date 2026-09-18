@@ -66,11 +66,16 @@ export async function GET(request: Request) {
 
     if (debtorIds.length === 0) continue;
 
-    await sendPushToUsers(supabase, debtorIds, {
-      title: "💸 No te hagas el distraído…",
-      body: `Todavía tenés cuentas pendientes de ${event.name}. Entrá y dejá todo saldado. 👀`,
-      url: `/gastos/${groupId}`,
-    });
+    await sendPushToUsers(
+      supabase,
+      debtorIds,
+      {
+        title: "💸 No te hagas el distraído…",
+        body: `Todavía tenés cuentas pendientes de ${event.name}. Entrá y dejá todo saldado. 👀`,
+        url: `/gastos/${groupId}`,
+      },
+      { kind: "saldo_pendiente" },
+    );
 
     await supabase
       .from("balance_reminders_sent")

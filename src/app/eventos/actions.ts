@@ -33,11 +33,16 @@ async function notifyTaskAssigned(
   const assignerName = assignerProfile?.name ?? assignerProfile?.email ?? "Alguien";
   const taskLabel = TASK_TYPE_LABELS[taskType] ?? taskType;
 
-  await sendPushToUsers(supabase, [assignedTo], {
-    title: "📋 Te tocó laburar",
-    body: `${assignerName} te asignó: ${taskLabel} para ${eventName}.`,
-    url: `/eventos/${eventId}`,
-  });
+  await sendPushToUsers(
+    supabase,
+    [assignedTo],
+    {
+      title: "📋 Te tocó laburar",
+      body: `${assignerName} te asignó: ${taskLabel} para ${eventName}.`,
+      url: `/eventos/${eventId}`,
+    },
+    { kind: "tarea_asignada" },
+  );
 }
 
 // "venue" viene del <select> de lugares predefinidos; "__new__" indica que
@@ -129,6 +134,7 @@ export async function createEvent(formData: FormData) {
         body: `${creatorName} armó ${name}. Entrá a ver de qué se trata.`,
         url: `/eventos/${event.id}`,
       },
+      { kind: "evento_nuevo" },
     );
   }
 
@@ -629,6 +635,7 @@ export async function saveFutbolTeams(
             body: `Hubo cambios en los equipos de ${eventName}. Revisá dónde jugás.`,
             url: `/eventos/${eventId}`,
           },
+      { kind: isFirstSave ? "equipos_armados" : "equipos_modificados" },
     );
   }
 

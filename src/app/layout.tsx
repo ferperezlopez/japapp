@@ -6,6 +6,7 @@ import { NavigationProgress } from "@/components/NavigationProgress";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { createClient } from "@/lib/supabase/server";
 import { getImpersonationTarget } from "@/lib/supabase/actingUser";
+import { getMyUnreadNotificationCount } from "@/app/actions/notifications";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,6 +52,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     : { data: null };
 
   const impersonationTarget = user ? await getImpersonationTarget(supabase) : null;
+  const unreadCount = user ? await getMyUnreadNotificationCount() : 0;
 
   return (
     <html
@@ -73,6 +75,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 : null
             }
             isAdmin={profile?.is_admin ?? false}
+            unreadCount={unreadCount}
           />
         </div>
         <div className="flex flex-1 flex-col">{children}</div>

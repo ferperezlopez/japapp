@@ -12,8 +12,31 @@ if (vapidPublicKey && vapidPrivateKey && vapidSubject) {
 
 export type PushPayload = { title: string; body: string; url?: string };
 
+// Categoriza cada envío para el log de /comunicaciones (specs/018): cada
+// disparador de la app tiene su propio kind, salvo el envío manual desde
+// /comunicaciones que además lleva `sentBy` (el admin que lo compuso).
+// El resto queda "automático" — no se threadea el usuario actor de cada
+// disparador (ver specs/018) porque lo pedido es distinguir cron/evento
+// de manual, no "qué usuario lo causó".
+export type NotificationKind =
+  | "evento_nuevo"
+  | "quorum_futbol"
+  | "quorum_juntada"
+  | "equipos_armados"
+  | "equipos_modificados"
+  | "gasto_nuevo"
+  | "tarea_asignada"
+  | "saldo_pendiente"
+  | "comunicacion_manual";
+
+export type NotificationMeta = { kind: NotificationKind; sentBy?: string };
+
 // Dispara un push a cada suscripción (puede haber varias por persona, una
-// por dispositivo) de cada userId dado. Nunca lanza si un envío puntual
+// por dispositivo) de cada userId dado, y deja un registro de todo envío
+// (notification_sends/notification_recipients) para el log de admin y la
+// campanita in-app — independiente de si el push del navegador
+// efectivamente llega a algún dispositivo (por eso se loguea ANTES de
+// tocar VAPID/suscripciones). Nunca lanza si un envío puntual del push
 // falla — un dispositivo puede tener la suscripción vencida sin que el
 // usuario haya tocado "desactivar" — así que la acción que dispara esto
 // (crear un evento, etc.) no debe fallar por un push roto. Si el push
@@ -27,9 +50,28 @@ export async function sendPushToUsers(
   supabase: SupabaseClient<Database>,
   userIds: string[],
   payload: PushPayload,
+  meta: NotificationMeta,
 ): Promise<{ subscriptionCount: number }> {
-  if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) return { subscriptionCount: 0 };
   if (userIds.length === 0) return { subscriptionCount: 0 };
+
+  const { data: send } = await supabase
+    .from("notification_sends")
+    .insert({
+      kind: meta.kind,
+      sent_by: meta.sentBy ?? null,
+      title: payload.title,
+      body: payload.body,
+      url: payload.url ?? null,
+    })
+    .select("id")
+    .single();
+  if (send) {
+    await supabase
+      .from("notification_recipients")
+      .insert(userIds.map((userId) => ({ send_id: send.id, user_id: userId })));
+  }
+
+  if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) return { subscriptionCount: 0 };
 
   const { data: subscriptions } = await supabase.rpc("get_push_subscriptions_for_users", {
     p_user_ids: userIds,
