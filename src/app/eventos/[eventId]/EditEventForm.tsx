@@ -6,6 +6,21 @@ import { Button } from "@/components/ui/Button";
 import { EventFormFields, NEW_VENUE_VALUE } from "../EventFormFields";
 import { withMinDuration } from "@/lib/withMinDuration";
 
+function PencilIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+    </svg>
+  );
+}
+
 interface EventDefaults {
   name: string;
   eventDateLocal: string;
@@ -38,9 +53,11 @@ export function EditEventForm({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="mt-3 text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
+          aria-label="Editar evento"
+          title="Editar evento"
+          className="mt-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground/50 transition-colors duration-200 hover:bg-surface hover:text-eventos"
         >
-          Editar evento
+          <PencilIcon />
         </button>
       </div>
     );

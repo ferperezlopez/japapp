@@ -216,6 +216,14 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-18: el botón "Editar evento" pasó de texto plano a un ícono
+  de lápiz (con `aria-label`/`title` para seguir siendo accesible),
+  pedido explícito del usuario ("es un standard"). En el mismo cuadro
+  se sacó el botón "✏️ Editar lugar" (ver changelog de
+  `specs/007-lugares-de-evento.md`) y el botón de compartir por
+  WhatsApp pasó a verde siempre, en vez de outline neutro — se extrajo
+  `WhatsAppShareButton` (`src/components/WhatsAppShareButton.tsx`) como
+  componente compartido con el de las calculadoras, que ya era verde.
 - 2026-09-17: fix de feedback sobre el rediseño anterior — el número
   de cada `StatItem` pasó de `text-lg font-bold` a `text-base
   font-medium` (mismo tamaño/peso que el nombre del evento en la

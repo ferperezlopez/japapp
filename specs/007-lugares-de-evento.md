@@ -35,12 +35,13 @@ muestra.
   Maps hacia esa dirección directamente en el dispositivo de quien lo
   toca (no un mapa para mirar, dispara la navegación). Fecha, hora y
   lugar tienen cada uno su propio icono (calendario/reloj/pin).
-- Editar un lugar ya guardado: desde "✏️ Editar lugar" en la página del
-  evento, cualquier logueado puede cambiar el nombre, la dirección y de
-  quién es la casa de un lugar existente (no hace falta haber sido
-  quien lo cargó). Si el nombre cambia, todos los eventos que ya
-  usaban ese nombre se actualizan solos para seguir apuntando al mismo
-  lugar (ver sección 3).
+- ~~Editar un lugar ya guardado desde un botón "✏️ Editar lugar" en la
+  página del evento~~ — sacado (ver changelog 2026-09-18): quedó
+  redundante con poder elegir qué `venue` usa un evento al editarlo
+  (`<EditEventForm>`), y era la única forma de tocar nombre/dirección/
+  dueño de un `venue` ya guardado. Si hace falta corregir esos datos
+  hoy, se hace directo en la base — necesidad rarísima en un grupo de
+  amigos cerrado, no justifica mantener la UI.
 
 ### No incluye (por ahora)
 
@@ -84,17 +85,15 @@ Puntos que el SQL no explica por sí solo:
   formato: es la dirección tal cual la tipeó quien creó el lugar, y
   Google Maps la resuelve como texto libre al armar el link de
   navegación (sin necesitar coordenadas).
-- `0022_venues_update_policy.sql` suma la policy de `update` que
-  faltaba: `using (true) with check (true)`, mismo criterio de
-  confianza total que `event_tasks`/`futbol_stats` — cualquier logueado
-  puede editar cualquier lugar, no solo quien lo creó. Sigue sin haber
-  policy de `delete` (no se puede borrar un lugar, solo editarlo).
-- `events.location` es una copia de texto, no una FK: si `updateVenue`
-  cambia `venues.name`, la action también corre
-  `update events set location = <nombre nuevo> where location = <nombre
-  viejo>` en la misma llamada, para que los eventos que ya usaban el
-  nombre viejo sigan resolviendo el mismo `venue` (dirección, dueño) en
-  vez de quedar "huérfanos" por el cambio de nombre.
+- `0022_venues_update_policy.sql` sumó en su momento la policy de
+  `update` (`using (true) with check (true)`) para la action
+  `updateVenue`, que se sacó junto con la UI (ver changelog
+  2026-09-18) — la policy queda en la base sin usarse desde código,
+  no se revirtió por ser aditiva y sin costo. Sigue sin haber policy
+  de `delete` (no se puede borrar un lugar).
+- `events.location` es una copia de texto, no una FK — dato que sigue
+  siendo relevante si en el futuro se agrega otra forma de renombrar un
+  `venue`, para no dejar eventos "huérfanos" por el cambio de nombre.
 
 ## 4. Diseño / flujo
 
@@ -150,21 +149,6 @@ En el celular de quien toca "Cómo llegar", cualquiera de los dos casos
 abre la app de mapas instalada (deep link nativo de `google.com/maps`
 y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 
-**Editar un lugar existente:**
-1. En `/eventos/[eventId]`, si el `venue` del evento se resuelve
-   (`eventVenue`), aparece un link "✏️ Editar lugar" debajo de la fecha/
-   lugar, visible para cualquier logueado (no solo el creador del
-   evento ni de quien cargó el lugar).
-2. `<EditVenueForm>` (mismo patrón de "abrir para revelar un form" que
-   `<EditEventForm>`) muestra nombre, dirección y "¿de quién es la
-   casa?" precargados; al guardar llama a `updateVenue(venueId,
-   formData)`.
-3. `updateVenue` actualiza `venues` (`name`, `address`, `host_user_id`)
-   y, si el nombre cambió, además corre `update events set location =
-   <nombre nuevo> where location = <nombre viejo>` para que ningún
-   evento existente quede sin poder resolver su `venue` por el cambio
-   de nombre (ver sección 3).
-
 **Día de la semana:**
 1. El input `datetime-local` del formulario de alta pasa a ser controlado
    (`value`/`onChange` con `useState`), solo para poder leer su valor y
@@ -195,11 +179,9 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 - [x] Si el lugar del evento tiene dirección cargada, la página del
       evento muestra "🧭 Cómo llegar" con el link de navegación de
       Google Maps hacia esa dirección; si no tiene, no aparece nada.
-- [x] Cualquier logueado puede editar nombre/dirección/dueño de un lugar
-      ya guardado desde "✏️ Editar lugar" en la página del evento.
-- [x] Cambiar el nombre de un lugar actualiza `events.location` en todos
-      los eventos que ya usaban el nombre viejo, sin dejar ninguno sin
-      poder resolver su dirección/dueño.
+- [x] ~~Cualquier logueado puede editar nombre/dirección/dueño de un
+      lugar ya guardado desde "✏️ Editar lugar"~~ — sacado, ver
+      changelog 2026-09-18.
 
 ## 6. Decisiones y tradeoffs
 
@@ -254,4 +236,9 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
   nuevo), con mapa Leaflet + OpenStreetMap y link "Ver en el mapa" en
   el evento. Primera librería de UI externa del repo — revertido más
   tarde el mismo día (ver entrada de arriba).
+- 2026-09-18: sacado el botón "✏️ Editar lugar" (y `<EditVenueForm>`/
+  `updateVenue`) de la página del evento — quedó redundante con poder
+  elegir qué `venue` usa un evento al editarlo (`<EditEventForm>`), y
+  era la única forma de editar nombre/dirección/dueño de un `venue`
+  ya guardado en la app.
 - 2026-09-14: creada e implementada.

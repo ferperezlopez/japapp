@@ -140,15 +140,23 @@ Puntos que el SQL no explica por sí solo:
    de estar en `guestsFutbol`, para no hacerlo desaparecer
    silenciosamente del equipo ya armado.
 3. `<FutbolTeamsSection>` (mismo criterio visual que `FutbolStatsForm`:
-   resumen de solo lectura + botón para editar) muestra "Todavía no se
-   armaron los equipos" o, si ya hay datos guardados, los dos equipos
-   agrupados en tres mini-listas ("Arquero", "Defensores",
-   "Delanteros") con chips de avatar + nombre — sin camisetas acá, el
-   resumen sigue siendo liviano.
-4. El botón "⚽ Armar equipos" / "Editar equipos" abre
-   `<TeamBuilderModal>`, que arranca precargado con el último estado
-   guardado (o todos los candidatos en "Sin asignar" si no hay nada
-   guardado todavía).
+   resumen de solo lectura + botón para editar): si todavía no hay
+   equipos guardados, muestra "Todavía no se armaron los equipos" +
+   "⚽ Armar equipos". Si ya hay datos guardados, en vez de mostrar
+   siempre expandido el detalle (ocupaba mucho alto de scroll en la
+   página del evento — feedback del usuario con una captura), muestra
+   solo dos botones, "👀 Ver equipos" y "Editar equipos".
+   "Ver equipos" abre un modal de solo lectura (`ViewTeamsModal`,
+   mismo shell que `ImageZoomModal`: overlay, cierre con Escape/click
+   afuera, bloqueo de scroll del body) con los dos equipos agrupados
+   en tres mini-listas ("Arquero", "Defensores", "Delanteros") y chips
+   de avatar + nombre — sin camisetas acá, el resumen sigue siendo
+   liviano — y un botón "Editar equipos" adentro para no perder ese
+   flujo desde la vista.
+4. El botón "Editar equipos" (desde la sección o desde dentro del
+   modal de vista) abre `<TeamBuilderModal>`, que arranca precargado
+   con el último estado guardado (o todos los candidatos en "Sin
+   asignar" si no hay nada guardado todavía).
 5. Dentro del modal, el estado de cada jugador (`unassigned`, equipo 1
    o 2 + posición) vive en un mapa por `id` (genérico, de miembro o de
    invitado — ver Modelo de datos), no en arrays separados — evita
@@ -222,6 +230,10 @@ Puntos que el SQL no explica por sí solo:
 - [x] Un invitado al fútbol aparece en el pool de "Armar equipos" y se
       lo puede mover a un equipo/posición igual que a un miembro;
       guardar y recargar persiste su asignación.
+- [x] Con equipos ya guardados, la página del evento no muestra el
+      detalle expandido por default — solo "👀 Ver equipos" y "Editar
+      equipos"; tocar "Ver equipos" abre el detalle en un modal, que
+      se cierra con Escape/click afuera/la X.
 - [x] Un invitado NO aparece como candidato a MVP/goleador.
 
 ## 6. Decisiones y tradeoffs
@@ -252,6 +264,13 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-18: con equipos ya armados, `<FutbolTeamsSection>` dejó de
+  mostrar siempre expandido el detalle completo en la página del
+  evento — feedback del usuario con captura mostrando que el bloque
+  ocupaba mucho alto de scroll antes de llegar a "Fotos". Ahora
+  muestra solo "👀 Ver equipos" (abre un modal de solo lectura,
+  `ViewTeamsModal`) y "Editar equipos" (abre `TeamBuilderModal`, sin
+  cambios).
 - 2026-09-17: las franjas de posición (arquero/defensores/delanteros)
   dentro de cada equipo pasan de estar apiladas a ir en columnas lado a
   lado, y el modal se ensancha de `max-w-sm` a `max-w-xl` — feedback
