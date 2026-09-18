@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sendPushToUsers } from "@/lib/push/send";
 
 export async function createGroup(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
@@ -147,6 +148,24 @@ export async function addExpense(groupId: string, formData: FormData) {
   if (sharesError) return { error: sharesError.message };
 
   revalidatePath(`/gastos/${groupId}`);
+
+  // "Resto de los miembros involucrados en ese gasto, excepto quien lo
+  // cargó" (no necesariamente quien pagó — puede ser distinto).
+  const notifyIds = participantIds.filter((id) => id !== user.id);
+  if (notifyIds.length > 0) {
+    const { data: loaderProfile } = await supabase
+      .from("profiles")
+      .select("name, email")
+      .eq("id", user.id)
+      .maybeSingle();
+    const loaderName = loaderProfile?.name ?? loaderProfile?.email ?? "Alguien";
+    await sendPushToUsers(supabase, notifyIds, {
+      title: "💸 Se cargó un nuevo gasto",
+      body: `${loaderName} cargó ${description} por $${amount.toFixed(2)}.`,
+      url: `/gastos/${groupId}`,
+    });
+  }
+
   return { ok: true };
 }
 

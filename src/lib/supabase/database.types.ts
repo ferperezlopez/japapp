@@ -52,6 +52,24 @@ export interface Database {
         };
         Relationships: [];
       };
+      balance_reminders_sent: {
+        Row: {
+          event_id: string;
+          user_id: string;
+          sent_at: string;
+        };
+        Insert: {
+          event_id: string;
+          user_id: string;
+          sent_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          user_id?: string;
+          sent_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;
@@ -253,6 +271,8 @@ export interface Database {
           created_by: string;
           created_at: string;
           has_futbol: boolean;
+          futbol_quorum_notified: boolean;
+          juntada_quorum_notified: boolean;
         };
         Insert: {
           id?: string;
@@ -264,6 +284,8 @@ export interface Database {
           created_by: string;
           created_at?: string;
           has_futbol?: boolean;
+          futbol_quorum_notified?: boolean;
+          juntada_quorum_notified?: boolean;
         };
         Update: {
           id?: string;
@@ -275,6 +297,8 @@ export interface Database {
           created_by?: string;
           created_at?: string;
           has_futbol?: boolean;
+          futbol_quorum_notified?: boolean;
+          juntada_quorum_notified?: boolean;
         };
         Relationships: [
           {

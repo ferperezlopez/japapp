@@ -4,8 +4,41 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActingUser } from "@/lib/supabase/actingUser";
 import { sendPushToUsers } from "@/lib/push/send";
+import { maybeNotifyQuorum } from "@/lib/push/quorum";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
+
+const TASK_TYPE_LABELS: Record<string, string> = {
+  compra_insumos: "Compra de insumos",
+  lavado_platos: "Lavado de platos",
+  orden_sede: "Orden de la sede",
+  reserva_cancha: "Reserva de cancha",
+};
+
+// Compartido por addTaskAssignee y setReservaCanchaAssignee: notifica
+// únicamente a quien recibe la tarea (nunca a quien se la asigna a sí
+// mismo, eso ya se filtra en el caller).
+async function notifyTaskAssigned(
+  supabase: SupabaseClient<Database>,
+  eventId: string,
+  taskType: string,
+  assignedTo: string,
+  assignedBy: string,
+) {
+  const [{ data: event }, { data: assignerProfile }] = await Promise.all([
+    supabase.from("events").select("name").eq("id", eventId).maybeSingle(),
+    supabase.from("profiles").select("name, email").eq("id", assignedBy).maybeSingle(),
+  ]);
+  const eventName = event?.name ?? "el evento";
+  const assignerName = assignerProfile?.name ?? assignerProfile?.email ?? "Alguien";
+  const taskLabel = TASK_TYPE_LABELS[taskType] ?? taskType;
+
+  await sendPushToUsers(supabase, [assignedTo], {
+    title: "📋 Te tocó laburar",
+    body: `${assignerName} te asignó: ${taskLabel} para ${eventName}.`,
+    url: `/eventos/${eventId}`,
+  });
+}
 
 // "venue" viene del <select> de lugares predefinidos; "__new__" indica que
 // se tipeó un lugar nuevo en newVenueName, que además se guarda en
@@ -82,10 +115,20 @@ export async function createEvent(formData: FormData) {
     .select("id")
     .neq("id", user.id);
   if (otherProfiles && otherProfiles.length > 0) {
+    const { data: creatorProfile } = await supabase
+      .from("profiles")
+      .select("name, email")
+      .eq("id", user.id)
+      .maybeSingle();
+    const creatorName = creatorProfile?.name ?? creatorProfile?.email ?? "Alguien";
     await sendPushToUsers(
       supabase,
       otherProfiles.map((p) => p.id),
-      { title: "Nuevo evento", body: name, url: `/eventos/${event.id}` },
+      {
+        title: "🍻 ¡Hay nueva JAPA!",
+        body: `${creatorName} armó ${name}. Entrá a ver de qué se trata.`,
+        url: `/eventos/${event.id}`,
+      },
     );
   }
 
@@ -160,6 +203,9 @@ export async function setRsvp(
   revalidatePath(`/eventos/${eventId}`);
   revalidatePath("/eventos");
   revalidatePath("/");
+
+  if (status === "yes") await maybeNotifyQuorum(supabase, eventId, kind);
+
   return { ok: true };
 }
 
@@ -328,6 +374,9 @@ export async function addGuestToEvent(
   if (error) return { error: error.message };
 
   revalidatePath(`/eventos/${eventId}`);
+
+  await maybeNotifyQuorum(supabase, eventId, kind);
+
   return { ok: true };
 }
 
@@ -411,6 +460,12 @@ export async function addTaskAssignee(
       updated_by: user.id,
     });
     if (error) return { error: error.message };
+
+    // Solo en la asignación nueva (no en un duplicado ignorado arriba),
+    // y nunca si alguien se asigna una tarea a sí mismo.
+    if (userId !== user.id) {
+      await notifyTaskAssigned(supabase, eventId, taskType, userId, user.id);
+    }
   }
 
   revalidatePath(`/eventos/${eventId}`);
@@ -484,6 +539,10 @@ export async function setReservaCanchaAssignee(
       updated_by: user.id,
     });
     if (error) return { error: error.message };
+
+    if (userId !== user.id) {
+      await notifyTaskAssigned(supabase, eventId, "reserva_cancha", userId, user.id);
+    }
   }
 
   revalidatePath(`/eventos/${eventId}`);
@@ -513,6 +572,15 @@ export async function saveFutbolTeams(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  // Se chequea antes de borrar (no después de insertar) para distinguir
+  // "primera vez que se arman" de "ya había equipos guardados" — el
+  // insert de abajo no lo puede decir por sí solo.
+  const { count: previousCount } = await supabase
+    .from("futbol_teams")
+    .select("*", { count: "exact", head: true })
+    .eq("event_id", eventId);
+  const isFirstSave = !previousCount;
+
   const { error: deleteError } = await supabase
     .from("futbol_teams")
     .delete()
@@ -534,6 +602,36 @@ export async function saveFutbolTeams(
   }
 
   revalidatePath(`/eventos/${eventId}`);
+
+  // Solo a jugadores con cuenta (los invitados no tienen suscripción
+  // push posible) que quedaron asignados a un equipo en esta guardada.
+  const assignedUserIds = assignments
+    .filter((a) => a.id.startsWith("u:"))
+    .map((a) => a.id.slice(2));
+  if (assignedUserIds.length > 0) {
+    const { data: event } = await supabase
+      .from("events")
+      .select("name")
+      .eq("id", eventId)
+      .maybeSingle();
+    const eventName = event?.name ?? "el evento";
+    await sendPushToUsers(
+      supabase,
+      assignedUserIds,
+      isFirstSave
+        ? {
+            title: "👕 ¡Equipos listos!",
+            body: `Ya están armados los equipos para ${eventName}. Mirá dónde te tocó.`,
+            url: `/eventos/${eventId}`,
+          }
+        : {
+            title: "🔄 Cambio de equipos",
+            body: `Hubo cambios en los equipos de ${eventName}. Revisá dónde jugás.`,
+            url: `/eventos/${eventId}`,
+          },
+    );
+  }
+
   return { ok: true };
 }
 
