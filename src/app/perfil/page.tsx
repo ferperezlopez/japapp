@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { EditAliasForm } from "./EditAliasForm";
 import { UploadAvatarForm } from "./UploadAvatarForm";
 import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
+import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import { calcularAsistencia } from "@/lib/eventos/attendance";
 
 export default async function PerfilPage() {
@@ -53,6 +54,13 @@ export default async function PerfilPage() {
 
       <div className="mt-6">
         <EditAliasForm defaultAlias={profile?.alias ?? ""} />
+      </div>
+
+      <div className="mt-6 rounded-xl border border-surface-border bg-surface p-5">
+        <p className="text-sm font-medium text-foreground">Notificaciones</p>
+        <div className="mt-2">
+          <PushNotificationToggle />
+        </div>
       </div>
 
       <AttendanceStatsCard attendance={attendance} />

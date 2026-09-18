@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActingUser } from "@/lib/supabase/actingUser";
+import { sendPushToUsers } from "@/lib/push/send";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -73,6 +74,21 @@ export async function createEvent(formData: FormData) {
   if (error || !event) return { error: error?.message ?? "No se pudo crear el evento." };
 
   revalidatePath("/eventos");
+
+  // Best-effort: un push que falla no debe tirar abajo la creación del
+  // evento (ver comentario de sendPushToUsers).
+  const { data: otherProfiles } = await supabase
+    .from("profiles")
+    .select("id")
+    .neq("id", user.id);
+  if (otherProfiles && otherProfiles.length > 0) {
+    await sendPushToUsers(
+      supabase,
+      otherProfiles.map((p) => p.id),
+      { title: "Nuevo evento", body: name, url: `/eventos/${event.id}` },
+    );
+  }
+
   return { eventId: event.id as string };
 }
 

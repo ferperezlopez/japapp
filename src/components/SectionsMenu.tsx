@@ -65,6 +65,25 @@ const ITEMS = [
   },
 ] as const;
 
+// Solo para admins — se agrega aparte del array de arriba (en vez de un
+// campo "adminOnly" por ítem) porque hoy es el único caso; si se suman
+// más secciones admin-only conviene generalizar recién ahí.
+const ADMIN_ITEM = {
+  href: "/comunicaciones",
+  label: "Comunicaciones",
+  colorClasses: "bg-amber-soft text-amber-ink",
+  icon: (
+    <>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 3.5c-.9 0-1.6.7-1.6 1.6v.7C7.9 6.4 6 8.9 6 11.8v3l-1.3 2c-.3.5.1 1.2.7 1.2h13.2c.6 0 1-.7.7-1.2l-1.3-2v-3c0-2.9-1.9-5.4-4.4-6v-.7c0-.9-.7-1.6-1.6-1.6Z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 19.5a2 2 0 0 0 4 0" />
+    </>
+  ),
+} as const;
+
 function HamburgerIcon() {
   return (
     <svg
@@ -83,9 +102,10 @@ function HamburgerIcon() {
 // Reemplaza la barra fija de abajo (BottomNav): con la lista de secciones
 // creciendo (se sumó Miembros y podrían sumarse más), un menú desplegable
 // escala mejor que ir agregando ítems a una franja siempre visible.
-export function SectionsMenu() {
+export function SectionsMenu({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const items = isAdmin ? [...ITEMS, ADMIN_ITEM] : ITEMS;
 
   useEffect(() => {
     if (!open) return;
@@ -140,7 +160,7 @@ export function SectionsMenu() {
               </button>
             </div>
             <div className="mt-1 space-y-0.5">
-              {ITEMS.map((item) => {
+              {items.map((item) => {
                 const active =
                   item.href === "/"
                     ? pathname === "/"

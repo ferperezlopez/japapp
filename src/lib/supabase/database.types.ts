@@ -11,8 +11,43 @@ export interface Database {
         Args: { candidate_name: string };
         Returns: { name: string }[];
       };
+      get_push_subscriptions_for_users: {
+        Args: { p_user_ids: string[] };
+        Returns: { user_id: string; endpoint: string; p256dh: string; auth: string }[];
+      };
+      prune_push_subscription: {
+        Args: { p_endpoint: string };
+        Returns: void;
+      };
     };
     Tables: {
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          endpoint?: string;
+          p256dh?: string;
+          auth?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;
