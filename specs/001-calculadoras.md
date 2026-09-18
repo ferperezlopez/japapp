@@ -82,7 +82,7 @@ planillas de Google Sheets originales del grupo.
 ## 8. Changelog
 
 - 2026-08-18: spec retroactiva creada, feature ya implementada en
-  commit `046bbf1` ("Scaffold JAPapp: calculadoras de asado/empanadas y
+  commit `046bbf1` ("Scaffold JAPApp: calculadoras de asado/empanadas y
   gastos compartidos").
 - 2026-08-18: fix de bug en producción — `asado/page.tsx` y
   `empanadas/page.tsx` eran Server Components pasando la función

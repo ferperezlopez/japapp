@@ -5,7 +5,7 @@ export default function AboutPage() {
         Nosotros
       </p>
       <h1 className="mt-1 font-heading text-3xl font-semibold text-foreground">
-        Sobre JAPapp
+        Sobre JAPApp
       </h1>
       <p className="mt-4 text-sm text-foreground/70">
         Acá va a ir la historia del grupo. Por ahora, este texto es un

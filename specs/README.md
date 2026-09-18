@@ -1,4 +1,4 @@
-# Specs de JAPapp
+# Specs de JAPApp
 
 Este directorio contiene una spec por feature, escrita ANTES de programarla
 (Spec Driven Development). La spec gobierna la implementación: si el código

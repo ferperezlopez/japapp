@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/Button";
 
 type Member = { id: string; name: string | null; email: string };
 
-export function AdminCommsForm({ members }: { members: Member[] }) {
+export function AdminCommsForm({
+  members,
+  subscribedIds,
+}: {
+  members: Member[];
+  subscribedIds: string[];
+}) {
+  const subscribed = new Set(subscribedIds);
   const [audience, setAudience] = useState<"all" | "selected">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
@@ -116,7 +123,10 @@ export function AdminCommsForm({ members }: { members: Member[] }) {
                   checked={selectedIds.has(member.id)}
                   onChange={() => toggleMember(member.id)}
                 />
-                {member.name ?? member.email}
+                <span className="flex-1">{member.name ?? member.email}</span>
+                {!subscribed.has(member.id) && (
+                  <span className="text-xs text-foreground/40">sin notificaciones</span>
+                )}
               </label>
             ))}
           </div>

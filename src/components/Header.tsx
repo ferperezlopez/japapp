@@ -30,8 +30,8 @@ export function Header({
           <Link
             href="/about"
             className="rounded-full p-2 text-foreground/50 transition-colors duration-200 hover:bg-surface hover:text-foreground"
-            aria-label="Sobre JAPapp"
-            title="Sobre JAPapp"
+            aria-label="Sobre JAPApp"
+            title="Sobre JAPApp"
           >
             <svg
               viewBox="0 0 24 24"

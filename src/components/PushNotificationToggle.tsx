@@ -109,7 +109,7 @@ export function PushNotificationToggle() {
   if (status === "denied") {
     return (
       <p className="text-sm text-foreground/50">
-        Bloqueaste las notificaciones de JAPapp. Para activarlas, habilitalas
+        Bloqueaste las notificaciones de JAPApp. Para activarlas, habilitalas
         desde la configuración del navegador.
       </p>
     );
@@ -119,7 +119,7 @@ export function PushNotificationToggle() {
     <div>
       <p className="text-sm text-foreground/60">
         {status === "subscribed"
-          ? "Recibís notificaciones de JAPapp en este dispositivo."
+          ? "Recibís notificaciones de JAPApp en este dispositivo."
           : "Activá las notificaciones para enterarte de eventos nuevos sin tener que abrir la app."}
       </p>
       <div className="mt-2">

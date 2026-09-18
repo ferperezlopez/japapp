@@ -19,6 +19,10 @@ export interface Database {
         Args: { p_endpoint: string };
         Returns: void;
       };
+      get_push_subscriber_ids: {
+        Args: Record<string, never>;
+        Returns: { user_id: string }[];
+      };
     };
     Tables: {
       push_subscriptions: {

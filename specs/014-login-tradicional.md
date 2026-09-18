@@ -21,7 +21,7 @@ igual que el resto.
 - Alta abierta: cualquiera con un email puede crear una cuenta, sin
   lista de invitados pre-aprobados.
 - Aviso dentro de la app cuando se suma alguien nuevo: en Inicio, una
-  tarjeta "🎉 Se sumó/sumaron a JAPapp: X" visible para el resto de los
+  tarjeta "🎉 Se sumó/sumaron a JAPApp: X" visible para el resto de los
   miembros durante los 7 días posteriores al alta.
 - Aviso al crear una cuenta (no bloqueante) si el nombre cargado se
   parece mucho a uno ya registrado — para el caso de alguien que ya es

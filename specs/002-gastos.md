@@ -23,7 +23,7 @@ transferencias posible.
 ### Incluye
 - Crear un grupo de gastos (el creador queda como miembro automáticamente).
 - Agregar miembros a un grupo por email, solo si esa persona ya inició
-  sesión al menos una vez en JAPapp (existe su `profiles` row).
+  sesión al menos una vez en JAPApp (existe su `profiles` row).
 - Cargar un gasto: descripción, monto, quién pagó, fecha, entre quiénes
   se divide. La descripción se carga con el mismo `<ItemPicker>`
   (`src/components/ItemPicker.tsx`) que "compra de insumos" en

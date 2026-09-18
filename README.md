@@ -1,4 +1,4 @@
-# JAPapp
+# JAPApp
 
 App privada para el grupo de amigos: eventos con confirmación de
 asistencia, calculadoras de asado y empanadas, y un módulo de gastos
