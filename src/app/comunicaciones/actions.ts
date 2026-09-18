@@ -41,8 +41,8 @@ export async function sendAdminPush(formData: FormData) {
   }
 
   const { subscriptionCount } = await sendPushToUsers(supabase, targetIds, {
-    title,
-    body,
+    title: `📣 ${title}`,
+    body: `"${body}"`,
     url: url || undefined,
   });
 
