@@ -54,6 +54,13 @@ export async function sendPushToUsers(
 ): Promise<{ subscriptionCount: number }> {
   if (userIds.length === 0) return { subscriptionCount: 0 };
 
+  // Sin link propio (hoy solo puede pasar en una comunicación manual sin
+  // URL cargada — puramente informativa), el destino por default es la
+  // campanita (/notificaciones) en vez de "/" — tiene más sentido llevar
+  // a "el resto de tus avisos" que a Inicio a secas.
+  const url = payload.url || "/notificaciones";
+  const normalizedPayload = { ...payload, url };
+
   const { data: send } = await supabase
     .from("notification_sends")
     .insert({
@@ -61,7 +68,7 @@ export async function sendPushToUsers(
       sent_by: meta.sentBy ?? null,
       title: payload.title,
       body: payload.body,
-      url: payload.url ?? null,
+      url,
     })
     .select("id")
     .single();
@@ -83,7 +90,7 @@ export async function sendPushToUsers(
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify(payload),
+          JSON.stringify(normalizedPayload),
         );
       } catch (error) {
         const statusCode = (error as { statusCode?: number }).statusCode;

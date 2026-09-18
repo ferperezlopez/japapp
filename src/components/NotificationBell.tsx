@@ -6,26 +6,7 @@ import {
   getMyNotifications,
   markAllNotificationsRead,
 } from "@/app/actions/notifications";
-
-type Notification = {
-  id: string;
-  unread: boolean;
-  title: string;
-  body: string;
-  url: string | null;
-  createdAt: string;
-};
-
-function relativeTime(iso: string) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "ahora";
-  if (minutes < 60) return `hace ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `hace ${hours} h`;
-  const days = Math.floor(hours / 24);
-  return `hace ${days} d`;
-}
+import { NotificationList, type Notification } from "@/components/NotificationList";
 
 function BellIcon() {
   return (
@@ -51,7 +32,9 @@ function BellIcon() {
 // (evento, cron, o comunicación manual de un admin) queda acá aunque el
 // push del navegador no haya llegado a ningún dispositivo. El contador
 // inicial viene del server (layout.tsx, atado al usuario real); al abrir
-// el modal se trae el detalle y se marca todo como leído de una.
+// el modal se trae el detalle y se marca todo como leído de una. La
+// misma lista existe como página propia en /notificaciones — destino de
+// un push sin link específico (ver sendPushToUsers).
 export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -84,7 +67,7 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
 
   function handleItemClick(notification: Notification) {
     setOpen(false);
-    if (notification.url) router.push(notification.url);
+    router.push(notification.url || "/notificaciones");
   }
 
   return (
@@ -130,34 +113,8 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
                 </svg>
               </button>
             </div>
-            <div className="mt-1 space-y-1">
-              {notifications === null ? (
-                <p className="p-3 text-sm text-foreground/50">Cargando…</p>
-              ) : notifications.length === 0 ? (
-                <p className="p-3 text-sm text-foreground/50">
-                  Todavía no te llegó ninguna notificación.
-                </p>
-              ) : (
-                notifications.map((notification) => (
-                  <button
-                    key={notification.id}
-                    type="button"
-                    onClick={() => handleItemClick(notification)}
-                    disabled={!notification.url}
-                    className={`w-full rounded-xl p-2.5 text-left transition-colors duration-200 ${
-                      notification.unread ? "bg-brand-soft/40" : ""
-                    } ${notification.url ? "hover:bg-surface" : ""}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-medium text-foreground">{notification.title}</p>
-                      <span className="shrink-0 text-xs text-foreground/40">
-                        {relativeTime(notification.createdAt)}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-sm text-foreground/70">{notification.body}</p>
-                  </button>
-                ))
-              )}
+            <div className="mt-1">
+              <NotificationList notifications={notifications} onItemClick={handleItemClick} />
             </div>
           </div>
         </div>

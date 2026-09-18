@@ -1,7 +1,7 @@
 # 018 - Log de comunicaciones y campanita de notificaciones
 
 - **Estado:** Implemented
-- **Rutas:** `/comunicaciones` (extendida)
+- **Rutas:** `/comunicaciones` (extendida), `/notificaciones` (nueva)
 - **Migraciones relacionadas:** `supabase/migrations/0032_notifications.sql`
 - **Última actualización:** 2026-09-18
 
@@ -32,6 +32,12 @@ Dos pedidos de Fernando sobre la infraestructura de push ya existente
 - Campanita en el header (ícono junto a About/Share/perfil), visible
   para cualquier logueado, con un badge del número de no leídas. Al
   abrirla, muestra las últimas ~30 y las marca todas como leídas.
+- Página `/notificaciones`: la misma lista que la campanita, pero como
+  página propia — es el destino de una notificación sin link específico
+  (hoy solo puede pasar en una comunicación manual sin URL cargada,
+  puramente informativa). Antes ese caso cae a `/`; ahora cae a "el
+  resto de tus avisos", que tiene más sentido para algo sin una sección
+  propia a la que ir.
 
 ### No incluye (por ahora)
 
@@ -130,8 +136,26 @@ Dos pedidos de Fernando sobre la infraestructura de push ya existente
    del body) que llama a `getMyNotifications()` (últimas 30, más
    recientes primero) y dispara `markAllNotificationsRead()` — el
    badge se resetea a 0 sin marcar de a una.
-4. Cada fila muestra título, cuerpo y tiempo relativo; si tiene `url`,
-   tocarla navega ahí y cierra el modal.
+4. Cada fila muestra título, cuerpo y tiempo relativo; tocarla navega a
+   `notification.url` y cierra el modal.
+5. `src/components/NotificationList.tsx`: lista compartida (tipo
+   `Notification`, helper `relativeTime`, y el render de cada fila)
+   entre la campanita y `/notificaciones` — evita duplicar el mismo
+   JSX en el modal y en la página.
+
+**Fallback de link (`sendPushToUsers`, `src/lib/push/send.ts`):**
+1. Si `payload.url` no viene (hoy solo pasa en `sendAdminPush` cuando
+   el admin no carga un link), se normaliza a `/notificaciones` **antes**
+   de guardar el envío y antes de mandarlo al push del navegador — un
+   solo punto de verdad, no hace falta duplicar el fallback en cada
+   caller.
+2. `public/sw.js` mantiene el mismo fallback como segunda capa
+   defensiva (por si algún payload llegara sin `url` de todos modos,
+   ej. una suscripción vieja con un payload cacheado).
+3. El click de un ítem en la campanita o en `/notificaciones` también
+   cae a `/notificaciones` si `url` es `null` — cubre las filas que ya
+   estaban en la base antes de este fallback (`notification_sends.url`
+   podía ser `null`).
 
 ## 5. Criterios de aceptación
 
@@ -147,6 +171,10 @@ Dos pedidos de Fernando sobre la infraestructura de push ya existente
 - [x] Tocar una notificación con `url` navega ahí y cierra el modal.
 - [x] Un usuario no-admin no puede ver el historial de
       `/comunicaciones` (mismo gate ya existente en esa página).
+- [x] Una comunicación manual sin URL cargada, al recibirla y tocarla
+      (push o campanita), lleva a `/notificaciones` en vez de a `/`.
+- [x] `/notificaciones` muestra la misma lista que la campanita y
+      también marca todo como leído al visitarla.
 
 ## 6. Decisiones y tradeoffs
 
@@ -158,6 +186,8 @@ Dos pedidos de Fernando sobre la infraestructura de push ya existente
 | Campanita atada al usuario real, no al impersonado | Usar `getActingUser()` | Mismo criterio ya establecido para push subscriptions: es un estado del dispositivo/sesión de quien está mirando la pantalla, no de la identidad que se está impersonando. |
 | Marcar todo como leído al abrir (no por ítem) | Marcar de a una al tocarla | UX más simple, sin necesidad de un endpoint por notificación — consistente con que las notificaciones de esta app son informativas, no accionables una por una. |
 | Modal full-screen (mismo shell que `SectionsMenu`) | Dropdown/popover anclado al ícono | No existe ningún patrón de popover en el repo — reusar el shell de modal ya probado evita inventar una mecánica de posicionamiento nueva. |
+| Notificación sin link cae a `/notificaciones` | Dejarla caer a `/` (comportamiento original) | Pedido explícito del usuario: una notificación puramente informativa (sin sección propia) tiene más sentido llevando a "el resto de tus avisos" que a Inicio a secas. |
+| `/notificaciones` como página propia (no solo el modal) | Que el fallback abra directamente el modal de la campanita | Un push llega con el navegador cerrado o en otra pestaña — necesita una URL real a la que navegar, no un estado de UI que abrir. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -168,6 +198,11 @@ Dos pedidos de Fernando sobre la infraestructura de push ya existente
 
 ## 8. Changelog
 
+- 2026-09-18: sumada la página `/notificaciones` y el fallback de link:
+  una notificación sin `url` propia (hoy solo una comunicación manual
+  sin link cargado) ahora lleva ahí en vez de a `/`, tanto desde el
+  push del navegador como desde la campanita. Extraído
+  `NotificationList` (compartido entre la campanita y la página nueva).
 - 2026-09-18: creada e implementada — log de comunicaciones en
   `/comunicaciones` y campanita de notificaciones en el header, a
   pedido explícito del usuario.
