@@ -31,9 +31,10 @@ de la app afuera. Esta spec cierra ese pendiente y agrega landing + PWA.
   existían para light mode).
 - Primitivas de UI compartidas (`src/components/ui/Button.tsx`,
   `Card.tsx`) para no repetir clases Tailwind en cada página.
-- Navegación mobile-first: barra fija inferior (`BottomNav`) con 4 accesos
-  (Inicio/Eventos/Calculadoras/Gastos), reemplaza los links horizontales del
-  header. El header queda reducido a logo + "Salir".
+- ~~Navegación mobile-first: barra fija inferior (`BottomNav`) con 4
+  accesos (Inicio/Eventos/Calculadoras/Gastos)~~ — reemplazada por un
+  menú de secciones (`SectionsMenu`) en el header, ver changelog
+  2026-09-18.
 - Landing (`/`) rediseñada como una lista vertical de accesos a las 3
   funcionalidades, pensada para pantalla angosta.
 - PWA instalable: manifest, set de íconos, `viewport`/`themeColor`.
@@ -89,9 +90,10 @@ de Next.js (no van en `supabase/migrations/`):
   falta esa bifurcación porque toda la app usa la misma paleta ahora.
 - **Navegación**: `layout.tsx` resuelve el usuario logueado una sola vez
   (antes lo hacía `Header` por su cuenta) y se lo pasa a `Header` como
-  prop; si hay sesión, también renderiza `<BottomNav />` (client component,
-  resalta la sección activa vía `usePathname`) y agrega `padding-bottom` al
-  contenedor de contenido para que no quede tapado detrás de la barra fija.
+  prop. ~~Si hay sesión, también renderiza `<BottomNav />`~~ — desde
+  2026-09-18, `Header` renderiza en su lugar `<SectionsMenu />` (ver
+  ese changelog), sin `padding-bottom` extra en el contenedor de
+  contenido porque ya no hay nada fijo abajo.
 - **Landing**: si hay sesión, lista vertical de 3 `Card` (Eventos,
   Calculadoras, Gastos) con ícono + título + descripción de una línea; si
   no hay sesión, un único CTA a `/login`.
@@ -139,6 +141,12 @@ de Next.js (no van en `supabase/migrations/`):
 
 ## 8. Changelog
 
+- 2026-09-18: `BottomNav` (barra fija inferior con 4 accesos) se
+  reemplazó por `SectionsMenu`, un ícono de hamburguesa en el `Header`
+  que despliega un modal con las 5 secciones (se sumó "Miembros", que
+  no estaba en la barra) — pedido explícito del usuario, pensando en
+  que la lista de secciones va a seguir creciendo y no quería que la
+  franja fija de abajo se recargara.
 - 2026-08-26: creada e implementada. Cierra el pendiente de
   `specs/004-eventos-gastos-y-fotos.md` ("Restyling del resto de la app...
   esta spec solo cubre `/eventos/[eventId]`") y agrega landing + PWA.
