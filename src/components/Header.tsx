@@ -8,15 +8,17 @@ import { Avatar } from "@/components/ui/Avatar";
 export function Header({
   user,
   profile,
+  isAdmin = false,
 }: {
   user: User | null;
   profile?: { name: string | null; avatarUrl: string | null } | null;
+  isAdmin?: boolean;
 }) {
   return (
     <header className="border-b border-surface-border">
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          {user && <SectionsMenu />}
+          {user && <SectionsMenu isAdmin={isAdmin} />}
           <Link
             href="/"
             className="font-heading text-lg font-semibold tracking-tight text-foreground"

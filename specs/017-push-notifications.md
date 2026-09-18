@@ -1,7 +1,8 @@
 # 017 - Notificaciones push (Web Push)
 
-- **Estado:** Implemented (parcial — infra + 1 disparador; ver sección 7)
-- **Rutas:** `/perfil` (extendida)
+- **Estado:** Implemented (parcial — infra + disparador automático +
+  disparador admin a demanda; ver sección 7)
+- **Rutas:** `/perfil` (extendida), `/comunicaciones` (nueva, solo admin)
 - **Migraciones relacionadas:** `supabase/migrations/0028_push_subscriptions.sql`
 - **Última actualización:** 2026-09-18
 
@@ -21,9 +22,14 @@ del grupo sin tener que abrir la app. Confirmado con `AskUserQuestion`:
    `compra_insumos` asignada y todavía no cargó el gasto.
 
 Esta entrega cubre la **infraestructura completa** (suscripción,
-service worker, envío) y **el primer disparador** ("se crea un evento
-nuevo"). El resto de los disparadores pedidos quedan para entregas
-siguientes sobre la misma base (ver sección 7).
+service worker, envío), **el primer disparador automático** ("se crea
+un evento nuevo") y, a pedido explícito de seguimiento, una
+**sección de Comunicaciones (`/comunicaciones`, solo admin)** para
+mandar un push a demanda a todo el grupo o a un subconjunto elegido de
+miembros — útil para avisos puntuales que no calzan en ningún
+disparador automático. El resto de los disparadores automáticos
+pedidos originalmente quedan para entregas siguientes sobre la misma
+base (ver sección 7).
 
 ## 2. Alcance
 
@@ -49,12 +55,20 @@ siguientes sobre la misma base (ver sección 7).
   que el push service devuelve como inválidas (404/410).
 - Primer disparador: al crear un evento (`createEvent`), se notifica a
   todos los demás perfiles con el nombre del evento y un link directo.
+- Sección `/comunicaciones` (solo admin): formulario con título,
+  mensaje, link opcional, y destinatarios ("Todos los miembros" o
+  "Elegir miembros" con checkboxes) — envía el push al tocar "Enviar
+  notificación" y muestra cuántos miembros y cuántos dispositivos
+  suscriptos recibieron el intento de envío.
 
 ### No incluye (por ahora, ver sección 7)
 
-- El resto de los disparadores elegidos (quórum, equipos armados,
-  gasto/tarea, recordatorio de insumos) — quedan como entregas
-  siguientes sobre esta misma infraestructura.
+- El resto de los disparadores **automáticos** elegidos originalmente
+  (quórum, equipos armados, gasto/tarea, recordatorio de insumos) —
+  quedan como entregas siguientes sobre esta misma infraestructura.
+- Grupos guardados/con nombre en `/comunicaciones` — la selección de
+  "un grupo" es ad-hoc (checkboxes en el momento), no se puede guardar
+  un grupo para reusarlo después.
 - Preferencias por tipo de notificación (todo o nada, hoy no hay forma
   de silenciar solo "evento nuevo" y dejar el resto).
 - Notificaciones en iOS Safari fuera de una PWA instalada — es una
@@ -115,13 +129,40 @@ siguientes sobre la misma base (ver sección 7).
 4. Si faltan las env vars de VAPID (no configuradas todavía en el
    entorno), la función no hace nada — no rompe la app en desarrollo
    sin las keys puestas.
+5. Devuelve `{ subscriptionCount }` — cuántas suscripciones activas se
+   encontraron para esos `userIds` (no cuántas efectivamente llegaron
+   al dispositivo, eso no lo puede saber el servidor). El disparador
+   automático de `createEvent` ignora este valor; `/comunicaciones` lo
+   muestra como feedback de "a cuánta gente le llegó el aviso".
 
-**Disparador 1 (`createEvent`, `src/app/eventos/actions.ts`):**
+**Disparador automático (`createEvent`, `src/app/eventos/actions.ts`):**
 - Después de insertar el evento, trae todos los `profiles.id` menos el
   del creador y llama `sendPushToUsers` con
   `{ title: "Nuevo evento", body: <nombre del evento>, url:
   "/eventos/<id>" }`. `notificationclick` en el service worker abre esa
   URL (o enfoca la pestaña si ya está abierta).
+
+**Disparador admin (`/comunicaciones`):**
+1. `ComunicacionesPage` (server component) exige sesión + `is_admin`
+   (mismo check inline que `updateInsumoItemIcon`, no un helper
+   compartido — mismo criterio que el resto del repo, cada
+   `actions.ts` repite su propio chequeo) — si no es admin, muestra un
+   mensaje en vez del formulario. Trae la lista de `profiles`
+   (`id, name, email`) para el selector de miembros.
+2. `<AdminCommsForm>` (client component): título + mensaje + link
+   opcional + radio "Todos los miembros" / "Elegir miembros" (con
+   checkboxes que solo se muestran en ese segundo caso).
+3. Al enviar, `sendAdminPush` (`src/app/comunicaciones/actions.ts`)
+   revalida `is_admin` en el servidor, resuelve la lista de
+   `targetIds` (todos los `profiles.id`, o los ids marcados) y llama
+   `sendPushToUsers`. Devuelve `{ targetCount, subscriptionCount }`
+   para que el formulario muestre "Enviado a N miembros · M
+   dispositivos con notificaciones activadas".
+4. El acceso a la sección desde el menú de secciones
+   (`<SectionsMenu>`) también es condicional: `Header` recibe
+   `isAdmin` desde `layout.tsx` (mismo `profiles.is_admin` del usuario
+   real, no del impersonado) y solo agrega el ítem "Comunicaciones" al
+   array de secciones cuando es admin.
 
 ## 5. Criterios de aceptación
 
@@ -138,6 +179,14 @@ siguientes sobre la misma base (ver sección 7).
 - [x] Si `createEvent` no encuentra VAPID configurado, o si un envío
       puntual falla, el evento se crea igual (el push nunca bloquea ni
       rompe la acción).
+- [x] `/comunicaciones` no aparece en el menú de secciones para un
+      usuario no-admin, y visitarla directo por URL muestra "No tenés
+      permisos" en vez del formulario.
+- [x] Como admin, mandar una notificación a "Todos los miembros" le
+      llega a cualquier miembro suscripto; mandarla a "Elegir
+      miembros" con 2 de 5 marcados solo le llega a esos 2.
+- [x] El formulario muestra cuántos miembros y cuántos dispositivos
+      suscriptos recibieron el intento de envío después de mandar.
 
 ## 6. Decisiones y tradeoffs
 
@@ -147,12 +196,16 @@ siguientes sobre la misma base (ver sección 7).
 | `security definer` para leer/podar suscripciones ajenas | Policy `using (true)` de lectura general en `push_subscriptions` | Acota el acceso a una función de un solo propósito (mandar/podar push) en vez de abrir la tabla entera a lectura de cualquiera — mismo criterio que otras funciones puntuales del repo (`remove_event_futbol`, `find_similar_profile_names`). |
 | Opt-in manual desde `/perfil`, sin auto-registro del SW | Registrar el SW y pedir permiso apenas hay sesión | Pedir permiso sin contexto es el patrón que más termina en "Bloquear" reflejo — mejor que la persona lo prenda cuando quiere. |
 | Suscripción atada al usuario real (`auth.getUser()`), no al impersonado | Usar `getActingUser()` como en `setRsvp` | Un push le llega al dispositivo físico de quien lo activó — atribuirlo al usuario impersonado no tendría ningún efecto real y confundiría el modelo. |
-| Entregar por fases (esta: infra + 1 disparador) | Implementar los ~5 disparadores elegidos de una sola vez | Cada disparador nuevo es independiente y de bajo riesgo de revisar por separado una vez que la infra está probada; hacerlos todos juntos hubiera sido un PR enorme. |
+| Entregar por fases (esta: infra + 1 disparador automático + 1 admin) | Implementar los ~5 disparadores automáticos elegidos de una sola vez | Cada disparador nuevo es independiente y de bajo riesgo de revisar por separado una vez que la infra está probada; hacerlos todos juntos hubiera sido un PR enorme. |
+| Selección de destinatarios ad-hoc (checkboxes en el momento) | Grupos guardados con nombre, reusables entre envíos | No fue pedido — un grupo de amigos cerrado no tiene tantos subconjuntos recurrentes distintos como para justificar una tabla nueva; se puede agregar después si hace falta. |
+| Ruta dedicada `/comunicaciones` en vez de una sección dentro de `/miembros` | Meter el formulario de envío como otro bloque de `/miembros` (donde ya viven otras capacidades admin) | El envío de push es una acción con su propio formulario grande (título, mensaje, selector de destinatarios) — mezclarlo en `/miembros` (una lista) le quitaría claridad a ambas cosas. |
 
 ## 7. Futuro / fuera de alcance de esta entrega
 
-Disparadores ya elegidos por el usuario, pendientes de una entrega
-siguiente sobre esta misma infraestructura:
+Disparadores **automáticos** ya elegidos por el usuario, pendientes de
+una entrega siguiente sobre esta misma infraestructura (el disparador
+**a demanda** desde `/comunicaciones` ya está implementado, ver
+sección 4):
 
 - Se suma un invitado o confirma alguien → notificar cuando se llega
   al quórum de fútbol/juntada (falta definir el número de quórum).
@@ -170,6 +223,9 @@ siguiente sobre esta misma infraestructura:
 
 ## 8. Changelog
 
+- 2026-09-18: sumada la sección `/comunicaciones` (solo admin) para
+  mandar push a demanda a todos los miembros o a un subconjunto
+  elegido, a pedido explícito del usuario tras la primera entrega.
 - 2026-09-18: creada e implementada (infra completa + disparador
   "evento nuevo"), a pedido explícito del usuario. Resto de
-  disparadores elegidos quedan para entregas siguientes.
+  disparadores automáticos elegidos quedan para entregas siguientes.

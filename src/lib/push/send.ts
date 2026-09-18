@@ -19,19 +19,22 @@ export type PushPayload = { title: string; body: string; url?: string };
 // (crear un evento, etc.) no debe fallar por un push roto. Si el push
 // service devuelve 404/410 (suscripción inválida), se borra esa fila vía
 // `prune_push_subscription` (security definer: puede no ser la suscripción
-// de quien dispara el envío).
+// de quien dispara el envío). Devuelve cuántas suscripciones se
+// encontraron (no cuántas efectivamente llegaron, eso no se puede saber
+// desde el servidor) — usado por la sección de Comunicaciones para dar
+// una idea de a cuánta gente le llegó el aviso.
 export async function sendPushToUsers(
   supabase: SupabaseClient<Database>,
   userIds: string[],
   payload: PushPayload,
-) {
-  if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) return;
-  if (userIds.length === 0) return;
+): Promise<{ subscriptionCount: number }> {
+  if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) return { subscriptionCount: 0 };
+  if (userIds.length === 0) return { subscriptionCount: 0 };
 
   const { data: subscriptions } = await supabase.rpc("get_push_subscriptions_for_users", {
     p_user_ids: userIds,
   });
-  if (!subscriptions || subscriptions.length === 0) return;
+  if (!subscriptions || subscriptions.length === 0) return { subscriptionCount: 0 };
 
   await Promise.all(
     subscriptions.map(async (sub) => {
@@ -48,4 +51,6 @@ export async function sendPushToUsers(
       }
     }),
   );
+
+  return { subscriptionCount: subscriptions.length };
 }

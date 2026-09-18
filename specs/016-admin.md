@@ -54,6 +54,10 @@ Un solo usuario tiene el rol hoy: **Fernando Pérez López**
   muestra "Email de registro: {email}" cuando el viewer es admin — para
   poder identificar de quién se trata una entrada rara en una lista de
   confirmados (ver caso real en sección 6).
+- **Comunicaciones (`/comunicaciones`)**: sección solo para admins que
+  manda una notificación push a demanda a todos los miembros o a un
+  subconjunto elegido — ver `specs/017-push-notifications.md` sección
+  4, "Disparador admin".
 
 ### No incluye (por ahora)
 
@@ -233,6 +237,9 @@ completo. Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-18: sumada la sección `/comunicaciones` (solo admin) para
+  mandar push a demanda a todo el grupo o a miembros elegidos — pedido
+  explícito del usuario, sobre la infra de `specs/017-push-notifications.md`.
 - 2026-09-18: `<ImpersonationBanner>` pasó a `sticky top-0` — pedido
   explícito del usuario, para no perder de vista que se está actuando
   como otra persona al scrollear una página larga.
