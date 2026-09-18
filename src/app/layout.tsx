@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Fredoka, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
-import { BottomNav } from "@/components/BottomNav";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 import { createClient } from "@/lib/supabase/server";
@@ -73,10 +72,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               : null
           }
         />
-        <div className={`flex flex-1 flex-col ${user ? "pb-16" : ""}`}>
-          {children}
-        </div>
-        {user && <BottomNav />}
+        <div className="flex flex-1 flex-col">{children}</div>
       </body>
     </html>
   );

@@ -157,7 +157,11 @@ completo. Puntos que el SQL no explica por sí solo:
    miembro (excepto la propia) solo si el viewer es admin.
 6. `<ImpersonationBanner>` se renderiza desde `layout.tsx` (que ya
    resuelve el usuario logueado) cuando `getImpersonationTarget`
-   devuelve algo — visible en cualquier página mientras dura. El
+   devuelve algo — visible en cualquier página mientras dura, y
+   `sticky top-0` (desde 2026-09-18) para que no desaparezca al
+   scrollear una página larga — antes quedaba en el flujo normal y se
+   perdía de vista al bajar, a pesar de que el propio comentario del
+   componente ya decía que debía ser "fija arriba de todo". El
    `Header` no cambia: sigue mostrando la identidad real del admin.
 
 ### Sacar cualquier invitado + email en la ficha
@@ -181,7 +185,8 @@ completo. Puntos que el SQL no explica por sí solo:
       `/perfil/[userId]` los guarda sobre esa persona, no sobre el
       propio perfil.
 - [x] Como admin, "Actuar como X" muestra el banner "Actuando como X"
-      en cualquier página.
+      en cualquier página, y queda fijo arriba al scrollear una página
+      larga (no desaparece de la vista).
 - [x] Mientras se actúa como X, confirmar RSVP en un evento guarda la
       fila de `event_rsvps` con el `user_id` de X, no el del admin
       real; "tu respuesta" en `/`, `/eventos` y `/eventos/[eventId]`
@@ -228,6 +233,9 @@ completo. Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-18: `<ImpersonationBanner>` pasó a `sticky top-0` — pedido
+  explícito del usuario, para no perder de vista que se está actuando
+  como otra persona al scrollear una página larga.
 - 2026-09-17: creada e implementada (alcance: editar perfiles de otros
   + "actuar como" para RSVP), a pedido explícito del usuario.
 - 2026-09-17: sumado "sacar cualquier invitado de un evento" y "ver
