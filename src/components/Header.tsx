@@ -3,16 +3,19 @@ import type { User } from "@supabase/supabase-js";
 import { signOut } from "@/app/actions/auth";
 import { ShareButton } from "@/components/ShareButton";
 import { SectionsMenu } from "@/components/SectionsMenu";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Avatar } from "@/components/ui/Avatar";
 
 export function Header({
   user,
   profile,
   isAdmin = false,
+  unreadCount = 0,
 }: {
   user: User | null;
   profile?: { name: string | null; avatarUrl: string | null } | null;
   isAdmin?: boolean;
+  unreadCount?: number;
 }) {
   return (
     <header className="border-b border-surface-border">
@@ -46,6 +49,7 @@ export function Header({
             </svg>
           </Link>
           <ShareButton />
+          {user && <NotificationBell initialUnreadCount={unreadCount} />}
           {user && (
             <Link
               href="/perfil"

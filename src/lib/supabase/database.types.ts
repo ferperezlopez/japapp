@@ -700,6 +700,107 @@ export interface Database {
           },
         ];
       };
+      notification_sends: {
+        Row: {
+          id: string;
+          kind:
+            | "evento_nuevo"
+            | "quorum_futbol"
+            | "quorum_juntada"
+            | "equipos_armados"
+            | "equipos_modificados"
+            | "gasto_nuevo"
+            | "tarea_asignada"
+            | "saldo_pendiente"
+            | "comunicacion_manual";
+          sent_by: string | null;
+          title: string;
+          body: string;
+          url: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          kind:
+            | "evento_nuevo"
+            | "quorum_futbol"
+            | "quorum_juntada"
+            | "equipos_armados"
+            | "equipos_modificados"
+            | "gasto_nuevo"
+            | "tarea_asignada"
+            | "saldo_pendiente"
+            | "comunicacion_manual";
+          sent_by?: string | null;
+          title: string;
+          body: string;
+          url?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          kind?:
+            | "evento_nuevo"
+            | "quorum_futbol"
+            | "quorum_juntada"
+            | "equipos_armados"
+            | "equipos_modificados"
+            | "gasto_nuevo"
+            | "tarea_asignada"
+            | "saldo_pendiente"
+            | "comunicacion_manual";
+          sent_by?: string | null;
+          title?: string;
+          body?: string;
+          url?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_sends_sent_by_fkey";
+            columns: ["sent_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notification_recipients: {
+        Row: {
+          id: string;
+          send_id: string;
+          user_id: string;
+          read_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          send_id: string;
+          user_id: string;
+          read_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          send_id?: string;
+          user_id?: string;
+          read_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_recipients_send_id_fkey";
+            columns: ["send_id"];
+            isOneToOne: false;
+            referencedRelation: "notification_sends";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notification_recipients_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       event_media: {
         Row: {
           id: string;

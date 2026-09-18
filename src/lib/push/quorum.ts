@@ -120,10 +120,15 @@ export async function maybeNotifyQuorum(
     if (targetIds.length === 0) return;
 
     const { title, body } = COPY[kind];
-    await sendPushToUsers(supabase, targetIds, {
-      title,
-      body: body(stillCount, eventName),
-      url: `/eventos/${eventId}`,
-    });
+    await sendPushToUsers(
+      supabase,
+      targetIds,
+      {
+        title,
+        body: body(stillCount, eventName),
+        url: `/eventos/${eventId}`,
+      },
+      { kind: kind === "futbol" ? "quorum_futbol" : "quorum_juntada" },
+    );
   });
 }

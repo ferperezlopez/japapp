@@ -159,11 +159,16 @@ export async function addExpense(groupId: string, formData: FormData) {
       .eq("id", user.id)
       .maybeSingle();
     const loaderName = loaderProfile?.name ?? loaderProfile?.email ?? "Alguien";
-    await sendPushToUsers(supabase, notifyIds, {
-      title: "💸 Se cargó un nuevo gasto",
-      body: `${loaderName} cargó ${description} por $${amount.toFixed(2)}.`,
-      url: `/gastos/${groupId}`,
-    });
+    await sendPushToUsers(
+      supabase,
+      notifyIds,
+      {
+        title: "💸 Se cargó un nuevo gasto",
+        body: `${loaderName} cargó ${description} por $${amount.toFixed(2)}.`,
+        url: `/gastos/${groupId}`,
+      },
+      { kind: "gasto_nuevo" },
+    );
   }
 
   return { ok: true };

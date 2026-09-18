@@ -40,11 +40,16 @@ export async function sendAdminPush(formData: FormData) {
     targetIds = (allProfiles ?? []).map((p) => p.id);
   }
 
-  const { subscriptionCount } = await sendPushToUsers(supabase, targetIds, {
-    title: `📣 ${title}`,
-    body: `"${body}"`,
-    url: url || undefined,
-  });
+  const { subscriptionCount } = await sendPushToUsers(
+    supabase,
+    targetIds,
+    {
+      title: `📣 ${title}`,
+      body: `"${body}"`,
+      url: url || undefined,
+    },
+    { kind: "comunicacion_manual", sentBy: user.id },
+  );
 
   return { ok: true, targetCount: targetIds.length, subscriptionCount };
 }
