@@ -61,6 +61,31 @@ function Jersey({ number, variant }: { number: number; variant: JerseyVariant })
         strokeWidth="2"
         strokeLinejoin="round"
       />
+      {/* Rayas de puño (manga raglán) */}
+      <path
+        d="M9.5 15.5 L13 21.5"
+        stroke={text}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      <path
+        d="M54.5 15.5 L51 21.5"
+        stroke={text}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      {/* Raya del ruedo */}
+      <rect x="20" y="52" width="24" height="2.5" rx="1" fill={text} opacity="0.85" />
+      {/* Escudo en el pecho */}
+      <path
+        d="M40 14.5 L43 16 L42.3 20 L40 22 L37.7 20 L37 16 Z"
+        fill="none"
+        stroke={text}
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
       <text
         x="32"
         y="38"
