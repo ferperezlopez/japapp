@@ -300,10 +300,20 @@ export async function addEventMedia(eventId: string, storagePath: string) {
   return { ok: true };
 }
 
+// "mvpId"/"goleadorId" vienen con el mismo esquema de id prefijado que
+// saveFutbolTeams ("u:<userId>" para un miembro, "g:<eventGuestId>"
+// para un invitado al fútbol) — se parten acá en la columna que
+// corresponda; futbol_stats admite ambas identidades desde 0033.
+function splitPlayerId(id: string) {
+  if (id.startsWith("u:")) return { userId: id.slice(2), eventGuestId: null };
+  if (id.startsWith("g:")) return { userId: null, eventGuestId: id.slice(2) };
+  return { userId: null, eventGuestId: null };
+}
+
 export async function upsertFutbolStats(eventId: string, formData: FormData) {
   const resultado = String(formData.get("resultado") ?? "").trim();
-  const mvpUserId = String(formData.get("mvpUserId") ?? "").trim();
-  const goleadorUserId = String(formData.get("goleadorUserId") ?? "").trim();
+  const mvp = splitPlayerId(String(formData.get("mvpId") ?? "").trim());
+  const goleador = splitPlayerId(String(formData.get("goleadorId") ?? "").trim());
 
   const supabase = await createClient();
   const {
@@ -318,8 +328,10 @@ export async function upsertFutbolStats(eventId: string, formData: FormData) {
     {
       event_id: eventId,
       resultado: resultado || null,
-      mvp_user_id: mvpUserId || null,
-      goleador_user_id: goleadorUserId || null,
+      mvp_user_id: mvp.userId,
+      mvp_event_guest_id: mvp.eventGuestId,
+      goleador_user_id: goleador.userId,
+      goleador_event_guest_id: goleador.eventGuestId,
       updated_by: user.id,
       updated_at: new Date().toISOString(),
     },
@@ -514,6 +526,37 @@ export async function updateInsumoItemIcon(itemId: string, icon: string) {
 
   revalidatePath("/eventos", "layout");
   revalidatePath("/gastos", "layout");
+  return { ok: true };
+}
+
+// Mismo patrón que updateInsumoItemIcon: solo admin (decisión explícita
+// del usuario), la policy RLS "Un admin puede editar el nombre de un
+// invitado" (0033) es la barrera real. `guests` es un catálogo
+// compartido entre eventos, así que se revalida todo /eventos.
+export async function renameGuest(guestId: string, name: string) {
+  const trimmedName = name.trim();
+  if (!trimmedName) return { error: "Poné un nombre." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!me?.is_admin) return { error: "No tenés permisos de administrador." };
+
+  const { error } = await supabase
+    .from("guests")
+    .update({ name: trimmedName })
+    .eq("id", guestId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/eventos", "layout");
   return { ok: true };
 }
 

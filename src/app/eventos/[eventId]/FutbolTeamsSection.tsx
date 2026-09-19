@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuestNameButton } from "@/components/GuestNameButton";
 import { TeamBuilderModal } from "./TeamBuilderModal";
 
-type Candidate = { id: string; name: string; avatarUrl: string | null };
+type Candidate = { id: string; name: string; avatarUrl: string | null; guestId?: string };
 type Position = "gk" | "def" | "fwd";
 type SavedAssignment = { id: string; team: 1 | 2; position: Position };
 
@@ -22,10 +23,12 @@ export function FutbolTeamsSection({
   eventId,
   candidates,
   initialAssignment,
+  isAdmin,
 }: {
   eventId: string;
   candidates: Candidate[];
   initialAssignment: SavedAssignment[];
+  isAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -54,8 +57,14 @@ export function FutbolTeamsSection({
                       key={a.id}
                       className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
                     >
-                      <Avatar src={c.avatarUrl} name={c.name} size="sm" />
-                      {c.name}
+                      {c.guestId ? (
+                        <GuestNameButton guestId={c.guestId} name={c.name} isAdmin={isAdmin} />
+                      ) : (
+                        <>
+                          <Avatar src={c.avatarUrl} name={c.name} size="sm" />
+                          {c.name}
+                        </>
+                      )}
                     </li>
                   );
                 })}

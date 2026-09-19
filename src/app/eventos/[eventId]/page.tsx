@@ -11,6 +11,7 @@ import { FutbolTeamsSection } from "./FutbolTeamsSection";
 import { UploadPhotoForm } from "./UploadPhotoForm";
 import { PhotoGrid } from "./PhotoGrid";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuestNameButton } from "@/components/GuestNameButton";
 import { AddGuestForm } from "./AddGuestForm";
 import { RemoveGuestButton } from "./RemoveGuestButton";
 import { TaskAssignSelect } from "./TaskAssignSelect";
@@ -213,12 +214,9 @@ function RsvpSection({
                       className="animate-reveal flex items-center gap-1 rounded-full bg-surface py-1 pl-1 pr-2 text-xs text-foreground/80"
                       style={{ animationDelay: `${(people.length + index) * 40}ms` }}
                     >
-                      <Avatar src={null} name={g.name} size="sm" />
-                      <span>
-                        {g.name}{" "}
-                        <span className="text-foreground/40">
-                          (trajo: {g.broughtByName})
-                        </span>
+                      <GuestNameButton guestId={g.guestId} name={g.name} isAdmin={isAdmin} />
+                      <span className="text-foreground/40">
+                        (trajo: {g.broughtByName})
                       </span>
                       {(g.addedBy === currentUserId || isAdmin) && (
                         <RemoveGuestButton
@@ -389,8 +387,8 @@ export default async function EventoPage({
   // goleador se eligen entre quienes confirmaron "Voy" al fútbol.
   let futbolStats: {
     resultado: string | null;
-    mvpUserId: string | null;
-    goleadorUserId: string | null;
+    mvpId: string | null;
+    goleadorId: string | null;
   } | null = null;
   // id genérico prefijado ("u:"/"g:") — ver saveFutbolTeams en actions.ts:
   // un jugador guardado puede ser un miembro (user_id) o un invitado al
@@ -405,7 +403,9 @@ export default async function EventoPage({
     const [{ data: statsRow }, { data: teamRows }] = await Promise.all([
       supabase
         .from("futbol_stats")
-        .select("resultado, mvp_user_id, goleador_user_id")
+        .select(
+          "resultado, mvp_user_id, goleador_user_id, mvp_event_guest_id, goleador_event_guest_id",
+        )
         .eq("event_id", eventId)
         .maybeSingle(),
       supabase
@@ -417,8 +417,16 @@ export default async function EventoPage({
     if (statsRow) {
       futbolStats = {
         resultado: statsRow.resultado,
-        mvpUserId: statsRow.mvp_user_id,
-        goleadorUserId: statsRow.goleador_user_id,
+        mvpId: statsRow.mvp_user_id
+          ? `u:${statsRow.mvp_user_id}`
+          : statsRow.mvp_event_guest_id
+            ? `g:${statsRow.mvp_event_guest_id}`
+            : null,
+        goleadorId: statsRow.goleador_user_id
+          ? `u:${statsRow.goleador_user_id}`
+          : statsRow.goleador_event_guest_id
+            ? `g:${statsRow.goleador_event_guest_id}`
+            : null,
       };
     }
 
@@ -433,13 +441,13 @@ export default async function EventoPage({
     .filter((a) => a.status === "yes")
     .map((a) => ({ userId: a.userId, name: a.name, avatarUrl: a.avatarUrl }));
 
-  // El pool del armador de equipos suma, además de los confirmados
-  // actuales (con id "u:<userId>"), a los invitados al fútbol (id
-  // "g:<eventGuestId>") — no son elegibles para MVP/goleador
-  // (futbolCandidates, arriba, que sigue siendo solo miembros), pero sí
-  // para armar equipos. También sigue incluyendo a quien ya quedó
-  // guardado en un equipo y después cambió su RSVP, para no hacerlo
-  // desaparecer.
+  // El pool del armador de equipos (y, desde 0033, también el de
+  // MVP/goleador) suma, además de los confirmados actuales (con id
+  // "u:<userId>"), a los invitados al fútbol (id "g:<eventGuestId>").
+  // `guestId` (el id real en `guests`, no el per-evento) viaja junto al
+  // candidato para poder editarlo (GuestNameButton) sin otra consulta.
+  // También sigue incluyendo a quien ya quedó guardado en un equipo y
+  // después cambió su RSVP, para no hacerlo desaparecer.
   const futbolTeamMemberCandidates = futbolCandidates.map((c) => ({
     id: `u:${c.userId}`,
     name: c.name,
@@ -449,6 +457,7 @@ export default async function EventoPage({
     id: `g:${g.eventGuestId}`,
     name: g.name,
     avatarUrl: null,
+    guestId: g.guestId,
   }));
   const futbolTeamCandidates = [
     ...futbolTeamMemberCandidates,
@@ -699,12 +708,14 @@ export default async function EventoPage({
           <FutbolStatsForm
             eventId={eventId}
             stats={futbolStats}
-            candidates={futbolCandidates}
+            candidates={futbolTeamCandidates}
+            isAdmin={isAdmin}
           />
           <FutbolTeamsSection
             eventId={eventId}
             candidates={futbolTeamCandidates}
             initialAssignment={futbolTeams}
+            isAdmin={isAdmin}
           />
         </>
       )}

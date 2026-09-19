@@ -6,43 +6,43 @@ import { upsertFutbolStats } from "../actions";
 import { withMinDuration } from "@/lib/withMinDuration";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuestNameButton } from "@/components/GuestNameButton";
 
 interface Candidate {
-  userId: string;
+  id: string;
   name: string;
   avatarUrl: string | null;
+  guestId?: string;
 }
 
 interface Stats {
   resultado: string | null;
-  mvpUserId: string | null;
-  goleadorUserId: string | null;
+  mvpId: string | null;
+  goleadorId: string | null;
 }
 
 export function FutbolStatsForm({
   eventId,
   stats,
   candidates,
+  isAdmin,
 }: {
   eventId: string;
   stats: Stats | null;
   candidates: Candidate[];
+  isAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const findCandidate = (id: string | null) =>
-    candidates.find((c) => c.userId === id);
+    candidates.find((c) => c.id === id);
 
-  const hasStats = !!(
-    stats?.resultado ||
-    stats?.mvpUserId ||
-    stats?.goleadorUserId
-  );
+  const hasStats = !!(stats?.resultado || stats?.mvpId || stats?.goleadorId);
 
-  const mvp = findCandidate(stats?.mvpUserId ?? null);
-  const goleador = findCandidate(stats?.goleadorUserId ?? null);
+  const mvp = findCandidate(stats?.mvpId ?? null);
+  const goleador = findCandidate(stats?.goleadorId ?? null);
 
   if (!open) {
     return (
@@ -55,37 +55,55 @@ export function FutbolStatsForm({
                 {stats.resultado}
               </p>
             )}
-            {stats?.mvpUserId && (
+            {stats?.mvpId && (
               <p className="flex items-center gap-1.5">
                 <span className="text-foreground/50">MVP:</span>{" "}
                 {mvp ? (
-                  <Link
-                    href={`/perfil/${mvp.userId}`}
-                    className="inline-flex items-center gap-1.5 hover:underline"
-                  >
-                    <Avatar src={mvp.avatarUrl} name={mvp.name} size="sm" />
-                    {mvp.name}
-                  </Link>
+                  mvp.guestId ? (
+                    <GuestNameButton
+                      guestId={mvp.guestId}
+                      name={mvp.name}
+                      isAdmin={isAdmin}
+                      className="inline-flex items-center gap-1.5"
+                    />
+                  ) : (
+                    <Link
+                      href={`/perfil/${mvp.id.slice(2)}`}
+                      className="inline-flex items-center gap-1.5 hover:underline"
+                    >
+                      <Avatar src={mvp.avatarUrl} name={mvp.name} size="sm" />
+                      {mvp.name}
+                    </Link>
+                  )
                 ) : (
                   "—"
                 )}
               </p>
             )}
-            {stats?.goleadorUserId && (
+            {stats?.goleadorId && (
               <p className="flex items-center gap-1.5">
                 <span className="text-foreground/50">Goleador:</span>{" "}
                 {goleador ? (
-                  <Link
-                    href={`/perfil/${goleador.userId}`}
-                    className="inline-flex items-center gap-1.5 hover:underline"
-                  >
-                    <Avatar
-                      src={goleador.avatarUrl}
+                  goleador.guestId ? (
+                    <GuestNameButton
+                      guestId={goleador.guestId}
                       name={goleador.name}
-                      size="sm"
+                      isAdmin={isAdmin}
+                      className="inline-flex items-center gap-1.5"
                     />
-                    {goleador.name}
-                  </Link>
+                  ) : (
+                    <Link
+                      href={`/perfil/${goleador.id.slice(2)}`}
+                      className="inline-flex items-center gap-1.5 hover:underline"
+                    >
+                      <Avatar
+                        src={goleador.avatarUrl}
+                        name={goleador.name}
+                        size="sm"
+                      />
+                      {goleador.name}
+                    </Link>
+                  )
                 ) : (
                   "—"
                 )}
@@ -141,13 +159,13 @@ export function FutbolStatsForm({
             MVP
           </label>
           <select
-            name="mvpUserId"
-            defaultValue={stats?.mvpUserId ?? ""}
+            name="mvpId"
+            defaultValue={stats?.mvpId ?? ""}
             className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           >
             <option value="">Sin elegir</option>
             {candidates.map((c) => (
-              <option key={c.userId} value={c.userId}>
+              <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
@@ -158,13 +176,13 @@ export function FutbolStatsForm({
             Goleador
           </label>
           <select
-            name="goleadorUserId"
-            defaultValue={stats?.goleadorUserId ?? ""}
+            name="goleadorId"
+            defaultValue={stats?.goleadorId ?? ""}
             className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           >
             <option value="">Sin elegir</option>
             {candidates.map((c) => (
-              <option key={c.userId} value={c.userId}>
+              <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}

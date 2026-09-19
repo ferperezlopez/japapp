@@ -588,6 +588,8 @@ export interface Database {
           resultado: string | null;
           mvp_user_id: string | null;
           goleador_user_id: string | null;
+          mvp_event_guest_id: string | null;
+          goleador_event_guest_id: string | null;
           updated_by: string;
           updated_at: string;
         };
@@ -596,6 +598,8 @@ export interface Database {
           resultado?: string | null;
           mvp_user_id?: string | null;
           goleador_user_id?: string | null;
+          mvp_event_guest_id?: string | null;
+          goleador_event_guest_id?: string | null;
           updated_by: string;
           updated_at?: string;
         };
@@ -604,6 +608,8 @@ export interface Database {
           resultado?: string | null;
           mvp_user_id?: string | null;
           goleador_user_id?: string | null;
+          mvp_event_guest_id?: string | null;
+          goleador_event_guest_id?: string | null;
           updated_by?: string;
           updated_at?: string;
         };
@@ -627,6 +633,20 @@ export interface Database {
             columns: ["goleador_user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "futbol_stats_mvp_event_guest_id_fkey";
+            columns: ["mvp_event_guest_id"];
+            isOneToOne: false;
+            referencedRelation: "event_guests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "futbol_stats_goleador_event_guest_id_fkey";
+            columns: ["goleador_event_guest_id"];
+            isOneToOne: false;
+            referencedRelation: "event_guests";
             referencedColumns: ["id"];
           },
           {
