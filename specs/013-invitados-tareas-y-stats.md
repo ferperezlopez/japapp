@@ -2,8 +2,8 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/eventos` (extendida), `/eventos/[eventId]` (extendida), `/perfil` (extendida), `/perfil/[userId]` (extendida), `/miembros` (nueva)
-- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`, `supabase/migrations/0014_event_tasks_multi_item_per_person.sql`
-- **Última actualización:** 2026-09-17
+- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`, `supabase/migrations/0014_event_tasks_multi_item_per_person.sql`, `supabase/migrations/0033_futbol_stats_guests_and_guest_rename.sql`
+- **Última actualización:** 2026-09-19
 
 ## 1. Resumen
 
@@ -24,6 +24,14 @@ asistencia de cada persona en su perfil.
 - Los invitados quedan guardados en una tabla reusable entre eventos:
   una vez cargado un invitado, aparece disponible para elegirlo de
   nuevo (sin re-tipear el nombre) en cualquier otro evento.
+- Invitados editables (`0033`): así como tocar a un miembro lleva a su
+  perfil, tocar a un invitado (en la lista "Van", en el resumen de
+  equipos ya guardados, o como MVP/goleador) abre un modal para
+  corregirle el nombre — **solo admins** pueden hacerlo (decisión
+  explícita del usuario), ya que `guests.name` es un catálogo
+  compartido entre todos los eventos donde aparezca ese invitado. Para
+  quien no es admin, el mismo chip se ve igual pero sin ningún
+  affordance de click.
 - Tareas de organización del evento, colapsadas por defecto bajo
   "Asignación de tareas": lista fija de tipos (compra de insumos,
   lavado de platos, orden de la sede, reserva de cancha). Compra de
@@ -141,6 +149,14 @@ Puntos que el SQL no explica por sí solo:
   `with check (columna = auth.uid())`). La excepción es el `delete` de
   `event_guests`, restringido a quien sumó a ese invitado
   específicamente (`using (added_by = auth.uid())`).
+- `guests` no tenía ninguna policy de `update` hasta `0033` — nadie
+  podía renombrar un invitado a nivel de base, aunque el problema
+  nunca se había planteado hasta que se pidió esta feature. La policy
+  nueva (`"Un admin puede editar el nombre de un invitado"`) es la
+  única excepción al criterio de "cualquier logueado" del punto
+  anterior: acá se restringe a `is_admin(auth.uid())`, decisión
+  explícita del usuario — mismo criterio ya usado para
+  `insumo_items.icon` (`0027_insumo_items_icon.sql`).
 
 ## 4. Diseño / flujo
 
@@ -166,11 +182,25 @@ Puntos que el SQL no explica por sí solo:
    resúmenes desactualizados (feedback del usuario con captura de
    pantalla).
 1.1. Los invitados al fútbol también son elegibles para "Armar
-   equipos" (no para MVP/goleador, que son individuales y no tiene
-   sentido para alguien sin cuenta): `futbolTeamCandidates` en
-   `page.tsx` los suma con id `g:<eventGuestId>`, junto a los miembros
-   confirmados con id `u:<userId>` — ver `specs/015-armar-equipos-futbol.md`
-   para el detalle de esquema y de `TeamBuilderModal`.
+   equipos" y, desde `0033`, para MVP/goleador: `futbolTeamCandidates`
+   en `page.tsx` los suma con id `g:<eventGuestId>`, junto a los
+   miembros confirmados con id `u:<userId>`, y ese mismo array
+   alimenta ambos selectores — ver `specs/015-armar-equipos-futbol.md`
+   para el detalle de esquema y de `TeamBuilderModal`, y
+   `specs/010-estadisticas-de-partidos.md` para MVP/goleador.
+1.2. **Editar un invitado (`0033`, solo admin):** en cualquiera de los
+   tres lugares donde se muestra un invitado (lista "Van", resumen de
+   equipos guardados, MVP/goleador), tocar su chip abre
+   `EditGuestNameModal` (mismo shell de modal que `SectionsMenu`/
+   `ImageZoomModal`) con un input para corregir `guests.name`, vía la
+   action `renameGuest(guestId, name)` — admin-gated en el server, con
+   la policy RLS como barrera real. Para quien no es admin, el
+   componente compartido `GuestNameButton`
+   (`src/components/GuestNameButton.tsx`) renderiza el mismo
+   avatar+nombre como texto plano, sin `onClick`. Queda fuera de
+   alcance a propósito el armador de equipos (`TeamBuilderModal`),
+   donde tocar un nombre significa "asignarlo a una posición" — repurpar
+   ese tap rompería la interacción principal del modal.
 2. `<AddGuestForm>` ofrece un `<select>` con los invitados ya
    registrados (traídos en la misma query de la página) más una opción
    "Nueva persona…" que revela un input de texto — mismo patrón que el
@@ -377,12 +407,17 @@ Puntos que el SQL no explica por sí solo:
 - [x] Sumar un invitado al fútbol hace que el contador "N de M
       confirmaron (%)" y la barra de `AttendanceSummary` lo cuenten,
       no solo el texto "+N invitadxs".
-- [x] Un invitado al fútbol aparece como candidato en "Armar equipos"
-      y se lo puede mover a un equipo/posición igual que a un miembro;
-      no aparece como candidato a MVP/goleador.
+- [x] Un invitado al fútbol aparece como candidato en "Armar equipos" y
+      en los `<select>` de MVP/goleador, y se lo puede elegir igual que
+      a un miembro.
 - [x] Como admin, editar el emoji de un insumo desde el picker (en
       Tareas o en Gastos) lo actualiza en el otro lado; como no-admin,
       no aparece la opción de editar.
+- [x] Como admin, tocar un invitado en "Van", en el resumen de equipos
+      guardados, o como MVP/goleador abre el editor de nombre; guardar
+      un nombre nuevo se refleja en cualquier otro evento donde
+      aparezca ese mismo invitado. Como no-admin, esos mismos chips no
+      son clickeables.
 
 ## 6. Decisiones y tradeoffs
 
@@ -408,6 +443,8 @@ Puntos que el SQL no explica por sí solo:
 | `AttendanceSummary` suma `guestCount` al numerador, no solo como texto | Dejar la barra/contador solo con `event_rsvps` y el "+N invitadxs" como nota aparte | Pedido explícito del usuario: los invitados no sumaban al contador de confirmados, aunque ya significaban "confirmado que viene" en el modelo de datos. |
 | `insumo_items.icon` explícito y editable por admin, con `resolveIcon` priorizándolo sobre `iconForInsumo` | Dejar el ícono siempre derivado por palabra clave, sin persistir ni poder editarlo | Pedido explícito del usuario: poder corregir/asignar el emoji de un ítem a mano, no solo depender del matching automático. |
 | `ItemPicker` extraído a `src/components/ItemPicker.tsx`, compartido con Gastos contra el mismo catálogo `insumo_items` | Un catálogo de ítems separado para Gastos | Decisión del usuario (`AskUserQuestion`): un emoji cargado de un lado se ve del otro, sin duplicar el concepto de "ítem con ícono". |
+| Edición de invitados solo admin | Cualquier logueado, o solo `created_by` del invitado | Decisión explícita del usuario (`AskUserQuestion`), mismo criterio que `insumo_items.icon` — más conservador que el resto de `guests`/`event_guests`, que sigue siendo "cualquier logueado" para insertar/sumar. |
+| Editable desde "Van"/equipos guardados/MVP-goleador, no desde `TeamBuilderModal` | Agregar también un ícono de lápiz dentro del armador de equipos | Ahí tocar un nombre ya significa "asignarlo a una posición" — repurpar el tap rompería la interacción principal de ese modal. Se puede pedir después si hace falta. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -421,9 +458,17 @@ Puntos que el SQL no explica por sí solo:
   decidir cómo mapear insumos a montos (hoy `insumo_items` no tiene
   precio) y cómo evitar duplicar el gasto si la persona ya lo cargó a
   mano — queda pendiente de diseño.
+- Editar un invitado desde dentro de `TeamBuilderModal` (ver
+  Decisiones, sección 6) — no pedido todavía.
+- Otros campos editables de un invitado más allá del nombre — hoy
+  `guests` no tiene ninguna otra columna (sin avatar, sin notas).
 
 ## 8. Changelog
 
+- 2026-09-19: invitados editables (solo admin) desde "Van", el resumen
+  de equipos guardados y MVP/goleador (`0033`, `renameGuest`,
+  `GuestNameButton`, `EditGuestNameModal`); MVP/goleador ahora también
+  admiten invitados al fútbol, ver `specs/010-estadisticas-de-partidos.md`.
 - 2026-09-17: nueva página `/miembros` — directorio de todo el grupo
   con avatar, nombre y estadísticas de asistencia de cada uno, a
   pedido del usuario ("hacé una sección donde pueda ver a todos los

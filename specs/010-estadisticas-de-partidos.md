@@ -2,8 +2,9 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/eventos/[eventId]` (extendida)
-- **Migraciones relacionadas:** `supabase/migrations/0008_futbol_stats.sql`
-- **Última actualización:** 2026-09-15
+- **Migraciones relacionadas:** `supabase/migrations/0008_futbol_stats.sql`,
+  `supabase/migrations/0033_futbol_stats_guests_and_guest_rename.sql`
+- **Última actualización:** 2026-09-19
 
 ## 1. Resumen
 
@@ -23,6 +24,12 @@ ya se confirma quién juega.
   hay) y un botón "Cargar resultado" / "Editar resultado".
 - MVP y goleador se eligen de una lista acotada a quienes confirmaron
   "Voy" al fútbol de ese evento — no de todos los usuarios de la app.
+- Desde `0033`, esa lista también incluye a los invitados al fútbol
+  (`event_guests`, kind `futbol`) — antes solo se podía elegir un
+  miembro registrado, aunque un invitado sí era elegible para armar
+  equipos (`specs/015-armar-equipos-futbol.md`). Mismo esquema de id
+  prefijado `u:<userId>`/`g:<eventGuestId>` que ya usa
+  `futbolTeamCandidates`/`saveFutbolTeams`.
 - Cualquier usuario logueado puede cargar o corregir el resultado, no
   solo el creador del evento (mismo criterio de confianza total que ya
   usan RSVPs).
@@ -65,6 +72,14 @@ Puntos que el SQL no explica por sí solo:
   se actualiza sola (igual criterio conservador que el resto de la app:
   nunca se borra/corrige algo automáticamente por un cambio en otra
   tabla, salvo los triggers ya existentes de `group_members`).
+- `0033_futbol_stats_guests_and_guest_rename.sql` suma
+  `mvp_event_guest_id`/`goleador_event_guest_id` (FK nullable a
+  `event_guests`, `on delete set null`) — mismo patrón que
+  `futbol_teams.event_guest_id` (`0026`). A diferencia de
+  `futbol_teams` (que exige exactamente una identidad por fila), acá
+  la constraint es "a lo sumo una de las dos" por campo
+  (`mvp_user_id`/`mvp_event_guest_id` y su par de goleador), porque es
+  válido no elegir a nadie.
 - Policy de `update` con `using (true)`: cualquier logueado puede
   corregir el resultado ya cargado por otra persona (no solo quien lo
   cargó originalmente) — refleja que esto es información compartida del
@@ -74,16 +89,24 @@ Puntos que el SQL no explica por sí solo:
 
 1. `/eventos/[eventId]` trae `futbol_stats` para el evento solo si
    `event.has_futbol` (si no tiene fútbol, ni se consulta la tabla).
-2. Los candidatos a MVP/goleador (`futbolCandidates`) se calculan
-   filtrando `attendeesFutbol` (ya traído para la sección de RSVP de
-   fútbol) por `status === "yes"` — no hay una consulta extra.
+2. Los candidatos a MVP/goleador ahora son `futbolTeamCandidates`
+   (compartidos con `FutbolTeamsSection`, ver `specs/015`) en vez de un
+   array propio de solo miembros: mezclan a quienes confirmaron "Voy"
+   al fútbol con los invitados al fútbol de ese evento, cada uno con
+   id prefijado `u:<userId>`/`g:<eventGuestId>`.
 3. `<FutbolStatsForm>` muestra el resultado actual (o un mensaje de "no
    cargado todavía") y, al tocar "Cargar/Editar resultado", un formulario
    con el texto libre de resultado y dos `<select>` (MVP, goleador) con
-   los candidatos.
-4. `upsertFutbolStats(eventId, formData)` hace `upsert` en
-   `futbol_stats` con `onConflict: "event_id"`, guardando campos vacíos
-   como `null`.
+   los candidatos, usando ese id prefijado como `value`. En el display
+   de solo lectura, un MVP/goleador miembro sigue linkeando a
+   `/perfil/[userId]`; uno invitado se muestra con `<GuestNameButton>`
+   (`src/components/GuestNameButton.tsx`, ver `specs/013`), editable
+   solo por admin.
+4. `upsertFutbolStats(eventId, formData)` recibe `mvpId`/`goleadorId`
+   (el id prefijado) y los parte en `{user_id, event_guest_id}` según
+   el prefijo (`splitPlayerId`, mismo criterio que `saveFutbolTeams`),
+   antes de hacer `upsert` en `futbol_stats` con `onConflict:
+   "event_id"`.
 
 ## 5. Criterios de aceptación
 
@@ -93,10 +116,13 @@ Puntos que el SQL no explica por sí solo:
       correctamente al cerrar el formulario.
 - [x] Editar un resultado ya cargado actualiza la misma fila (no crea
       una segunda).
-- [x] Los `<select>` de MVP y goleador solo ofrecen a quienes confirmaron
-      "Voy" al fútbol de ese evento.
+- [x] Los `<select>` de MVP y goleador ofrecen tanto a quienes
+      confirmaron "Voy" al fútbol como a los invitados al fútbol de ese
+      evento.
 - [x] Cualquier usuario logueado (no solo el creador del evento) puede
       cargar o corregir el resultado.
+- [x] Elegir un invitado como MVP/goleador persiste al recargar la
+      página y se muestra con su nombre en el resumen de solo lectura.
 
 ## 6. Decisiones y tradeoffs
 
@@ -106,6 +132,9 @@ Puntos que el SQL no explica por sí solo:
 | `event_id` como primary key de `futbol_stats` (1:1 con el evento) | `id` propio + FK a `event_id` con posibilidad de múltiples partidos por evento | No hay caso de uso de "más de un partido por evento" — un evento con fútbol tiene un partido. |
 | Cualquier logueado puede cargar/editar (`using (true)` en update) | Solo el creador del evento, o solo quien confirmó "Voy" al fútbol | Mismo criterio de confianza total que RSVPs y el resto de la app; cargar un resultado no tiene el mismo peso que borrar un evento o un gasto. |
 | Sin restricción de fecha para cargar el resultado | Bloquear el formulario hasta que `event_date` haya pasado | Agregar esa validación no aporta nada real (nadie va a cargar un resultado falso de un partido que no jugó) y sí agrega una condición más para mantener. |
+| Reusar `futbolTeamCandidates` para MVP/goleador (0033) | Armar un array propio que sume invitados por separado | Ya existe y ya mezcla miembros+invitados con el mismo esquema de id prefijado que usa `saveFutbolTeams` — no había motivo para mantener dos pipelines de candidatos en paralelo. |
+
+
 
 ## 7. Futuro / fuera de alcance
 
@@ -117,4 +146,8 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-19: MVP y goleador ahora admiten invitados al fútbol, no solo
+  miembros registrados (`0033_futbol_stats_guests_and_guest_rename.sql`),
+  a pedido explícito del usuario — mismo `u:`/`g:` esquema de id que
+  `futbol_teams`/`saveFutbolTeams`.
 - 2026-09-15: creada e implementada.
