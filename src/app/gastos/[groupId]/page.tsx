@@ -329,27 +329,31 @@ export default async function GroupPage({
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-foreground/50">Agregar gasto</h2>
-        <div className="mt-2">
-          {!canAddExpense ? (
-            <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
-              Necesitás ser parte de este grupo para cargar un gasto.
-            </p>
-          ) : payerOptions.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
-              Todavía nadie confirmó asistencia a este evento, no hay entre
-              quién elegir.
-            </p>
-          ) : (
-            <AddExpenseForm
-              groupId={groupId}
-              people={payerOptions}
-              defaultParticipantIds={expenseParticipantDefaults}
-              items={insumoItems ?? []}
-              isAdmin={isAdmin}
-            />
-          )}
-        </div>
+        {!canAddExpense ? (
+          <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
+            Necesitás ser parte de este grupo para cargar un gasto.
+          </p>
+        ) : payerOptions.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
+            Todavía nadie confirmó asistencia a este evento, no hay entre
+            quién elegir.
+          </p>
+        ) : (
+          <details>
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg bg-gastos px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:bg-gastos-hover active:scale-[0.98] [&::-webkit-details-marker]:hidden">
+              + Agregar gasto
+            </summary>
+            <div className="mt-3">
+              <AddExpenseForm
+                groupId={groupId}
+                people={payerOptions}
+                defaultParticipantIds={expenseParticipantDefaults}
+                items={insumoItems ?? []}
+                isAdmin={isAdmin}
+              />
+            </div>
+          </details>
+        )}
       </section>
 
       <section className="mt-8">
