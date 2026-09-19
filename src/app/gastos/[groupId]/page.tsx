@@ -9,6 +9,7 @@ import { CopyableText } from "@/components/ui/CopyableText";
 import { AddMemberForm } from "./AddMemberForm";
 import { AddExpenseForm } from "@/components/gastos/AddExpenseForm";
 import { DeleteExpenseButton } from "@/components/gastos/DeleteExpenseButton";
+import { ExpenseIconEditor } from "@/components/gastos/ExpenseIconEditor";
 
 export default async function GroupPage({
   params,
@@ -109,20 +110,22 @@ export default async function GroupPage({
   const memberAvatar = (id: string) =>
     profiles.find((p) => p.id === id)?.avatar_url ?? null;
 
-  // Solo se muestra ícono cuando el gasto está ligado a un ítem del
-  // catálogo (item_id) — a diferencia de "compra de insumos", una
-  // descripción de gasto en texto libre no pasa por matching de palabra
-  // clave (ver specs/002-gastos.md): sería raro que "Cuota cancha marzo"
-  // saque un emoji por casualidad.
-  const expenseIcon = (itemId: string | null) => {
-    const item = itemId ? insumoItems?.find((i) => i.id === itemId) : null;
-    return item ? resolveIcon(item) : null;
+  // Si el gasto está ligado a un ítem del catálogo (item_id), el emoji
+  // sale de ahí (resolveIcon, compartido con "compra de insumos"). Si
+  // no, cae a expenses.icon (0034) — a diferencia de "compra de
+  // insumos", una descripción en texto libre no pasa por matching de
+  // palabra clave (ver specs/002-gastos.md): sería raro que "Cuota
+  // cancha marzo" saque un emoji por casualidad, así que sin un icon
+  // explícito no se muestra nada.
+  const expenseIcon = (e: { item_id: string | null; icon: string | null }) => {
+    const item = e.item_id ? insumoItems?.find((i) => i.id === e.item_id) : null;
+    return item ? resolveIcon(item) : e.icon;
   };
 
   const { data: expenses } = await supabase
     .from("expenses")
     .select(
-      "id, description, item_id, amount, expense_date, paid_by, created_by, expense_shares(user_id, share_amount)",
+      "id, description, item_id, icon, amount, expense_date, paid_by, created_by, expense_shares(user_id, share_amount)",
     )
     .eq("group_id", groupId)
     .order("expense_date", { ascending: false })
@@ -297,11 +300,17 @@ export default async function GroupPage({
           {(expenses ?? []).map((e) => (
             <li key={e.id} className="flex items-center justify-between py-2 text-sm">
               <div>
-                <p className="font-medium">
-                  {expenseIcon(e.item_id) && (
-                    <span aria-hidden="true">{expenseIcon(e.item_id)} </span>
-                  )}
-                  {e.description}
+                <p className="flex items-center gap-1.5 font-medium">
+                  <span>
+                    {expenseIcon(e) && <span aria-hidden="true">{expenseIcon(e)} </span>}
+                    {e.description}
+                  </span>
+                  <ExpenseIconEditor
+                    expenseId={e.id}
+                    itemId={e.item_id}
+                    currentIcon={expenseIcon(e)}
+                    isAdmin={isAdmin}
+                  />
                 </p>
                 <p className="text-xs text-foreground/50">
                   {e.expense_date} · pagó {memberName(e.paid_by)}

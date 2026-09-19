@@ -174,6 +174,34 @@ export async function addExpense(groupId: string, formData: FormData) {
   return { ok: true };
 }
 
+// Mismo patrón que updateInsumoItemIcon (eventos/actions.ts): solo
+// admin, la policy RLS de 0034 es la barrera real. Solo tiene sentido
+// para un gasto sin item_id (texto libre) — si está ligado a un ítem
+// del catálogo, el emoji se edita ahí (updateInsumoItemIcon), no acá.
+export async function updateExpenseIcon(expenseId: string, icon: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (!me?.is_admin) return { error: "No tenés permisos de administrador." };
+
+  const { error } = await supabase
+    .from("expenses")
+    .update({ icon: icon || null })
+    .eq("id", expenseId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/gastos", "layout");
+  return { ok: true };
+}
+
 export async function deleteExpense(groupId: string, expenseId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("expenses").delete().eq("id", expenseId);

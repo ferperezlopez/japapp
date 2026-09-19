@@ -168,6 +168,7 @@ export interface Database {
           group_id: string;
           description: string;
           item_id: string | null;
+          icon: string | null;
           amount: number;
           paid_by: string;
           expense_date: string;
@@ -179,6 +180,7 @@ export interface Database {
           group_id: string;
           description: string;
           item_id?: string | null;
+          icon?: string | null;
           amount: number;
           paid_by: string;
           expense_date?: string;
@@ -190,6 +192,7 @@ export interface Database {
           group_id?: string;
           description?: string;
           item_id?: string | null;
+          icon?: string | null;
           amount?: number;
           paid_by?: string;
           expense_date?: string;

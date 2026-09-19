@@ -61,21 +61,27 @@ export async function sendPushToUsers(
   const url = payload.url || "/notificaciones";
   const normalizedPayload = { ...payload, url };
 
-  const { data: send } = await supabase
-    .from("notification_sends")
-    .insert({
-      kind: meta.kind,
-      sent_by: meta.sentBy ?? null,
-      title: payload.title,
-      body: payload.body,
-      url,
-    })
-    .select("id")
-    .single();
-  if (send) {
+  // Id generado acá (no vía `.select().single()` sobre el insert): un
+  // INSERT ... RETURNING queda sujeto a la policy de SELECT de la
+  // tabla, no solo a la de INSERT — para alguien no-admin, una fila
+  // recién creada no matchea esa policy todavía (get_push_subscriber_ids
+  // aparte, `notification_recipients` para esa fila ni existe hasta el
+  // segundo insert de abajo), así que Postgres la rechazaba con "new row
+  // violates row-level security policy" aunque el INSERT en sí esté
+  // permitido para cualquier logueado.
+  const sendId = crypto.randomUUID();
+  const { error: sendError } = await supabase.from("notification_sends").insert({
+    id: sendId,
+    kind: meta.kind,
+    sent_by: meta.sentBy ?? null,
+    title: payload.title,
+    body: payload.body,
+    url,
+  });
+  if (!sendError) {
     await supabase
       .from("notification_recipients")
-      .insert(userIds.map((userId) => ({ send_id: send.id, user_id: userId })));
+      .insert(userIds.map((userId) => ({ send_id: sendId, user_id: userId })));
   }
 
   if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) return { subscriptionCount: 0 };
