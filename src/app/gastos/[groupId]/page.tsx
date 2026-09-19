@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
 import { resolveIcon } from "@/lib/eventos/insumos";
+import { abbreviateName } from "@/lib/formatName";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { CopyableText } from "@/components/ui/CopyableText";
@@ -10,6 +11,8 @@ import { AddMemberForm } from "./AddMemberForm";
 import { AddExpenseForm } from "@/components/gastos/AddExpenseForm";
 import { DeleteExpenseButton } from "@/components/gastos/DeleteExpenseButton";
 import { ExpenseIconEditor } from "@/components/gastos/ExpenseIconEditor";
+import { ReportPaymentButton } from "@/components/gastos/ReportPaymentButton";
+import { DeleteDebtPaymentButton } from "@/components/gastos/DeleteDebtPaymentButton";
 
 export default async function GroupPage({
   params,
@@ -131,6 +134,15 @@ export default async function GroupPage({
     .order("expense_date", { ascending: false })
     .order("created_at", { ascending: false });
 
+  // Pagos ya reportados (0035, "informe de pago realizado") — se restan
+  // directo en calcularBalances, así que "para saldar cuentas" se achica
+  // sola sin tocar los gastos originales.
+  const { data: debtPayments } = await supabase
+    .from("debt_payments")
+    .select("id, from_user_id, to_user_id, amount, reported_by, created_at")
+    .eq("group_id", groupId)
+    .order("created_at", { ascending: false });
+
   // El universo de balances es "miembros formales" + cualquiera que ya
   // aparezca pagando o participando de un gasto de este grupo — desde que
   // el selector de "pagó"/"participantes" en AddExpenseForm dejó de estar
@@ -142,6 +154,10 @@ export default async function GroupPage({
   for (const e of expenses ?? []) {
     relevantIds.add(e.paid_by);
     for (const s of e.expense_shares) relevantIds.add(s.user_id);
+  }
+  for (const p of debtPayments ?? []) {
+    relevantIds.add(p.from_user_id);
+    relevantIds.add(p.to_user_id);
   }
   const balanceMemberIds = profiles
     .filter((p) => relevantIds.has(p.id))
@@ -155,6 +171,11 @@ export default async function GroupPage({
         userId: s.user_id,
         amount: Number(s.share_amount),
       })),
+    })),
+    (debtPayments ?? []).map((p) => ({
+      from: p.from_user_id,
+      to: p.to_user_id,
+      amount: Number(p.amount),
     })),
   );
   const settlements = simplificarDeudas(balances);
@@ -211,37 +232,77 @@ export default async function GroupPage({
             <h3 className="font-medium text-gastos-ink dark:text-gastos-mid">
               Para saldar cuentas
             </h3>
-            <ul className="mt-2 space-y-1 text-foreground/80">
+            <ul className="mt-2 space-y-2 text-foreground/80">
               {settlements.map((s, i) => (
-                <li key={i} className="flex flex-wrap items-center gap-1.5">
-                  <Link
-                    href={`/perfil/${s.from}`}
-                    className="inline-flex items-center gap-1.5 hover:underline"
-                  >
-                    <Avatar src={memberAvatar(s.from)} name={memberName(s.from)} size="sm" />
-                    {memberName(s.from)}
-                  </Link>{" "}
-                  le paga{" "}
-                  <span className="font-medium tabular-nums">
-                    ${s.amount.toFixed(2)}
-                  </span>{" "}
-                  a{" "}
-                  <Link
-                    href={`/perfil/${s.to}`}
-                    className="inline-flex items-center gap-1.5 hover:underline"
-                  >
-                    <Avatar src={memberAvatar(s.to)} name={memberName(s.to)} size="sm" />
-                    {memberName(s.to)}
-                  </Link>
-                  {memberAlias(s.to) && (
-                    <span className="text-foreground/50">
-                      {" "}
-                      (alias:{" "}
-                      <CopyableText text={memberAlias(s.to)!}>
-                        {memberAlias(s.to)}
-                      </CopyableText>
-                      )
+                <li
+                  key={i}
+                  className="flex items-center justify-between gap-2 overflow-x-auto whitespace-nowrap rounded-lg border border-surface-border bg-background px-3 py-2"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Link
+                      href={`/perfil/${s.from}`}
+                      className="inline-flex items-center gap-1 hover:underline"
+                    >
+                      <Avatar src={memberAvatar(s.from)} name={memberName(s.from)} size="sm" />
+                      {abbreviateName(memberName(s.from))}
+                    </Link>
+                    <span className="text-foreground/50">→</span>
+                    <span className="font-medium tabular-nums">
+                      ${s.amount.toFixed(2)}
                     </span>
+                    <span className="text-foreground/50">→</span>
+                    <Link
+                      href={`/perfil/${s.to}`}
+                      className="inline-flex items-center gap-1 hover:underline"
+                    >
+                      <Avatar src={memberAvatar(s.to)} name={memberName(s.to)} size="sm" />
+                      {abbreviateName(memberName(s.to))}
+                    </Link>
+                    {memberAlias(s.to) && (
+                      <CopyableText text={memberAlias(s.to)!}>
+                        <span className="text-foreground/50">
+                          (alias: {memberAlias(s.to)})
+                        </span>
+                      </CopyableText>
+                    )}
+                  </span>
+                  <ReportPaymentButton
+                    groupId={groupId}
+                    fromUserId={s.from}
+                    toUserId={s.to}
+                    fromName={memberName(s.from)}
+                    toName={memberName(s.to)}
+                    suggestedAmount={s.amount}
+                  />
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
+        {(debtPayments ?? []).length > 0 && (
+          <Card className="mt-4 p-4 text-sm">
+            <h3 className="font-medium text-foreground/70">Pagos registrados</h3>
+            <ul className="mt-2 space-y-2 text-foreground/80">
+              {(debtPayments ?? []).map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between gap-2 overflow-x-auto whitespace-nowrap rounded-lg border border-surface-border bg-background px-3 py-2"
+                >
+                  <span className="flex items-center gap-1.5">
+                    {abbreviateName(memberName(p.from_user_id))}
+                    <span className="text-foreground/50">→</span>
+                    <span className="font-medium tabular-nums">
+                      ${Number(p.amount).toFixed(2)}
+                    </span>
+                    <span className="text-foreground/50">→</span>
+                    {abbreviateName(memberName(p.to_user_id))}
+                    <span className="text-xs text-foreground/50">
+                      {new Date(p.created_at).toLocaleDateString("es-AR")}
+                    </span>
+                  </span>
+                  {p.reported_by === user?.id && (
+                    <DeleteDebtPaymentButton groupId={groupId} paymentId={p.id} />
                   )}
                 </li>
               ))}

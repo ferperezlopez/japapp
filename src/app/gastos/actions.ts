@@ -210,3 +210,50 @@ export async function deleteExpense(groupId: string, expenseId: string) {
   revalidatePath(`/gastos/${groupId}`);
   return { ok: true };
 }
+
+// "Informe de pago realizado" (0035): registra una transferencia real
+// entre dos personas para saldar (total o parcial) la deuda que ya
+// sugiere "para saldar cuentas" — no es un gasto, calcularBalances la
+// resta directo (ver src/lib/gastos/balances.ts). Cualquier logueado
+// puede reportarlo (mismo criterio de confianza que el resto de la
+// app), no hace falta ser ninguno de los dos involucrados.
+export async function reportPayment(
+  groupId: string,
+  fromUserId: string,
+  toUserId: string,
+  amount: number,
+) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { error: "El monto tiene que ser mayor a 0." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { error } = await supabase.from("debt_payments").insert({
+    group_id: groupId,
+    from_user_id: fromUserId,
+    to_user_id: toUserId,
+    amount,
+    reported_by: user.id,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/gastos/${groupId}`);
+  return { ok: true };
+}
+
+export async function deleteDebtPayment(groupId: string, paymentId: string) {
+  const supabase = await createClient();
+
+  // La policy RLS "Quien registro el pago lo puede borrar" es la
+  // barrera real acá, igual que deleteExpense.
+  const { error } = await supabase.from("debt_payments").delete().eq("id", paymentId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/gastos/${groupId}`);
+  return { ok: true };
+}

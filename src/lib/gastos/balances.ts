@@ -3,6 +3,12 @@ export interface ExpenseForBalance {
   shares: { userId: string; amount: number }[];
 }
 
+export interface PaymentForBalance {
+  from: string;
+  to: string;
+  amount: number;
+}
+
 export interface Balance {
   userId: string;
   balance: number; // positivo: le deben plata. negativo: debe plata.
@@ -14,9 +20,16 @@ export interface Settlement {
   amount: number;
 }
 
+// `payments`: pagos ya reportados entre dos personas (debt_payments,
+// specs/002-gastos.md) — a diferencia de un gasto, acá nadie "consume"
+// nada, es plata que cambió de mano para saldar una deuda ya calculada.
+// Mismo efecto en el balance que un gasto de un solo participante:
+// quien paga suma a su balance (debe menos), quien recibe resta (le
+// deben menos).
 export function calcularBalances(
   memberIds: string[],
   expenses: ExpenseForBalance[],
+  payments: PaymentForBalance[] = [],
 ): Balance[] {
   const balanceByUser = new Map<string, number>(
     memberIds.map((id) => [id, 0]),
@@ -34,6 +47,17 @@ export function calcularBalances(
         (balanceByUser.get(share.userId) ?? 0) - share.amount,
       );
     }
+  }
+
+  for (const payment of payments) {
+    balanceByUser.set(
+      payment.from,
+      (balanceByUser.get(payment.from) ?? 0) + payment.amount,
+    );
+    balanceByUser.set(
+      payment.to,
+      (balanceByUser.get(payment.to) ?? 0) - payment.amount,
+    );
   }
 
   return memberIds.map((userId) => ({

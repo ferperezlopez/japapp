@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { saveFutbolTeams } from "../actions";
 import { withMinDuration } from "@/lib/withMinDuration";
 import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
+import { abbreviateName } from "@/lib/formatName";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 
@@ -36,14 +37,6 @@ const JERSEY_COLORS: Record<
     text: "var(--color-amber-ink)",
   },
 };
-
-// "M. Perez" a partir de "Fernando Pérez López" — inicial del nombre +
-// el primer apellido (no todos), para la etiqueta debajo de la camiseta.
-function nameLabel(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return parts[0] ?? "";
-  return `${parts[0][0]}. ${parts[1]}`;
-}
 
 // Camiseta con dorsal numérico, SVG inline (sin dependencia nueva): clara
 // para el Equipo 1, oscura para el Equipo 2, y un tercer color (arquero)
@@ -238,7 +231,7 @@ export function TeamBuilderModal({
       >
         <Jersey number={number} variant={variant} />
         <span className="rounded-full bg-black/40 px-1.5 py-0.5 text-[9px] font-medium text-white">
-          {nameLabel(c.name)}
+          {abbreviateName(c.name)}
         </span>
       </div>
     );

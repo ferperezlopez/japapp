@@ -130,6 +130,46 @@ describe("calcularBalances", () => {
     ]);
   });
 
+  it("un pago reportado reduce la deuda del pagador y lo recibido por el acreedor", () => {
+    const result = calcularBalances(
+      ["a", "b"],
+      [
+        {
+          paidBy: "a",
+          shares: [
+            { userId: "a", amount: 50 },
+            { userId: "b", amount: 50 },
+          ],
+        },
+      ],
+      [{ from: "b", to: "a", amount: 30 }],
+    );
+    expect(result).toEqual([
+      { userId: "a", balance: 20 },
+      { userId: "b", balance: -20 },
+    ]);
+  });
+
+  it("un pago que salda toda la deuda deja el balance en 0", () => {
+    const result = calcularBalances(
+      ["a", "b"],
+      [
+        {
+          paidBy: "a",
+          shares: [
+            { userId: "a", amount: 50 },
+            { userId: "b", amount: 50 },
+          ],
+        },
+      ],
+      [{ from: "b", to: "a", amount: 50 }],
+    );
+    expect(result).toEqual([
+      { userId: "a", balance: 0 },
+      { userId: "b", balance: 0 },
+    ]);
+  });
+
   it("acepta montos negativos (ej. un reembolso) sin rechazarlos", () => {
     const result = calcularBalances(
       ["a", "b"],
