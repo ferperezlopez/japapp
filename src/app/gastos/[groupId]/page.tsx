@@ -236,9 +236,9 @@ export default async function GroupPage({
               {settlements.map((s, i) => (
                 <li
                   key={i}
-                  className="flex items-center justify-between gap-2 overflow-x-auto whitespace-nowrap rounded-lg border border-surface-border bg-background px-3 py-2"
+                  className="rounded-lg border border-surface-border bg-background px-3 py-2"
                 >
-                  <span className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <Link
                       href={`/perfil/${s.from}`}
                       className="inline-flex items-center gap-1 hover:underline"
@@ -246,10 +246,6 @@ export default async function GroupPage({
                       <Avatar src={memberAvatar(s.from)} name={memberName(s.from)} size="sm" />
                       {abbreviateName(memberName(s.from))}
                     </Link>
-                    <span className="text-foreground/50">→</span>
-                    <span className="font-medium tabular-nums">
-                      ${s.amount.toFixed(2)}
-                    </span>
                     <span className="text-foreground/50">→</span>
                     <Link
                       href={`/perfil/${s.to}`}
@@ -265,15 +261,20 @@ export default async function GroupPage({
                         </span>
                       </CopyableText>
                     )}
-                  </span>
-                  <ReportPaymentButton
-                    groupId={groupId}
-                    fromUserId={s.from}
-                    toUserId={s.to}
-                    fromName={memberName(s.from)}
-                    toName={memberName(s.to)}
-                    suggestedAmount={s.amount}
-                  />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <span className="font-medium tabular-nums">
+                      ${s.amount.toFixed(2)}
+                    </span>
+                    <ReportPaymentButton
+                      groupId={groupId}
+                      fromUserId={s.from}
+                      toUserId={s.to}
+                      fromName={memberName(s.from)}
+                      toName={memberName(s.to)}
+                      suggestedAmount={s.amount}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -287,23 +288,24 @@ export default async function GroupPage({
               {(debtPayments ?? []).map((p) => (
                 <li
                   key={p.id}
-                  className="flex items-center justify-between gap-2 overflow-x-auto whitespace-nowrap rounded-lg border border-surface-border bg-background px-3 py-2"
+                  className="rounded-lg border border-surface-border bg-background px-3 py-2"
                 >
-                  <span className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {abbreviateName(memberName(p.from_user_id))}
-                    <span className="text-foreground/50">→</span>
-                    <span className="font-medium tabular-nums">
-                      ${Number(p.amount).toFixed(2)}
-                    </span>
                     <span className="text-foreground/50">→</span>
                     {abbreviateName(memberName(p.to_user_id))}
                     <span className="text-xs text-foreground/50">
                       {new Date(p.created_at).toLocaleDateString("es-AR")}
                     </span>
-                  </span>
-                  {p.reported_by === user?.id && (
-                    <DeleteDebtPaymentButton groupId={groupId} paymentId={p.id} />
-                  )}
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <span className="font-medium tabular-nums">
+                      ${Number(p.amount).toFixed(2)}
+                    </span>
+                    {p.reported_by === user?.id && (
+                      <DeleteDebtPaymentButton groupId={groupId} paymentId={p.id} />
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

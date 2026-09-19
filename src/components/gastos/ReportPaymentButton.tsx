@@ -34,7 +34,7 @@ export function ReportPaymentButton({
         title="Marcar como pagado"
         className="shrink-0 text-xs font-medium text-eventos hover:underline"
       >
-        ✅ Pagado
+        🕓 Marcar pagado
       </button>
       {open && (
         <ReportPaymentModal
