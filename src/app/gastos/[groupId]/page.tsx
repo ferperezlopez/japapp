@@ -198,7 +198,7 @@ export default async function GroupPage({
       {settlements.length > 0 && (
         <section className="mt-6">
           <Card className="bg-gastos-soft/60 p-4 text-sm">
-            <h2 className="font-medium text-gastos-ink dark:text-gastos-mid">
+            <h2 className="font-medium text-gastos-ink">
               Para saldar cuentas
             </h2>
             <ul className="mt-2 space-y-2 text-foreground/80">
