@@ -8,8 +8,10 @@
   (relaja el SELECT de este esquema para grupos enlazados a un evento — ver
   `specs/004-eventos-gastos-y-fotos.md`), `supabase/migrations/0027_insumo_items_icon.sql`
   (suma `expenses.item_id`, ligando opcionalmente un gasto al catálogo
-  `insumo_items` de `specs/013-invitados-tareas-y-stats.md`)
-- **Última actualización:** 2026-09-17
+  `insumo_items` de `specs/013-invitados-tareas-y-stats.md`),
+  `supabase/migrations/0035_debt_payments.sql` (tabla `debt_payments`:
+  informe de pago realizado, ver sección 4)
+- **Última actualización:** 2026-09-19
 
 ## 1. Resumen
 
@@ -47,7 +49,14 @@ transferencias posible.
   el resto de centavos (por redondeo) entre los primeros N participantes.
 - Cálculo de balances por miembro (cuánto puso vs. cuánto le corresponde).
 - Simplificación de deudas: algoritmo goloso que minimiza la cantidad de
-  transferencias necesarias para saldar todo.
+  transferencias necesarias para saldar todo (no garantiza el óptimo
+  global en todos los casos — ver sección 6).
+- Informar que un pago sugerido de "para saldar cuentas" se hizo en la
+  vida real (`reportPayment`): cualquier miembro logueado del grupo
+  puede registrarlo (no hace falta ser ninguna de las dos personas
+  involucradas), con el monto editable por si se pagó parcial o un poco
+  distinto al sugerido. Descuenta directo del cálculo de balances (ver
+  sección 4), y puede borrarse (solo quien lo reportó).
 - Borrar un gasto (solo quien lo creó).
 
 ### No incluye (por ahora)
@@ -57,8 +66,6 @@ transferencias posible.
 - Sacar a otro miembro de un grupo (un miembro puede autoeliminarse via
   RLS — policy `"Un miembro puede salirse de un grupo"` — pero no hay
   botón/UI para eso todavía).
-- Registrar pagos reales de saldar deudas (los "settlements" son solo una
-  sugerencia calculada, no se persisten ni se marcan como pagados).
 - Invitar por email real a alguien que nunca usó la app.
 
 ## 3. Modelo de datos
@@ -79,6 +86,15 @@ Puntos que el SQL no explica por sí solo:
   porcentaje), calculado por `splitEqual()` en
   `src/app/gastos/actions.ts` antes del insert — la división en centavos
   vive en la app, no en DB.
+- `debt_payments` (`0035_debt_payments.sql`) modela una transferencia
+  real entre dos miembros del grupo, separada de `expenses`: no es un
+  gasto (nadie "consume" nada), es plata que cambió de mano para saldar
+  una deuda ya calculada. No toca las filas de `expenses`/`expense_shares`
+  originales — es un ledger aditivo que `calcularBalances()` también
+  suma (ver sección 4). Mismo patrón de RLS que `expenses`: insert
+  requiere ser miembro del grupo y `reported_by = auth.uid()`; select
+  permite miembros del grupo o cualquiera si el grupo está enlazado a
+  un evento; delete solo a quien reportó el pago.
 
 ## 4. Diseño / flujo
 
@@ -143,6 +159,32 @@ Puntos que el SQL no explica por sí solo:
    action — se apoya enteramente en la policy RLS `"Quien creo el gasto
    lo puede borrar"`. La UI oculta el botón de borrar si
    `expense.created_by !== user.id`, pero eso es UX, no la barrera real.
+7. `/gastos/[groupId]` trae también `debt_payments` del grupo y suma
+   `from_user_id`/`to_user_id` al universo de `calcularBalances()` (igual
+   que ya hacía con pagadores/participantes de gastos). `calcularBalances()`
+   (`src/lib/gastos/balances.ts`) acepta un tercer parámetro opcional
+   `payments` que ajusta el balance exactamente igual que un gasto de un
+   solo participante (quien pagó suma, quien recibió resta) — por eso un
+   pago reportado achica la sugerencia de "para saldar cuentas" en el
+   próximo cálculo, sin tocar ningún `expense` existente. El parámetro es
+   opcional (default `[]`) para no romper otros call sites/tests.
+8. `reportPayment(groupId, fromUserId, toUserId, amount)` (server action,
+   `src/app/gastos/actions.ts`) valida `amount > 0` y sesión, inserta en
+   `debt_payments` con `reported_by: user.id`, y revalida la página. Se
+   dispara desde `<ReportPaymentButton>` (`src/components/gastos/`), un
+   botón "✅ Pagado" en cada fila de "para saldar cuentas" que abre un
+   modal con el monto sugerido pre-cargado pero editable (mismo shell de
+   modal que `EditGuestNameModal`: overlay, Escape/click afuera, bloqueo
+   de scroll). `deleteDebtPayment(groupId, paymentId)` borra un pago
+   reportado, apoyada en la policy RLS de delete (mismo patrón que
+   `deleteExpense`); el botón `<DeleteDebtPaymentButton>` solo se muestra
+   si `reported_by === user.id`.
+9. Las filas de "para saldar cuentas" usan `abbreviateName()`
+   (`src/lib/formatName.ts`, extraído de `TeamBuilderModal.tsx`) para
+   mostrar "F. Pérez" en vez del nombre completo, y cada pago es su
+   propia caja con borde (`rounded-lg border ...`) en una lista con
+   `space-y-2`, en vez de un `<ul>` plano — así se lee en una sola línea
+   por pago y cada uno queda visualmente separado del siguiente.
 
 ## 5. Criterios de aceptación
 
@@ -191,6 +233,18 @@ Puntos que el SQL no explica por sí solo:
 - [x] Escribir una descripción en texto libre (sin elegir del
       catálogo) sigue funcionando igual que antes, sin emoji, y no crea
       una fila nueva en `insumo_items`.
+- [x] Cada fila de "para saldar cuentas" entra en una sola línea (nombres
+      abreviados) y se ve claramente separada de la siguiente (caja con
+      borde propia).
+- [x] Tocar "✅ Pagado" en una fila abre un modal con el monto sugerido
+      pre-cargado; confirmar (con el monto tal cual o editado) crea una
+      fila en `debt_payments` y esa deuda se descuenta del cálculo de
+      balances en el próximo render, sin alterar ningún `expense`.
+- [x] Un pago reportado aparece en "Pagos registrados"; el botón de
+      borrarlo solo es visible para quien lo reportó, y borrar vía
+      policy RLS solo lo permite a `reported_by`.
+- [x] Cualquier miembro logueado del grupo puede reportar un pago, no
+      solo las dos personas involucradas en esa deuda.
 
 ## 6. Decisiones y tradeoffs
 
@@ -206,14 +260,22 @@ Puntos que el SQL no explica por sí solo:
 | La lista "Miembros" de la página del grupo sigue mostrando `group_members` sin cambios, aunque ahora puede diferir de quién aparece en `payerOptions` para un grupo enlazado a un evento | Actualizar también "Miembros" para que muestre solo confirmados en grupos con evento, y así las dos listas siempre coincidan | Decisión explícita del usuario: aceptar la inconsistencia por ahora en vez de tocar un concepto más (membresía formal del grupo) que no fue parte de este pedido. |
 | Gastos comparte el catálogo `insumo_items` de "compra de insumos" (`ItemPicker` extraído a `src/components/ItemPicker.tsx`) | Un catálogo de ítems propio y separado para Gastos | Decisión del usuario (`AskUserQuestion`): un emoji cargado de un lado (Tareas) se ve del otro (Gastos), sin duplicar el concepto. |
 | Elegir texto libre nuevo en Gastos NO crea una fila en `insumo_items` (a diferencia de "compra de insumos", donde sí) | Mismo comportamiento que `addTaskAssignee`: cualquier texto nuevo se guarda en el catálogo | Las descripciones de gasto suelen ser puntuales ("Cuota cancha marzo"), no cosas reusables como "Carne" — auto-crearlas ensuciaría el catálogo compartido con Tareas. |
+| Cualquier miembro logueado del grupo puede reportar un pago (`reportPayment`), no solo las dos personas involucradas | Restringir el insert a que `reported_by` sea `fromUserId` o `toUserId` | Mismo criterio de confianza total que ya usa el resto de la app (ej. `futbol_stats`, `event_tasks`: cualquier logueado puede cargar/corregir) — un tercero puede enterarse de que el pago se hizo y registrarlo. |
+| Reportar un pago afecta de verdad el cálculo de balances (tercer parámetro de `calcularBalances`), no es solo un check cosmético | Guardar el pago únicamente como registro histórico, sin tocar el cálculo | Si no descuenta del balance, la misma sugerencia de "para saldar cuentas" seguiría apareciendo después de pagarla — confuso y contradice el propósito de la feature. |
+| `debt_payments` es una tabla nueva y separada, no una columna/estado sobre `expenses` | Agregar un campo "pagado" a `expense_shares` o a los settlements calculados | Un settlement no es una fila persistida (se recalcula en cada render) y puede involucrar montos que no corresponden 1:1 a ningún `expense_share` puntual (son netos entre dos personas) — una tabla propia modela mejor "plata que cambió de mano" sin forzar ese concepto sobre el modelo de gastos. |
 
 ## 7. Futuro / fuera de alcance
 
 - Editar un gasto ya cargado (hoy hay que borrarlo y recargarlo).
 - Borrar grupo / sacar miembro desde la UI (la policy de "salirse" ya
   existe en DB, falta el botón).
-- Marcar un settlement sugerido como "ya pagado" (persistirlo).
 - Split no igualitario.
+- El algoritmo de simplificación de deudas sigue siendo goloso (ordena
+  y empareja el mayor deudor con el mayor acreedor), no un minimizador
+  exacto de transferencias — existen casos donde un backtracking
+  encontraría una transferencia menos. No se resolvió por no haber
+  aparecido un caso real que lo necesite; ver sección 5 (criterio
+  "converge y es determinístico", no "óptimo global").
 - ~~Enlace con `events.group_id` para una futura sección de estadísticas~~
   — implementado en `specs/004-eventos-gastos-y-fotos.md` (todo evento
   crea y usa su propio grupo de gastos). La sección de estadísticas en sí
@@ -221,6 +283,17 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-19: "Para saldar cuentas" mostraba cada fila en 2 líneas
+  (nombre completo + texto "le paga ... a"), confuso de leer, y no había
+  forma de informar que un pago sugerido ya se hizo. Se agregó
+  `debt_payments` (tabla nueva, `0035_debt_payments.sql`) + `reportPayment`/
+  `deleteDebtPayment` + `<ReportPaymentButton>`/`<DeleteDebtPaymentButton>`
+  (ver sección 4), y se rediseñaron las filas: nombres abreviados
+  (`abbreviateName()`, nuevo `src/lib/formatName.ts`, extraído de
+  `TeamBuilderModal.tsx`) en una sola línea por pago, cada uno en su
+  propia caja separada de la siguiente. Nueva sección "Pagos
+  registrados" lista lo ya reportado con opción de borrar (solo quien lo
+  reportó).
 - 2026-09-17: la descripción de un gasto se carga con el `<ItemPicker>`
   compartido con "compra de insumos" (`specs/013-invitados-tareas-y-stats.md`),
   contra el mismo catálogo `insumo_items` — elegir un ítem existente
