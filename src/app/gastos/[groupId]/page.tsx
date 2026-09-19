@@ -195,43 +195,12 @@ export default async function GroupPage({
         {group.name}
       </h1>
 
-      <section className="mt-6">
-        <h2 className="text-sm font-medium text-foreground/50">Balances</h2>
-        <ul className="mt-2 space-y-1">
-          {balances.map((b) => (
-            <li
-              key={b.userId}
-              className="flex items-center justify-between text-sm"
-            >
-              <Link
-                href={`/perfil/${b.userId}`}
-                className="flex items-center gap-1.5 text-foreground/80 hover:underline"
-              >
-                <Avatar src={memberAvatar(b.userId)} name={memberName(b.userId)} size="sm" />
-                {memberName(b.userId)}
-              </Link>
-              {b.balance > 0 ? (
-                <span className="rounded-full bg-eventos-soft px-2.5 py-0.5 text-xs font-medium text-eventos-ink">
-                  +${b.balance.toFixed(2)}
-                </span>
-              ) : b.balance < 0 ? (
-                <span className="rounded-full bg-gastos-soft px-2.5 py-0.5 text-xs font-medium text-gastos-ink">
-                  ${b.balance.toFixed(2)}
-                </span>
-              ) : (
-                <span className="rounded-full bg-surface px-2.5 py-0.5 text-xs font-medium text-foreground/50">
-                  $0.00
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-
-        {settlements.length > 0 && (
-          <Card className="mt-4 bg-gastos-soft/60 p-4 text-sm">
-            <h3 className="font-medium text-gastos-ink dark:text-gastos-mid">
+      {settlements.length > 0 && (
+        <section className="mt-6">
+          <Card className="bg-gastos-soft/60 p-4 text-sm">
+            <h2 className="font-medium text-gastos-ink dark:text-gastos-mid">
               Para saldar cuentas
-            </h3>
+            </h2>
             <ul className="mt-2 space-y-2 text-foreground/80">
               {settlements.map((s, i) => (
                 <li
@@ -255,10 +224,11 @@ export default async function GroupPage({
                       {abbreviateName(memberName(s.to))}
                     </Link>
                     {memberAlias(s.to) && (
-                      <CopyableText text={memberAlias(s.to)!}>
-                        <span className="text-foreground/50">
-                          (alias: {memberAlias(s.to)})
-                        </span>
+                      <CopyableText
+                        text={memberAlias(s.to)!}
+                        className="text-xs text-foreground/50"
+                      >
+                        Copiar alias
                       </CopyableText>
                     )}
                   </div>
@@ -279,11 +249,13 @@ export default async function GroupPage({
               ))}
             </ul>
           </Card>
-        )}
+        </section>
+      )}
 
-        {(debtPayments ?? []).length > 0 && (
-          <Card className="mt-4 p-4 text-sm">
-            <h3 className="font-medium text-foreground/70">Pagos registrados</h3>
+      {(debtPayments ?? []).length > 0 && (
+        <section className="mt-6">
+          <Card className="p-4 text-sm">
+            <h2 className="font-medium text-foreground/70">Pagos registrados</h2>
             <ul className="mt-2 space-y-2 text-foreground/80">
               {(debtPayments ?? []).map((p) => (
                 <li
@@ -310,27 +282,50 @@ export default async function GroupPage({
               ))}
             </ul>
           </Card>
-        )}
-      </section>
+        </section>
+      )}
 
-      <section className="mt-8">
-        <h2 className="text-sm font-medium text-foreground/50">Miembros</h2>
-        <ul className="mt-2 flex flex-wrap gap-2">
-          {members.map((m) => (
-            <li key={m.id}>
-              <Link
-                href={`/perfil/${m.id}`}
-                className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80 transition-colors duration-200 hover:bg-surface-border"
+      <section className="mt-6">
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-foreground/50">
+            Balances
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {balances.map((b) => (
+              <li
+                key={b.userId}
+                className="flex items-center justify-between text-sm"
               >
-                <Avatar src={m.avatar_url} name={m.name ?? m.email} size="sm" />
-                {m.name ?? m.email}
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3">
-          <AddMemberForm groupId={groupId} />
-        </div>
+                <Link
+                  href={`/perfil/${b.userId}`}
+                  className="flex items-center gap-1.5 text-foreground/80 hover:underline"
+                >
+                  <Avatar src={memberAvatar(b.userId)} name={memberName(b.userId)} size="sm" />
+                  {memberName(b.userId)}
+                </Link>
+                {b.balance > 0 ? (
+                  <span className="rounded-full bg-eventos-soft px-2.5 py-0.5 text-xs font-medium text-eventos-ink">
+                    +${b.balance.toFixed(2)}
+                  </span>
+                ) : b.balance < 0 ? (
+                  <span className="rounded-full bg-gastos-soft px-2.5 py-0.5 text-xs font-medium text-gastos-ink">
+                    ${b.balance.toFixed(2)}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-surface px-2.5 py-0.5 text-xs font-medium text-foreground/50">
+                    $0.00
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3">
+            <p className="text-xs font-medium text-foreground/50">Agregar miembro</p>
+            <div className="mt-1">
+              <AddMemberForm groupId={groupId} />
+            </div>
+          </div>
+        </details>
       </section>
 
       <section className="mt-8">
