@@ -70,7 +70,7 @@ const ITEMS = [
 // más secciones admin-only conviene generalizar recién ahí.
 const ADMIN_ITEM = {
   href: "/comunicaciones",
-  label: "Comunicaciones",
+  label: "Notificaciones",
   colorClasses: "bg-amber-soft text-amber-ink",
   icon: (
     <>
