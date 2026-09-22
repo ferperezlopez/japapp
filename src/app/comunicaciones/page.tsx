@@ -83,38 +83,13 @@ export default async function ComunicacionesPage() {
         Admin
       </p>
       <h1 className="mt-1 font-heading text-3xl font-semibold text-foreground">
-        Comunicaciones
+        Notificaciones
       </h1>
       <p className="mt-2 text-sm text-foreground/60">
         Mandá una notificación push a todo el grupo o a un grupo elegido de
         miembros. Solo le llega a quien haya activado las notificaciones
         desde su perfil.
       </p>
-
-      <div className="mt-6 rounded-xl border border-surface-border bg-surface p-4 text-sm">
-        <p className="font-medium text-foreground">Quién recibe notificaciones</p>
-        <p className="mt-1 text-xs text-foreground/50">
-          {optedInCount} de {(members ?? []).length} miembros activaron las
-          notificaciones.
-        </p>
-        <ul className="mt-2 divide-y divide-surface-border">
-          {(members ?? []).map((member) => {
-            const optedIn = subscribedIds.has(member.id);
-            return (
-              <li key={member.id} className="flex items-center justify-between py-1.5">
-                <span className="text-foreground">{member.name ?? member.email}</span>
-                {optedIn ? (
-                  <span className="text-xs font-medium text-green-600 dark:text-green-400">
-                    🔔 Activadas
-                  </span>
-                ) : (
-                  <span className="text-xs text-foreground/40">🔕 No activadas</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
 
       <div className="mt-6">
         <AdminCommsForm members={members ?? []} subscribedIds={[...subscribedIds]} />
@@ -161,6 +136,29 @@ export default async function ComunicacionesPage() {
           </ul>
         )}
       </div>
+
+      <details className="mt-8 rounded-xl border border-surface-border bg-surface p-4 text-sm">
+        <summary className="cursor-pointer font-medium text-foreground">
+          Quién recibe notificaciones ({optedInCount}/{(members ?? []).length})
+        </summary>
+        <ul className="mt-2 divide-y divide-surface-border">
+          {(members ?? []).map((member) => {
+            const optedIn = subscribedIds.has(member.id);
+            return (
+              <li key={member.id} className="flex items-center justify-between py-1.5">
+                <span className="text-foreground">{member.name ?? member.email}</span>
+                {optedIn ? (
+                  <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                    🔔 Activadas
+                  </span>
+                ) : (
+                  <span className="text-xs text-foreground/40">🔕 No activadas</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
     </div>
   );
 }
