@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/balance-reminders",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/sync-photos-to-google",
+      "schedule": "0 13 * * *"
     }
   ]
 }

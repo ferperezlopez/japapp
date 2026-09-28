@@ -891,6 +891,11 @@ export interface Database {
           storage_path: string;
           created_at: string;
           legacy: boolean;
+          google_media_item_id: string | null;
+          taken_at: string | null;
+          width: number | null;
+          height: number | null;
+          original_staging_path: string | null;
         };
         Insert: {
           id?: string;
@@ -899,6 +904,11 @@ export interface Database {
           storage_path: string;
           created_at?: string;
           legacy?: boolean;
+          google_media_item_id?: string | null;
+          taken_at?: string | null;
+          width?: number | null;
+          height?: number | null;
+          original_staging_path?: string | null;
         };
         Update: {
           id?: string;
@@ -907,6 +917,11 @@ export interface Database {
           storage_path?: string;
           created_at?: string;
           legacy?: boolean;
+          google_media_item_id?: string | null;
+          taken_at?: string | null;
+          width?: number | null;
+          height?: number | null;
+          original_staging_path?: string | null;
         };
         Relationships: [
           {

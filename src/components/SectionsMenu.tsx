@@ -29,6 +29,18 @@ const ITEMS = [
     ),
   },
   {
+    href: "/fotos",
+    label: "Fotos",
+    colorClasses: "bg-eventos-soft text-eventos",
+    icon: (
+      <>
+        <rect x="3.5" y="5" width="17" height="14" rx="2" strokeLinejoin="round" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 16.5 8.5 12l3 2.5 4-4 4.5 4" />
+        <circle cx="8.25" cy="9" r="1.25" />
+      </>
+    ),
+  },
+  {
     href: "/calculadoras/asado",
     label: "Calculadoras",
     colorClasses: "bg-brand-soft text-brand",

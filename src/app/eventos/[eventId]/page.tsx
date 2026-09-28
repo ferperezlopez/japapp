@@ -488,15 +488,22 @@ export default async function EventoPage({
       | "maybe"
       | undefined) ?? null;
 
-  // Fotos: URLs firmadas en batch, expiran en 1h. Las "legacy" (ver
-  // specs/011-fotos-legacy-y-carrusel.md) quedan fuera de la galería del
-  // evento, aunque siguen contando para el pool general de la landing.
-  const { data: mediaRows } = await supabase
+  // Fotos: acá solo se muestra una muestra chica (las más recientes) con
+  // el preview rápido de Supabase — la navegación completa vive en
+  // /fotos (ver specs/019-fotos-y-google-photos.md), que además muestra
+  // el archivo en tamaño original guardado en Google Photos. URLs
+  // firmadas en batch, expiran en 1h. Las "legacy" (ver
+  // specs/011-fotos-legacy-y-carrusel.md) quedan fuera de esta muestra,
+  // aunque siguen contando para el pool general de la landing y para
+  // /fotos.
+  const PHOTO_PREVIEW_COUNT = 6;
+  const { data: mediaRows, count: totalPhotoCount } = await supabase
     .from("event_media")
-    .select("id, storage_path, uploaded_by")
+    .select("id, storage_path, uploaded_by", { count: "exact" })
     .eq("event_id", eventId)
     .eq("legacy", false)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(PHOTO_PREVIEW_COUNT);
 
   const paths = (mediaRows ?? []).map((m) => m.storage_path);
   const { data: signedUrls } =
@@ -721,7 +728,17 @@ export default async function EventoPage({
       )}
 
       <section className="mt-8">
-        <h2 className="text-sm font-medium">Fotos</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-medium">Fotos</h2>
+          {(totalPhotoCount ?? 0) > PHOTO_PREVIEW_COUNT && (
+            <Link
+              href={`/fotos?event=${eventId}`}
+              className="text-xs font-medium text-eventos hover:underline"
+            >
+              Ver todas las fotos →
+            </Link>
+          )}
+        </div>
         <div className="mt-2">
           <UploadPhotoForm eventId={eventId} />
           <PhotoGrid

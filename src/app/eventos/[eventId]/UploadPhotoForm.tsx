@@ -14,7 +14,10 @@ const ALLOWED_TYPES = [
   "image/heic",
   "image/heif",
 ];
-const MAX_SIZE_BYTES = 15 * 1024 * 1024;
+// El original (sin comprimir) va a un bucket de tránsito de hasta 45MB
+// (ver 0036_event_media_google_photos.sql) antes de guardarse en tamaño
+// completo en Google Photos — margen amplio sobre una foto de celular.
+const MAX_SIZE_BYTES = 45 * 1024 * 1024;
 
 export function UploadPhotoForm({ eventId }: { eventId: string }) {
   const [error, setError] = useState<string | null>(null);
@@ -32,32 +35,47 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
       return;
     }
     if (file.size > MAX_SIZE_BYTES) {
-      setError("La foto no puede pesar más de 15MB.");
+      setError("La foto no puede pesar más de 45MB.");
       return;
     }
 
     startTransition(async () => {
       await withMinDuration(
         (async () => {
-          // Estas fotos alimentan la galería del evento y el carrusel de
-          // la landing — bajarlas a 1600px de lado más largo alcanza de
-          // sobra para pantalla y corta el peso de fotos de celular de
-          // varios MB.
-          const resized = await resizeImage(file, { maxDimension: 1600, quality: 0.82 });
           const supabase = createClient();
-          const ext = resized.name.split(".").pop() || "jpg";
-          const path = `${eventId}/${crypto.randomUUID()}.${ext}`;
+          const uuid = crypto.randomUUID();
 
-          const { error: uploadError } = await supabase.storage
+          // Preview: alimenta la galería del evento y el carrusel de la
+          // landing sin depender de Google Photos — bajarlo a 1600px de
+          // lado más largo alcanza de sobra para pantalla.
+          const resized = await resizeImage(file, { maxDimension: 1600, quality: 0.82 });
+          const previewExt = resized.name.split(".").pop() || "jpg";
+          const previewPath = `${eventId}/${uuid}.${previewExt}`;
+
+          const { error: previewError } = await supabase.storage
             .from("event-photos")
-            .upload(path, resized, { contentType: resized.type });
+            .upload(previewPath, resized, { contentType: resized.type });
 
-          if (uploadError) {
+          if (previewError) {
             setError("No se pudo subir la foto.");
             return;
           }
 
-          const result = await addEventMedia(eventId, path);
+          // Original sin tocar: va a un bucket de tránsito, el servidor
+          // lo toma de ahí para guardarlo en tamaño completo en Google
+          // Photos (ver specs/019-fotos-y-google-photos.md). Si esto
+          // falla, no bloquea nada — el preview ya quedó guardado.
+          const originalExt = file.name.split(".").pop() || previewExt;
+          const originalPath = `${eventId}/${uuid}-original.${originalExt}`;
+          const { error: originalError } = await supabase.storage
+            .from("event-photos-originals")
+            .upload(originalPath, file, { contentType: file.type });
+
+          const result = await addEventMedia(
+            eventId,
+            previewPath,
+            originalError ? undefined : originalPath,
+          );
           if (result.error) setError(result.error);
         })(),
       );
