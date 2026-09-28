@@ -25,7 +25,9 @@ segura.
   mes (más reciente primero), con toggle grilla de íconos / lista con
   detalle (miniatura, evento, fecha, quién la subió), soporte de
   `?event=<id>` para filtrar, y detalle ampliado al hacer click (con
-  link de descarga del original real).
+  link de descarga del original real). En el detalle ampliado, las
+  flechas ← → del teclado (más botones clickeables superpuestos)
+  recorren todas las fotos en orden cronológico sin cerrar el visor.
 - `/eventos/[eventId]`: la galería del evento ahora muestra solo las 6
   fotos más recientes, con un link "Ver todas las fotos →" a
   `/fotos?event=<id>` cuando hay más.
@@ -37,6 +39,9 @@ segura.
   este cambio.
 - Cron de reintento (`/api/cron/sync-photos-to-google`) para fotos cuya
   sincronización con Google falló en el momento de subirlas.
+- El mismo cron **reconcilia borrados**: si Fernando borra una foto
+  directo desde Google Photos, deja de mostrarse en la app (se borra la
+  fila y el preview en Supabase) la próxima corrida diaria.
 
 ### No incluye (por ahora)
 
@@ -145,7 +150,11 @@ tarde. La subida a Google nunca bloquea ni rompe la subida del preview
   persisten: se piden de nuevo en cada carga de `/fotos` o del detalle
   del evento. Con sufijos (`=w500-h500-c` thumbnail, `=w2000` detalle,
   `=d` descarga del original real, servida directo desde Google sin
-  pasar por el servidor de JAPApp).
+  pasar por el servidor de JAPApp). También `checkMediaItemsExist()`
+  (mismo endpoint, otro uso): confirma existencia por id para la
+  reconciliación de borrados del cron — devuelve `true`/`false` solo
+  cuando Google contesta explícitamente, y omite el id si la llamada
+  falló, para no borrar nada ante la duda.
 - `sync.ts`: `syncEventMediaToGooglePhotos()` — la pieza compartida por
   los tres callers (upload nuevo, cron de reintento, backfill de fotos
   viejas): descarga bytes de un bucket/path, sube a Google, actualiza
@@ -159,7 +168,18 @@ tarde. La subida a Google nunca bloquea ni rompe la subida del preview
    intenta sincronizar con Google (si falla, no rompe la respuesta — el
    preview ya está guardado).
 4. Cron `sync-photos-to-google` (diario, mismo patrón que
-   `balance-reminders`): reintenta las que quedaron pendientes.
+   `balance-reminders`), dos pasadas en la misma corrida:
+   - **Reintento**: las filas que quedaron pendientes de sincronizar.
+   - **Reconciliación de borrados**: para todas las filas ya
+     sincronizadas, `checkMediaItemsExist()`
+     (`src/lib/googlePhotos/mediaItems.ts`) confirma contra Google, en
+     lotes de 50, cuáles siguen existiendo. Solo se borra (fila +
+     preview en Supabase) ante una confirmación explícita de "no
+     existe" — si la llamada a Google falla por completo (token,
+     red, 500), esos ids quedan afuera del resultado y no se tocan,
+     para no borrar nada por una duda. No hace costo real: para el
+     volumen de fotos de este grupo son unos pocos `batchGet` por día,
+     muy por debajo de la cuota de la API.
 
 ### `/fotos`
 
@@ -168,11 +188,15 @@ del evento — acá si corresponde mostrar todo), resuelve nombres de
 evento/uploader con `Map`s (mismo criterio que el resto del repo, sin
 selects embebidos), pide las `baseUrl` de Google para lo que ya está
 migrado y firma el resto contra Supabase como respaldo (sirve si Google
-Photos no está configurado, si falló el `batchGet`, o si el media item
-se borró a mano desde Google Photos). Agrupa por mes en el server,
-manda los grupos ya armados a `PhotoGalleryClient` (toggle grilla/lista
-+ modal de detalle, extendiendo `ImageZoomModal` con un `footer`
-opcional de metadata).
+Photos no está configurado o si falló el `batchGet` puntual de esa
+carga — un media item borrado a mano en Google ya no aparece del todo,
+porque el cron de reconciliación borra también la fila). Agrupa por mes
+en el server, manda los grupos ya armados a `PhotoGalleryClient` (toggle
+grilla/lista + modal de detalle, extendiendo `ImageZoomModal` con un
+`footer` opcional de metadata y `onPrev`/`onNext` opcionales para
+navegar con ← → sobre el array aplanado de fotos, sin importar el
+límite de mes — se recalcula en cada render a partir de `groups`, sin
+estado propio duplicado).
 
 ## 5. Criterios de aceptación
 
@@ -189,6 +213,11 @@ opcional de metadata).
 - [x] Si Google Photos no está configurado, la app sigue funcionando
       igual (fallback a los previews de Supabase).
 - [ ] (Requiere las env vars) El backfill admin migra las fotos viejas.
+- [ ] (Requiere las env vars) Borrar una foto desde Google Photos hace
+      que desaparezca de `/fotos` después de la corrida diaria del cron.
+- [x] En el detalle ampliado de una foto, las flechas ← → del teclado
+      (y los botones visibles) navegan a la foto anterior/siguiente sin
+      cerrar el visor, y no aparecen/responden en los extremos.
 
 ## 6. Decisiones y tradeoffs
 
@@ -200,6 +229,9 @@ opcional de metadata).
 | Bucket de tránsito para el original, en vez de mandarlo directo a una server action | Server action recibiendo el archivo completo | El original de una foto de celular puede pesar más de lo que soporta el body de una función serverless de Vercel — mismo problema que ya evitaba el upload directo a `event-photos` desde el día uno (`specs/004-eventos-gastos-y-fotos.md`). |
 | Backfill de fotos viejas sube el preview de 1600px (no el original real) | No migrar fotos viejas, o intentar recuperar el original de alguna forma | El archivo original de fotos subidas antes de este cambio nunca se guardó en ningún lado (se descartaba en el browser tras comprimir) — no hay nada mejor que migrar. |
 | Cron diario de reintento (mismo horario que `balance-reminders` + 1h) | Reintentar más seguido | El plan de Vercel de este proyecto corre cron jobs una vez al día — no se puede agendar más frecuente sin cambiar de plan. |
+| Reconciliación de borrados en el mismo cron de reintento, no uno nuevo | Un cron dedicado a reconciliar | Sumar otro cron diario más no aporta nada (igual corre una vez al día) y el plan de Vercel de este proyecto tiene un límite de cron jobs — no se justifica un route handler nuevo para esto. |
+| Borrar solo ante confirmación explícita de "no existe" de Google | Borrar también si el `batchGet` de ese id falla (ej. tratar cualquier ausencia como borrado) | Una falla de red, un token vencido momentáneamente, o un 500 de Google no son lo mismo que "Fernando la borró" — tratarlos igual borraría fotos por error ante cualquier hiccup de la API. |
+| Navegación ← → sobre el array aplanado de `groups`, no por índice dentro de cada mes | Un estado de navegación separado por sección de mes | Recorrer "todas las fotos en orden", como hace Google Photos, es más intuitivo que quedar atrapado dentro del mes donde se abrió la primera — y el array ya viene ordenado, aplanarlo no pierde nada. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -242,6 +274,10 @@ opcional de metadata).
 
 ## 8. Changelog
 
+- 2026-09-28: sumada reconciliación de borrados (el cron diario también
+  chequea contra Google Photos y borra de la app lo que Fernando ya
+  borró ahí) y navegación con ← → en el detalle ampliado de `/fotos`, a
+  pedido del usuario tras completar el setup de Google Cloud.
 - 2026-09-28: creada e implementada — sección `/fotos`, muestra
   colapsada en el evento, y almacenamiento de originales en Google
   Photos, a pedido explícito del usuario.

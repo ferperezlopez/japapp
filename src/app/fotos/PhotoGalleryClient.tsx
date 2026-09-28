@@ -45,7 +45,13 @@ function ListIcon() {
 // pedir datos, ambas vistas usan el mismo array.
 export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]][] }) {
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [openPhoto, setOpenPhoto] = useState<GalleryPhoto | null>(null);
+  // Índice sobre el array aplanado (no por grupo) — así ← → recorren
+  // todas las fotos en orden cronológico sin importar el límite de mes,
+  // igual que en Google Photos. Los grupos ya vienen en orden, así que
+  // aplanarlos preserva el orden general.
+  const flatPhotos = groups.flatMap(([, photos]) => photos);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const openPhoto = openIndex !== null ? flatPhotos[openIndex] : null;
 
   return (
     <div>
@@ -87,7 +93,7 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
                 <button
                   key={photo.id}
                   type="button"
-                  onClick={() => setOpenPhoto(photo)}
+                  onClick={() => setOpenIndex(flatPhotos.indexOf(photo))}
                   className="aspect-square overflow-hidden rounded-lg bg-surface"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- fotos de Google Photos / Supabase Storage, no vale next/image para esto */}
@@ -101,7 +107,7 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
                 <li key={photo.id}>
                   <button
                     type="button"
-                    onClick={() => setOpenPhoto(photo)}
+                    onClick={() => setOpenIndex(flatPhotos.indexOf(photo))}
                     className="flex w-full items-center gap-3 py-2 text-left"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- ídem */}
@@ -127,11 +133,15 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
         </section>
       ))}
 
-      {openPhoto && (
+      {openPhoto && openIndex !== null && (
         <ImageZoomModal
           src={openPhoto.detailUrl}
           alt={openPhoto.eventName}
-          onClose={() => setOpenPhoto(null)}
+          onClose={() => setOpenIndex(null)}
+          onPrev={openIndex > 0 ? () => setOpenIndex(openIndex - 1) : undefined}
+          onNext={
+            openIndex < flatPhotos.length - 1 ? () => setOpenIndex(openIndex + 1) : undefined
+          }
           footer={
             <div className="max-w-full rounded-lg bg-black/60 px-4 py-2 text-center text-sm text-white">
               <p className="font-medium">{openPhoto.eventName}</p>
