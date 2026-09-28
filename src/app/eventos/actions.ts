@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActingUser } from "@/lib/supabase/actingUser";
 import { sendPushToUsers } from "@/lib/push/send";
 import { maybeNotifyQuorum } from "@/lib/push/quorum";
+import { syncEventMediaToGooglePhotos } from "@/lib/googlePhotos/sync";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -281,22 +282,50 @@ export async function ensureEventGroup(eventId: string) {
   return { groupId: group.id as string };
 }
 
-export async function addEventMedia(eventId: string, storagePath: string) {
+export async function addEventMedia(
+  eventId: string,
+  storagePath: string,
+  originalStagingPath?: string,
+) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
-  const { error } = await supabase.from("event_media").insert({
-    event_id: eventId,
-    uploaded_by: user.id,
-    storage_path: storagePath,
-  });
+  const { data: inserted, error } = await supabase
+    .from("event_media")
+    .insert({
+      event_id: eventId,
+      uploaded_by: user.id,
+      storage_path: storagePath,
+      original_staging_path: originalStagingPath ?? null,
+    })
+    .select("id")
+    .single();
 
-  if (error) return { error: error.message };
+  if (error || !inserted) return { error: error?.message ?? "No se pudo guardar la foto." };
 
   revalidatePath(`/eventos/${eventId}`);
+
+  // El original se guarda en tamaño completo en Google Photos — esto no
+  // debe bloquear ni romper la subida (el preview ya quedó guardado
+  // arriba, la persona ya ve su foto). Si falla acá (token vencido,
+  // error transitorio de la API), la fila queda con
+  // original_staging_path seteado y el cron de reintento la retoma
+  // (src/app/api/cron/sync-photos-to-google/route.ts).
+  if (originalStagingPath) {
+    const syncResult = await syncEventMediaToGooglePhotos(supabase, {
+      mediaId: inserted.id,
+      bucket: "event-photos-originals",
+      path: originalStagingPath,
+      deleteSourceOnSuccess: true,
+    });
+    if ("error" in syncResult) {
+      console.error("No se pudo sincronizar la foto con Google Photos:", syncResult.error);
+    }
+  }
+
   return { ok: true };
 }
 

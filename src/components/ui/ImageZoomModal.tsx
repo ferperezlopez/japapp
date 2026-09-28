@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 
 export function ImageZoomModal({
   src,
   alt = "",
   onClose,
+  footer,
 }: {
   src: string;
   alt?: string;
   onClose: () => void;
+  // Opcional: contenido debajo de la imagen (ej. metadata de la foto en
+  // /fotos — evento, fecha, quién la subió, link de descarga). Sin esto
+  // se comporta igual que antes.
+  footer?: ReactNode;
 }) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -47,13 +52,18 @@ export function ImageZoomModal({
           <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
         </svg>
       </button>
-      {/* eslint-disable-next-line @next/next/no-img-element -- visor a pantalla completa */}
-      <img
-        src={src}
-        alt={alt}
-        className="max-h-full max-w-full rounded-lg object-contain"
+      <div
+        className="flex max-h-full max-w-full flex-col items-center gap-3"
         onClick={(event) => event.stopPropagation()}
-      />
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- visor a pantalla completa */}
+        <img
+          src={src}
+          alt={alt}
+          className="max-h-[80vh] max-w-full rounded-lg object-contain"
+        />
+        {footer}
+      </div>
     </div>
   );
 }
