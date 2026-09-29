@@ -279,6 +279,27 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-29: tres ajustes a pedido del usuario sobre la vista gráfica
+  recién implementada. (a) Los badges de MVP (⭐) y goleador (⚽) dejan de
+  ser un emoji al lado de la camiseta — el usuario aclaró que, de las 13
+  imágenes que generó con ChatGPT, las 8 que se habían descartado como
+  "no usables" en la integración de assets reales (con un trofeo o una
+  pelota superpuestos) las mandó a propósito para esto. `Jersey` recibe
+  un prop opcional `badge?: "mvp" | "goleador"` que cambia la camiseta
+  entera por la versión con trofeo/pelota (si es MVP y goleador a la
+  vez, gana MVP); la fila de emoji reservada arriba de la camiseta se
+  elimina. Pendiente: la camiseta de trofeo/pelota del equipo 1 (navy)
+  usa un azul más claro como placeholder temporal — el usuario no generó
+  esa combinación en el color correcto y va a mandar las 2 que faltan
+  (se reemplazan 2 archivos, sin tocar código). (b) Cuando queda un solo
+  defensor centrado (misma columna x=50% que el arquero), su nombre
+  quedaba pegado/tapando el del arquero — se agrega `defYSingle` en
+  `PITCH_POSITIONS`, un Y más alejado del arco propio que se usa solo en
+  ese caso (equipo 1: 21→27; equipo 2: 72→66). (c) El usuario reportó
+  que las imágenes tardaban en cargar — medido: 1049KB en total para los
+  5 assets PNG en uso. Se convierten todos los assets (los 5 originales
+  + los 8 nuevos de trofeo/pelota) a WebP calidad 85, sin pérdida visual
+  perceptible (mismo tamaño/resolución) — 90% menos peso.
 - 2026-09-29: la cancha y las 4 camisetas pasan de SVG/CSS dibujado a
   mano a los PNG reales que generó el usuario (ChatGPT, editando su
   imagen de referencia) — el usuario había preguntado explícitamente si

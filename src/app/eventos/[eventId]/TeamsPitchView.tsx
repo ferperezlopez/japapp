@@ -82,27 +82,10 @@ export function TeamsPitchView({
   const renderPlayer = (c: Candidate, variant: JerseyVariant, number: number) => {
     const isMvp = stats?.mvpId === c.id;
     const isGoleador = stats?.goleadorId === c.id;
+    const badge = isMvp ? "mvp" : isGoleador ? "goleador" : undefined;
     return (
       <div key={c.id} className="flex flex-col items-center gap-0.5">
-        {/* En flujo normal (no absoluto) arriba de la camiseta, para que
-            quede pegado siempre a la columna de este jugador puntual sin
-            depender de dónde caiga un elemento posicionado encima de un
-            SVG dentro de una fila que puede envolver. Altura fija
-            siempre reservada (vacía si no aplica) para que todas las
-            camisetas de una misma fila arranquen a la misma altura. */}
-        <div className="flex h-4 items-center gap-0.5 text-sm leading-none">
-          {isMvp && (
-            <span title="MVP" aria-label="MVP">
-              ⭐
-            </span>
-          )}
-          {isGoleador && (
-            <span title="Goleador" aria-label="Goleador">
-              ⚽
-            </span>
-          )}
-        </div>
-        <Jersey number={number} variant={variant} />
+        <Jersey number={number} variant={variant} badge={badge} />
         <NamePill name={c.name} guestId={c.guestId} isAdmin={isAdmin} />
       </div>
     );
@@ -178,7 +161,8 @@ export function TeamsPitchView({
       <div key={team} className="absolute inset-0">
         {label}
         {gk.length > 0 && renderRow("gk", gk, gkVariant, pos.gkY, [50, 50], numbers)}
-        {def.length > 0 && renderRow("def", def, variant, pos.defY, ROW_X_SPAN.def, numbers)}
+        {def.length > 0 &&
+          renderRow("def", def, variant, def.length === 1 ? pos.defYSingle : pos.defY, ROW_X_SPAN.def, numbers)}
         {fwd.length > 0 && renderRow("fwd", fwd, variant, pos.fwdY, ROW_X_SPAN.fwd, numbers)}
       </div>
     );
@@ -192,8 +176,8 @@ export function TeamsPitchView({
       </Pitch>
       {(stats?.mvpId || stats?.goleadorId) && (
         <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-foreground/50">
-          {stats?.mvpId && <span>⭐ MVP</span>}
-          {stats?.goleadorId && <span>⚽ Goleador</span>}
+          {stats?.mvpId && <span>MVP</span>}
+          {stats?.goleadorId && <span>Goleador</span>}
         </p>
       )}
     </div>

@@ -6,12 +6,38 @@
 // usuario consideró que no se parecía lo suficiente. Ver
 // specs/015-armar-equipos-futbol.md, sección "Réplica visual de cancha".
 export type JerseyVariant = "team1" | "team2" | "gk1" | "gk2";
+export type JerseyBadge = "mvp" | "goleador";
 
+// WebP en vez de PNG (mismo contenido visual, ~90% menos peso medido con
+// Pillow: pitch.png 625KB→46KB, cada camiseta ~105KB→~15KB) — la carga
+// inicial de "Armar equipos"/"Ver equipos" tardaba notoriamente.
 const JERSEY_SRC: Record<JerseyVariant, string> = {
-  team1: "/futbol/jersey-team1.png",
-  team2: "/futbol/jersey-team2.png",
-  gk1: "/futbol/jersey-gk1.png",
-  gk2: "/futbol/jersey-gk2.png",
+  team1: "/futbol/jersey-team1.webp",
+  team2: "/futbol/jersey-team2.webp",
+  gk1: "/futbol/jersey-gk1.webp",
+  gk2: "/futbol/jersey-gk2.webp",
+};
+
+// Camisetas con trofeo/pelota superpuestos (mismas 8 imágenes que el
+// usuario generó junto con las 4 limpias, en la misma tanda) para marcar
+// MVP/goleador en "Ver equipos" en vez de un emoji ⭐/⚽ al lado de la
+// camiseta — reemplaza la camiseta entera, no superpone nada.
+// team1-trophy/ball: placeholder temporal en un azul más claro que el
+// navy real (el usuario no generó esa combinación en el color correcto;
+// va a mandar las 2 que faltan y ahí se reemplazan estos 2 archivos sin
+// tocar código).
+const JERSEY_SRC_MVP: Record<JerseyVariant, string> = {
+  team1: "/futbol/jersey-team1-trophy.webp",
+  team2: "/futbol/jersey-team2-trophy.webp",
+  gk1: "/futbol/jersey-gk1-trophy.webp",
+  gk2: "/futbol/jersey-gk2-trophy.webp",
+};
+
+const JERSEY_SRC_GOLEADOR: Record<JerseyVariant, string> = {
+  team1: "/futbol/jersey-team1-ball.webp",
+  team2: "/futbol/jersey-team2-ball.webp",
+  gk1: "/futbol/jersey-gk1-ball.webp",
+  gk2: "/futbol/jersey-gk2-ball.webp",
 };
 
 // Color del número superpuesto: blanco sobre la camiseta navy (equipo 1),
@@ -27,19 +53,27 @@ const NUMBER_COLOR: Record<JerseyVariant, string> = {
 export function Jersey({
   number,
   variant,
+  badge,
   className = "w-16",
 }: {
   number: number;
   variant: JerseyVariant;
+  badge?: JerseyBadge;
   className?: string;
 }) {
+  const src =
+    badge === "mvp"
+      ? JERSEY_SRC_MVP[variant]
+      : badge === "goleador"
+        ? JERSEY_SRC_GOLEADOR[variant]
+        : JERSEY_SRC[variant];
   return (
     <div
       className={`relative shrink-0 ${className}`}
       style={{ filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.4))" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- ícono chico repetido muchas veces por cancha, no vale la pena next/image acá */}
-      <img src={JERSEY_SRC[variant]} alt="" className="block w-full" />
+      <img src={src} alt="" className="block w-full" />
       <span
         className="absolute left-1/2 top-[53%] -translate-x-1/2 -translate-y-1/2 text-xl font-extrabold"
         style={{ color: NUMBER_COLOR[variant] }}
@@ -78,7 +112,7 @@ export function Pitch({
       className={`relative overflow-hidden rounded-2xl border border-white/40 shadow-lg ${className}`}
       style={{
         aspectRatio: "700 / 1050",
-        backgroundImage: "url(/futbol/pitch.png)",
+        backgroundImage: "url(/futbol/pitch.webp)",
         backgroundSize: "100% 100%",
       }}
     >
@@ -93,9 +127,13 @@ export function Pitch({
 // % horizontales de los dos jugadores de esa fila en la imagen de
 // referencia (equipo 1, que después se reusan tal cual para el equipo 2
 // porque las filas midieron prácticamente simétricas).
-export const PITCH_POSITIONS: Record<1 | 2, { gkY: number; defY: number; fwdY: number }> = {
-  1: { gkY: 9, defY: 21, fwdY: 36 },
-  2: { gkY: 85, defY: 72, fwdY: 55 },
+// `defYSingle` se usa en vez de `defY` cuando hay un solo defensor: al
+// quedar centrado (x=50%), comparte columna con el arquero, y con el
+// `defY` normal (pensado para 2 jugadores separados del arco) su nombre
+// queda pegado al del arquero — se aleja unos puntos más del arco propio.
+export const PITCH_POSITIONS: Record<1 | 2, { gkY: number; defY: number; defYSingle: number; fwdY: number }> = {
+  1: { gkY: 9, defY: 21, defYSingle: 27, fwdY: 36 },
+  2: { gkY: 85, defY: 72, defYSingle: 66, fwdY: 55 },
 };
 
 export const ROW_X_SPAN: Record<"def" | "fwd", [number, number]> = {

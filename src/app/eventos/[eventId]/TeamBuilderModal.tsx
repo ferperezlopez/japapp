@@ -253,7 +253,7 @@ export function TeamBuilderModal({
           Equipo {team} <span className="text-slate-300">({t.total})</span>
         </span>
         {renderRow(team, "gk", t.gk, gkVariant, pos.gkY, [50, 50])}
-        {renderRow(team, "def", t.def, variant, pos.defY, ROW_X_SPAN.def)}
+        {renderRow(team, "def", t.def, variant, t.def.length === 1 ? pos.defYSingle : pos.defY, ROW_X_SPAN.def)}
         {renderRow(team, "fwd", t.fwd, variant, pos.fwdY, ROW_X_SPAN.fwd)}
       </div>
     );
