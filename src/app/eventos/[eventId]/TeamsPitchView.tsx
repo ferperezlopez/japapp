@@ -108,7 +108,13 @@ export function TeamsPitchView({
     );
   };
 
-  const renderTeam = (team: 1 | 2) => {
+  // Bloque de un equipo dentro de la cancha compartida (ver `Pitch`, que
+  // ancla el bloque del equipo 1 arriba y el del equipo 2 abajo con
+  // `justify-between`). El equipo 1 crece hacia abajo desde su arco
+  // (arquero primero); el equipo 2 va al revés (arquero al final) para
+  // que quede pegado al arco de abajo, el que le corresponde en la
+  // imagen de cancha completa.
+  const renderTeamBlock = (team: 1 | 2) => {
     const gk = byPosition(team, "gk");
     const def = byPosition(team, "def");
     const fwd = byPosition(team, "fwd");
@@ -117,42 +123,55 @@ export function TeamsPitchView({
     const variant: JerseyVariant = team === 2 ? "team2" : "team1";
     const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
 
+    const label = (
+      <span
+        key="label"
+        className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white"
+      >
+        Equipo {team} <span className="text-slate-300">({total})</span>
+      </span>
+    );
+
+    if (total === 0) {
+      return (
+        <div key={team} className="flex flex-col items-center gap-2">
+          {label}
+          <p className="py-2 text-center text-xs text-white/70">Sin jugadores</p>
+        </div>
+      );
+    }
+
+    const gkRow = gk.length > 0 && (
+      <div key="gk" className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+        {gk.map((c) => renderPlayer(c, gkVariant, numbers.get(c.id) ?? 0))}
+      </div>
+    );
+    const defRow = def.length > 0 && (
+      <div key="def" className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+        {def.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
+      </div>
+    );
+    const fwdRow = fwd.length > 0 && (
+      <div key="fwd" className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+        {fwd.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
+      </div>
+    );
+
     return (
-      <Pitch>
-        <span className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white">
-          Equipo {team} <span className="text-slate-300">({total})</span>
-        </span>
-        {total === 0 ? (
-          <p className="mt-3 py-4 text-center text-xs text-white/70">Sin jugadores</p>
-        ) : (
-          <div className="mt-2 flex flex-col items-center gap-3">
-            {gk.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-                {gk.map((c) => renderPlayer(c, gkVariant, numbers.get(c.id) ?? 0))}
-              </div>
-            )}
-            {def.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-                {def.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
-              </div>
-            )}
-            {fwd.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-                {fwd.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
-              </div>
-            )}
-          </div>
-        )}
-      </Pitch>
+      <div key={team} className="flex flex-col items-center gap-2">
+        {team === 1 ? [label, gkRow, defRow, fwdRow] : [label, fwdRow, defRow, gkRow]}
+      </div>
     );
   };
 
   return (
-    <div className="space-y-3">
-      {renderTeam(1)}
-      {renderTeam(2)}
+    <div>
+      <Pitch>
+        {renderTeamBlock(1)}
+        {renderTeamBlock(2)}
+      </Pitch>
       {(stats?.mvpId || stats?.goleadorId) && (
-        <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-foreground/50">
+        <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-foreground/50">
           {stats?.mvpId && <span>⭐ MVP</span>}
           {stats?.goleadorId && <span>⚽ Goleador</span>}
         </p>

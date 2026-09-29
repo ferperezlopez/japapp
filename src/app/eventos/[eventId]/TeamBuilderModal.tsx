@@ -194,41 +194,51 @@ export function TeamBuilderModal({
     );
   };
 
-  // Cancha propia por equipo (arco + arquero al frente, defensores y
-  // delanteros debajo) — mismo estilo visual que TeamsPitchView (vista
-  // de solo lectura), a pedido explícito del usuario con una captura de
-  // referencia. Equipo 1 primero, Equipo 2 después (antes compartían una
-  // sola cancha partida en dos mitades).
-  const renderTeamPitch = (team: 1 | 2) => {
+  // Bloque de un equipo dentro de la cancha compartida (ver `Pitch`, que
+  // ancla el bloque del equipo 1 arriba y el del equipo 2 abajo con
+  // `justify-between`). El equipo 1 crece hacia abajo desde su arco
+  // (arquero primero, delanteros al final); el equipo 2 va al revés
+  // (arquero al final) para que quede pegado al arco de abajo, que es el
+  // que le corresponde en la imagen de cancha completa.
+  const renderTeamBlock = (team: 1 | 2) => {
     const t = team === 1 ? team1 : team2;
     const numbers = team === 1 ? team1Numbers : team2Numbers;
     const variant: JerseyVariant = team === 2 ? "team2" : "team1";
     const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
+    const label = (
+      <span
+        key="label"
+        className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white"
+      >
+        Equipo {team} <span className="text-slate-300">({t.total})</span>
+      </span>
+    );
+    const gkZone = (
+      <div
+        key="gk"
+        onClick={(event) => {
+          event.stopPropagation();
+          moveSelectedTo({ team, position: "gk" });
+        }}
+        className="flex min-h-[4.5rem] w-full cursor-pointer flex-wrap items-center justify-center gap-1 rounded-lg px-2 py-1 transition-colors duration-150 hover:bg-white/5"
+      >
+        {t.gk.length > 0 ? (
+          t.gk.map((c) => renderPitchChip(c, gkVariant, numbers.get(c.id) ?? 0))
+        ) : (
+          <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
+            {POSITION_LABELS.gk}
+          </span>
+        )}
+      </div>
+    );
+    const defZone = <div key="def">{renderZone(team, "def", t.def, variant)}</div>;
+    const fwdZone = <div key="fwd">{renderZone(team, "fwd", t.fwd, variant)}</div>;
     return (
-      <Pitch key={team}>
-        <span className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white">
-          Equipo {team} <span className="text-slate-300">({t.total})</span>
-        </span>
-        <div className="mt-2 flex flex-col items-center gap-2">
-          <div
-            onClick={(event) => {
-              event.stopPropagation();
-              moveSelectedTo({ team, position: "gk" });
-            }}
-            className="flex min-h-[4.5rem] w-full cursor-pointer flex-wrap items-center justify-center gap-1 rounded-lg px-2 pt-1 transition-colors duration-150 hover:bg-white/5"
-          >
-            {t.gk.length > 0 ? (
-              t.gk.map((c) => renderPitchChip(c, gkVariant, numbers.get(c.id) ?? 0))
-            ) : (
-              <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
-                {POSITION_LABELS.gk}
-              </span>
-            )}
-          </div>
-          {renderZone(team, "def", t.def, variant)}
-          {renderZone(team, "fwd", t.fwd, variant)}
-        </div>
-      </Pitch>
+      <div key={team} className="flex flex-col items-center gap-2">
+        {team === 1
+          ? [label, gkZone, defZone, fwdZone]
+          : [label, fwdZone, defZone, gkZone]}
+      </div>
     );
   };
 
@@ -321,10 +331,10 @@ export function TeamBuilderModal({
           delanteros o &quot;Sin asignar&quot;) donde va.
         </p>
 
-        <div className="mt-4 space-y-3">
-          {renderTeamPitch(1)}
-          {renderTeamPitch(2)}
-        </div>
+        <Pitch className="mt-4">
+          {renderTeamBlock(1)}
+          {renderTeamBlock(2)}
+        </Pitch>
         {(warnTeam1 || warnTeam2) && (
           <p className="mt-2 rounded-lg bg-amber-soft p-2 text-xs text-amber-ink">
             Cada equipo debería tener al menos 4 jugadores.
