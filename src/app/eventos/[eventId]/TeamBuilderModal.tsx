@@ -71,10 +71,26 @@ export function TeamBuilderModal({
     setSelectedId((prev) => (prev === id ? null : id));
   };
 
+  const countInLine = (
+    state: Record<string, { location: Location; position: Position }>,
+    team: 1 | 2,
+    position: Position,
+    excludeIds: string[],
+  ) =>
+    Object.entries(state).filter(
+      ([id, s]) => !excludeIds.includes(id) && s.location === team && s.position === position,
+    ).length;
+
   const moveSelectedTo = (
     destination: "unassigned" | { team: 1 | 2; position: Position },
   ) => {
     if (!selectedId) return;
+    // Si la línea de destino ya tiene 2 (el máximo permitido — fútbol 5,
+    // arquero + hasta 2 defensores + hasta 2 delanteros), el movimiento
+    // queda bloqueado: no se limpia la selección, para que quede claro
+    // que hay que elegir otra franja en vez de que el jugador
+    // seleccionado desaparezca sin explicación.
+    let blocked = false;
     setPlayerState((prev) => {
       if (destination === "unassigned") {
         if (prev[selectedId]?.location === "unassigned") return prev;
@@ -90,9 +106,14 @@ export function TeamBuilderModal({
       ) {
         return prev;
       }
+      if (position !== "gk" && countInLine(prev, team, position, [selectedId]) >= 2) {
+        blocked = true;
+        return prev;
+      }
       const next = { ...prev };
       // Un solo arquero a la vez por equipo: al arquero anterior se lo
-      // pasa a defensores en vez de dejarlo sin equipo.
+      // pasa a defensores, salvo que esa línea ya esté llena — en ese
+      // caso queda sin asignar en vez de sumar un tercero.
       if (position === "gk") {
         for (const id of Object.keys(next)) {
           if (
@@ -100,14 +121,19 @@ export function TeamBuilderModal({
             next[id].location === team &&
             next[id].position === "gk"
           ) {
-            next[id] = { ...next[id], position: "def" };
+            const defFull = countInLine(next, team, "def", [id, selectedId]) >= 2;
+            next[id] = {
+              ...next[id],
+              location: defFull ? "unassigned" : team,
+              position: "def",
+            };
           }
         }
       }
       next[selectedId] = { location: team, position };
       return next;
     });
-    setSelectedId(null);
+    if (!blocked) setSelectedId(null);
   };
 
   const byPosition = (team: 1 | 2, position: Position) =>
