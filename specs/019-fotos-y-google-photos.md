@@ -189,8 +189,13 @@ tarde. La subida a Google nunca bloquea ni rompe la subida del preview
 
 ### `/fotos`
 
-Trae `event_media` (sin filtro de `legacy`, a diferencia de la galería
-del evento — acá si corresponde mostrar todo), resuelve nombres de
+Trae `event_media` con `legacy = false` (mismo filtro que ya usa la
+galería de un evento desde `0009_legacy_photos.sql` — las 4 fotos
+legacy quedaron atadas al primer evento que existía en ese momento solo
+por la restricción de clave foránea, no porque realmente sean de ese
+evento; en el carrusel de la landing eso no importa porque se muestran
+sin metadata, pero en `/fotos` sí, porque cada foto se etiqueta con su
+evento y fecha). Resuelve nombres de
 evento/uploader con `Map`s (mismo criterio que el resto del repo, sin
 selects embebidos), pide las `baseUrl` de Google para lo que ya está
 migrado y firma el resto contra Supabase como respaldo (sirve si Google
@@ -238,6 +243,7 @@ estado propio duplicado).
 | Bucket de tránsito para el original, en vez de mandarlo directo a una server action | Server action recibiendo el archivo completo | El original de una foto de celular puede pesar más de lo que soporta el body de una función serverless de Vercel — mismo problema que ya evitaba el upload directo a `event-photos` desde el día uno (`specs/004-eventos-gastos-y-fotos.md`). |
 | No migrar las fotos viejas a Google Photos (se sacó un backfill admin-only que sí existió) | Mantener el backfill: subir el preview de 1600px de cada foto vieja a Google Photos | El archivo original de esas fotos nunca se guardó en ningún lado (se descartaba en el browser tras comprimir), así que el backfill no recuperaba nada mejor — solo sumaba una segunda copia y un botón admin de uso único, sin beneficio real que justifique mantenerlo. |
 | Botón de descarga con fallback al preview de Supabase (no solo cuando hay original en Google) | Mostrar "Descargar" únicamente para fotos ya sincronizadas | Pedido explícito de poder descargar cualquier foto — no tiene sentido que una foto sin sincronizar (o subida antes del cambio, que ya nunca se sincroniza) no se pueda bajar en absoluto. |
+| `/fotos` filtra `legacy = false`, igual que la galería del evento | Mostrar también las legacy, ya que técnicamente tienen un `event_id` válido | Esas 4 fotos nunca fueron realmente "de" el evento al que apuntan — quedaron ahí solo porque la columna es `not null` y ese era el único evento que existía cuando se corrió `0009_legacy_photos.sql`. Mostrarlas en `/fotos` con ese evento/fecha atribuido es directamente incorrecto, a diferencia del carrusel de la landing donde se muestran sin ningún dato asociado. |
 | Cron diario de reintento (mismo horario que `balance-reminders` + 1h) | Reintentar más seguido | El plan de Vercel de este proyecto corre cron jobs una vez al día — no se puede agendar más frecuente sin cambiar de plan. |
 | Reconciliación de borrados en el mismo cron de reintento, no uno nuevo | Un cron dedicado a reconciliar | Sumar otro cron diario más no aporta nada (igual corre una vez al día) y el plan de Vercel de este proyecto tiene un límite de cron jobs — no se justifica un route handler nuevo para esto. |
 | Borrar solo ante confirmación explícita de "no existe" de Google | Borrar también si el `batchGet` de ese id falla (ej. tratar cualquier ausencia como borrado) | Una falla de red, un token vencido momentáneamente, o un 500 de Google no son lo mismo que "Fernando la borró" — tratarlos igual borraría fotos por error ante cualquier hiccup de la API. |
@@ -288,6 +294,12 @@ estado propio duplicado).
 
 ## 8. Changelog
 
+- 2026-09-29: `/fotos` filtra `legacy = false` — las 4 fotos legacy
+  (`0009_legacy_photos.sql`) aparecían atribuidas a un evento
+  ("JAPA de empanadas y apps") al que en realidad no pertenecen, solo
+  quedaron ahí por la restricción de clave foránea del momento. Se
+  siguen viendo igual en el carrusel de la landing, donde no llevan
+  metadata.
 - 2026-09-29: sacado el backfill admin de fotos viejas (`MigrateOldPhotosButton`,
   `src/app/fotos/actions.ts`) — beneficio chico frente al costo de
   mantener una función/UI de uso único (ver sección 6). Agregado botón
