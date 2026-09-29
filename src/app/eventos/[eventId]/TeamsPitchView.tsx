@@ -4,7 +4,7 @@ import { useState } from "react";
 import { EditGuestNameModal } from "@/components/EditGuestNameModal";
 import { abbreviateName } from "@/lib/formatName";
 import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
-import { Jersey, GoalNet, Pitch, type JerseyVariant } from "./Jersey";
+import { Jersey, Pitch, type JerseyVariant } from "./Jersey";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null; guestId?: string };
 type Position = "gk" | "def" | "fwd";
@@ -127,11 +127,8 @@ export function TeamsPitchView({
         ) : (
           <div className="mt-2 flex flex-col items-center gap-3">
             {gk.length > 0 && (
-              <div className="relative flex flex-col items-center">
-                <GoalNet className="h-12 w-32" />
-                <div className="-mt-3">
-                  {gk.map((c) => renderPlayer(c, gkVariant, numbers.get(c.id) ?? 0))}
-                </div>
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+                {gk.map((c) => renderPlayer(c, gkVariant, numbers.get(c.id) ?? 0))}
               </div>
             )}
             {def.length > 0 && (

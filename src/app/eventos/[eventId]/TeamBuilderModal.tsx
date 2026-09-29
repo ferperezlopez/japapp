@@ -7,7 +7,7 @@ import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
 import { abbreviateName } from "@/lib/formatName";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Jersey, GoalNet, Pitch, type JerseyVariant } from "./Jersey";
+import { Jersey, Pitch, type JerseyVariant } from "./Jersey";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null };
 type Position = "gk" | "def" | "fwd";
@@ -215,18 +215,15 @@ export function TeamBuilderModal({
               event.stopPropagation();
               moveSelectedTo({ team, position: "gk" });
             }}
-            className="relative flex min-h-[4.5rem] cursor-pointer flex-col items-center rounded-lg px-2 pt-1 transition-colors duration-150 hover:bg-white/5"
+            className="flex min-h-[4.5rem] w-full cursor-pointer flex-wrap items-center justify-center gap-1 rounded-lg px-2 pt-1 transition-colors duration-150 hover:bg-white/5"
           >
-            <GoalNet className="h-12 w-32" />
-            <div className="-mt-3 flex flex-wrap items-center justify-center gap-1">
-              {t.gk.length > 0 ? (
-                t.gk.map((c) => renderPitchChip(c, gkVariant, numbers.get(c.id) ?? 0))
-              ) : (
-                <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
-                  {POSITION_LABELS.gk}
-                </span>
-              )}
-            </div>
+            {t.gk.length > 0 ? (
+              t.gk.map((c) => renderPitchChip(c, gkVariant, numbers.get(c.id) ?? 0))
+            ) : (
+              <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
+                {POSITION_LABELS.gk}
+              </span>
+            )}
           </div>
           {renderZone(team, "def", t.def, variant)}
           {renderZone(team, "fwd", t.fwd, variant)}
