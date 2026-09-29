@@ -3,7 +3,7 @@
 - **Estado:** Implemented (requiere setup manual de Google Cloud antes de andar — ver sección 4)
 - **Rutas:** `/fotos` (nueva), `/eventos/[eventId]` (extendida), `/api/cron/sync-photos-to-google` (nueva)
 - **Migraciones relacionadas:** `supabase/migrations/0036_event_media_google_photos.sql`
-- **Última actualización:** 2026-09-28
+- **Última actualización:** 2026-09-29
 
 ## 1. Resumen
 
@@ -34,14 +34,15 @@ segura.
 - Cada foto nueva se guarda en dos copias: un preview comprimido
   (1600px, igual que antes) en Supabase Storage, y el archivo original
   sin tocar en Google Photos, subido server-side.
-- Backfill admin-only (botón colapsado al final de `/fotos`) para
-  migrar a Google Photos las fotos que ya estaban cargadas antes de
-  este cambio.
 - Cron de reintento (`/api/cron/sync-photos-to-google`) para fotos cuya
   sincronización con Google falló en el momento de subirlas.
 - El mismo cron **reconcilia borrados**: si Fernando borra una foto
   directo desde Google Photos, deja de mostrarse en la app (se borra la
   fila y el preview en Supabase) la próxima corrida diaria.
+- Botón de descarga en cada foto (grilla, lista y detalle ampliado):
+  baja el original real si ya está sincronizada con Google, o el
+  preview de Supabase si no — toda foto se puede descargar, aunque no
+  siempre sea su tamaño original.
 
 ### No incluye (por ahora)
 
@@ -53,6 +54,11 @@ segura.
   sección 6, es una decisión de seguridad, no una limitación técnica
   temporal.
 - Video. Se mantiene el alcance actual (solo imágenes).
+- Migrar a Google Photos las fotos que ya estaban cargadas antes de
+  este cambio (se evaluó un backfill admin-only y se sacó — ver sección
+  6: el beneficio era chico, porque esas fotos nunca tuvieron un
+  original real guardado, y agregaba una función/UI que nadie iba a
+  usar más de una vez).
 
 ## 3. Modelo de datos
 
@@ -61,8 +67,8 @@ detalle. Resumen de lo que no se ve leyendo el SQL:
 
 - `event_media` gana `google_media_item_id`, `taken_at`, `width`,
   `height` y `original_staging_path`. Las fotos cargadas antes de este
-  cambio quedan con estas columnas en `null` hasta que se las migra
-  (backfill o cron).
+  cambio quedan con estas columnas en `null` para siempre — no se migran
+  (ver sección 2, "No incluye").
 - `taken_at` viene de la metadata EXIF que devuelve Google Photos al
   subir (`mediaMetadata.creationTime`) — más confiable que `created_at`
   (fecha de upload) para ordenar "de más recientes a menos recientes"
@@ -156,9 +162,9 @@ tarde. La subida a Google nunca bloquea ni rompe la subida del preview
   cuando Google contesta explícitamente, y omite el id si la llamada
   falló, para no borrar nada ante la duda.
 - `sync.ts`: `syncEventMediaToGooglePhotos()` — la pieza compartida por
-  los tres callers (upload nuevo, cron de reintento, backfill de fotos
-  viejas): descarga bytes de un bucket/path, sube a Google, actualiza
-  la fila, borra la fuente si corresponde.
+  los dos callers que suben un original (upload nuevo y el reintento del
+  cron): descarga bytes del bucket de tránsito, sube a Google, actualiza
+  la fila, borra el objeto de tránsito si tiene éxito.
 
 ### Flujo de subida
 
@@ -208,11 +214,14 @@ estado propio duplicado).
       `/fotos?event=<id>` cuando hay más.
 - [x] Una foto nueva sube su preview de inmediato y, en segundo plano,
       su original a Google Photos.
-- [ ] (Requiere las env vars de Fernando cargadas) Una foto sincronizada
-      muestra "Descargar original" y trae el archivo en tamaño completo.
+- [x] Toda foto tiene un botón de descarga (grilla, lista y detalle
+      ampliado) — baja el original real si ya está sincronizada con
+      Google, o el preview de Supabase si no.
+- [ ] (Requiere las env vars de Fernando cargadas) El botón de descarga
+      de una foto sincronizada trae el archivo en tamaño completo.
 - [x] Si Google Photos no está configurado, la app sigue funcionando
-      igual (fallback a los previews de Supabase).
-- [ ] (Requiere las env vars) El backfill admin migra las fotos viejas.
+      igual (fallback a los previews de Supabase, incluido el botón de
+      descarga).
 - [ ] (Requiere las env vars) Borrar una foto desde Google Photos hace
       que desaparezca de `/fotos` después de la corrida diaria del cron.
 - [x] En el detalle ampliado de una foto, las flechas ← → del teclado
@@ -227,7 +236,8 @@ estado propio duplicado).
 | Bootstrap del refresh token con el OAuth Playground, sin pantalla de conexión en la app | Construir un flujo de conexión OAuth (`/admin/...` + callback) dentro de JAPApp | Es una operación de una sola vez (o rarísima); una pantalla/callback nuevo en la app es superficie de código y de ataque que no se justifica para algo que en la práctica no se repite. |
 | Dos copias (preview en Supabase + original en Google) | Guardar todo en Google Photos, sin preview local | El preview no depende de pedir un access token/baseUrl a Google en cada carga — más rápido y resiliente si la API de Google tiene un mal momento. |
 | Bucket de tránsito para el original, en vez de mandarlo directo a una server action | Server action recibiendo el archivo completo | El original de una foto de celular puede pesar más de lo que soporta el body de una función serverless de Vercel — mismo problema que ya evitaba el upload directo a `event-photos` desde el día uno (`specs/004-eventos-gastos-y-fotos.md`). |
-| Backfill de fotos viejas sube el preview de 1600px (no el original real) | No migrar fotos viejas, o intentar recuperar el original de alguna forma | El archivo original de fotos subidas antes de este cambio nunca se guardó en ningún lado (se descartaba en el browser tras comprimir) — no hay nada mejor que migrar. |
+| No migrar las fotos viejas a Google Photos (se sacó un backfill admin-only que sí existió) | Mantener el backfill: subir el preview de 1600px de cada foto vieja a Google Photos | El archivo original de esas fotos nunca se guardó en ningún lado (se descartaba en el browser tras comprimir), así que el backfill no recuperaba nada mejor — solo sumaba una segunda copia y un botón admin de uso único, sin beneficio real que justifique mantenerlo. |
+| Botón de descarga con fallback al preview de Supabase (no solo cuando hay original en Google) | Mostrar "Descargar" únicamente para fotos ya sincronizadas | Pedido explícito de poder descargar cualquier foto — no tiene sentido que una foto sin sincronizar (o subida antes del cambio, que ya nunca se sincroniza) no se pueda bajar en absoluto. |
 | Cron diario de reintento (mismo horario que `balance-reminders` + 1h) | Reintentar más seguido | El plan de Vercel de este proyecto corre cron jobs una vez al día — no se puede agendar más frecuente sin cambiar de plan. |
 | Reconciliación de borrados en el mismo cron de reintento, no uno nuevo | Un cron dedicado a reconciliar | Sumar otro cron diario más no aporta nada (igual corre una vez al día) y el plan de Vercel de este proyecto tiene un límite de cron jobs — no se justifica un route handler nuevo para esto. |
 | Borrar solo ante confirmación explícita de "no existe" de Google | Borrar también si el `batchGet` de ese id falla (ej. tratar cualquier ausencia como borrado) | Una falla de red, un token vencido momentáneamente, o un 500 de Google no son lo mismo que "Fernando la borró" — tratarlos igual borraría fotos por error ante cualquier hiccup de la API. |
@@ -245,6 +255,10 @@ estado propio duplicado).
 - Reconectar Google Photos si el refresh token se invalida (password
   change, revocación manual, 6 meses sin uso) — hoy requiere repetir el
   bootstrap manual del checklist de la sección 4 abajo.
+- Las fotos cargadas antes de este cambio se quedan para siempre sin
+  copia en Google Photos (ver sección 6) — si en algún momento se
+  quisiera revertir esto, habría que reconstruir el backfill que se
+  sacó, no solo reactivar un flag.
 
 ## Checklist manual (Fernando, antes de que esto funcione en producción)
 
@@ -274,6 +288,12 @@ estado propio duplicado).
 
 ## 8. Changelog
 
+- 2026-09-29: sacado el backfill admin de fotos viejas (`MigrateOldPhotosButton`,
+  `src/app/fotos/actions.ts`) — beneficio chico frente al costo de
+  mantener una función/UI de uso único (ver sección 6). Agregado botón
+  de descarga en cada foto (grilla, lista y detalle ampliado), con
+  fallback al preview de Supabase cuando todavía no hay original en
+  Google Photos.
 - 2026-09-28: sumada reconciliación de borrados (el cron diario también
   chequea contra Google Photos y borra de la app lo que Fernando ya
   borró ahí) y navegación con ← → en el detalle ampliado de `/fotos`, a
