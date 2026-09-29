@@ -279,6 +279,13 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-29: la leyenda de texto debajo de la cancha en "Ver equipos"
+  ("MVP" / "Goleador", sin ícono desde la ronda de "sacar los emojis")
+  recupera el emoji junto al texto — a pedido puntual del usuario para
+  esta leyenda en particular (la camiseta con badge de trofeo/pelota
+  sobre cada jugador no cambia). Para MVP es 🏆 (no ⭐), coherente con
+  que el badge de la camiseta también es un trofeo: "🏆 MVP" / "⚽
+  Goleador".
 - 2026-09-29: fix — en "Armar equipos" (editor) no se podía tocar/mover a
   ningún jugador del equipo 1. Causa raíz: desde que los dos equipos
   comparten una sola cancha (`Pitch`) como dos `div`s hermanos

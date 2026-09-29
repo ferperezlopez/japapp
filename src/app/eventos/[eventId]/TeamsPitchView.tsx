@@ -181,8 +181,8 @@ export function TeamsPitchView({
       </Pitch>
       {(stats?.mvpId || stats?.goleadorId) && (
         <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-foreground/50">
-          {stats?.mvpId && <span>MVP</span>}
-          {stats?.goleadorId && <span>Goleador</span>}
+          {stats?.mvpId && <span>🏆 MVP</span>}
+          {stats?.goleadorId && <span>⚽ Goleador</span>}
         </p>
       )}
     </div>
