@@ -722,6 +722,7 @@ export default async function EventoPage({
             eventId={eventId}
             candidates={futbolTeamCandidates}
             initialAssignment={futbolTeams}
+            stats={futbolStats}
             isAdmin={isAdmin}
           />
         </>

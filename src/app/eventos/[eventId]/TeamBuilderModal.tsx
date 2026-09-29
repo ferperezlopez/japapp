@@ -7,6 +7,7 @@ import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
 import { abbreviateName } from "@/lib/formatName";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
+import { Jersey, type JerseyVariant } from "./Jersey";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null };
 type Position = "gk" | "def" | "fwd";
@@ -18,80 +19,6 @@ const POSITION_LABELS: Record<Position, string> = {
   def: "Defensores",
   fwd: "Delanteros",
 };
-
-type JerseyVariant = "light" | "dark" | "gk";
-
-const JERSEY_COLORS: Record<
-  JerseyVariant,
-  { fill: string; stroke: string; text: string }
-> = {
-  light: { fill: "#f8fafc", stroke: "#94a3b8", text: "#111827" },
-  dark: { fill: "#111827", stroke: "#4b5563", text: "#f8fafc" },
-  // El arquero se destaca con el mismo amarillo que ya usa la app para
-  // "aviso/pendiente" (--color-amber en globals.css) — se adapta solo a
-  // dark mode al ser una variable CSS, sin necesidad de un segundo set
-  // de colores hardcodeados.
-  gk: {
-    fill: "var(--color-amber)",
-    stroke: "var(--color-amber-hover)",
-    text: "var(--color-amber-ink)",
-  },
-};
-
-// Camiseta con dorsal numérico, SVG inline (sin dependencia nueva): clara
-// para el Equipo 1, oscura para el Equipo 2, y un tercer color (arquero)
-// sin importar el equipo — para que el arquero se distinga de un vistazo.
-// El número es puramente visual (no se guarda en la base, ver
-// assignJerseyNumbers): el nombre va aparte, en una etiqueta debajo.
-function Jersey({ number, variant }: { number: number; variant: JerseyVariant }) {
-  const { fill, stroke, text } = JERSEY_COLORS[variant];
-  return (
-    <svg viewBox="0 0 64 64" className="h-20 w-16 shrink-0">
-      <path
-        d="M20 4 L8 14 L14 24 L18 21 L18 58 L46 58 L46 21 L50 24 L56 14 L44 4 L36 9 L28 9 Z"
-        fill={fill}
-        stroke={stroke}
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      {/* Rayas de puño (manga raglán) */}
-      <path
-        d="M9.5 15.5 L13 21.5"
-        stroke={text}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        opacity="0.85"
-      />
-      <path
-        d="M54.5 15.5 L51 21.5"
-        stroke={text}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        opacity="0.85"
-      />
-      {/* Raya del ruedo */}
-      <rect x="20" y="52" width="24" height="2.5" rx="1" fill={text} opacity="0.85" />
-      {/* Escudo en el pecho */}
-      <path
-        d="M40 14.5 L43 16 L42.3 20 L40 22 L37.7 20 L37 16 Z"
-        fill="none"
-        stroke={text}
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <text
-        x="32"
-        y="38"
-        textAnchor="middle"
-        fontSize="20"
-        fontWeight="700"
-        fill={text}
-      >
-        {number}
-      </text>
-    </svg>
-  );
-}
 
 // Tocar y ubicar (sin drag-and-drop, ver specs/015-armar-equipos-futbol.md):
 // tocar un jugador lo selecciona, tocar una franja de posición (o "Sin

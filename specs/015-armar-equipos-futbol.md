@@ -5,7 +5,7 @@
 - **Migraciones relacionadas:** `supabase/migrations/0016_futbol_teams.sql`,
   `supabase/migrations/0017_futbol_teams_position.sql`,
   `supabase/migrations/0026_futbol_teams_guests.sql`
-- **Última actualización:** 2026-09-17
+- **Última actualización:** 2026-09-29
 
 ## 1. Resumen
 
@@ -235,6 +235,13 @@ Puntos que el SQL no explica por sí solo:
       equipos"; tocar "Ver equipos" abre el detalle en un modal, que
       se cierra con Escape/click afuera/la X.
 - [x] Un invitado NO aparece como candidato a MVP/goleador.
+- [x] "Ver equipos" muestra una cancha propia por equipo (con arco,
+      arquero al frente y filas de defensores/delanteros debajo), con
+      el mismo estilo de camiseta que el editor — no una lista de
+      texto.
+- [x] Si ya se cargó el resultado del partido, el MVP y el goleador
+      aparecen con un badge (⭐ / ⚽) sobre su camiseta en "Ver
+      equipos".
 
 ## 6. Decisiones y tradeoffs
 
@@ -252,6 +259,8 @@ Puntos que el SQL no explica por sí solo:
 | Invitados elegibles para armar equipos, pero no para MVP/goleador | Excluir invitados de armar equipos también, mismo criterio que MVP/goleador | Pedido explícito del usuario, acotado a equipos: MVP/goleador es un reconocimiento individual sobre alguien con cuenta en la app, mientras que "quién juega en qué equipo" es información del partido en sí, sin esa restricción. |
 | `id` genérico con prefijo (`u:`/`g:`) en vez de una unión discriminada tipada | Un tipo `Candidate` con campos `kind`/`userId`/`guestId` separados | Mismo espíritu que `NEW_GUEST_VALUE` ya usado en `AddGuestForm.tsx`: un string simple evita tocar la forma de todos los mapas/comparaciones (`playerState`, `byPosition`, `assignJerseyNumbers`) que ya asumían una clave string plana. |
 | Franjas de posición en columnas lado a lado dentro de cada equipo, modal ensanchado a `max-w-xl` | Mantener las franjas apiladas y solo ensanchar el modal | Feedback del usuario con captura: solo ensanchar no reducía la altura (6 franjas apiladas seguían apiladas), y sobraba mucho espacio a los costados sin usar — pasar a columnas usa ese ancho para bajar la cantidad de franjas apiladas de 6 a 2 (una fila de 3 columnas por equipo). |
+| "Ver equipos" con cancha propia por equipo (arco + arquero + filas), reusando `Jersey`/`assignJerseyNumbers` del editor | Mejorar la lista de texto (`renderTeamSummary`) en vez de construir una vista gráfica nueva | Pedido explícito del usuario con una captura de referencia (el mismo estilo del editor, pero de solo lectura); `Jersey`/`JERSEY_COLORS`/`GoalNet` se extraen a `Jersey.tsx` para no duplicar el SVG entre el editor y la vista nueva. |
+| Badges de MVP (⭐) y goleador (⚽) superpuestos a la camiseta en "Ver equipos" | Mostrar el resultado del partido aparte, sin cruzarlo con la vista de equipos | Pedido explícito del usuario: "reflejalo en la imagen de equipos" — conecta visualmente quién ganó cada reconocimiento con el equipo en el que jugó, sin tener que ir a leer el texto de `FutbolStatsForm` aparte. `FutbolTeamsSection` recibe `stats` como prop nueva (antes solo la tenía `FutbolStatsForm`). |
 
 ## 7. Futuro / fuera de alcance
 
@@ -264,6 +273,16 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-29: "Ver equipos" (`ViewTeamsModal`) pasa de una lista de
+  texto agrupada por posición a una vista gráfica: cada equipo en su
+  propia cancha (arco + arquero al frente, filas de defensores y
+  delanteros), con el mismo estilo de camiseta que `TeamBuilderModal` —
+  extraído a `Jersey.tsx` (`Jersey`, `JERSEY_COLORS`, `GoalNet`) para
+  compartirlo entre el editor y la vista nueva
+  (`TeamsPitchView.tsx`). Si ya se cargó el resultado del partido, el
+  MVP (⭐) y el goleador (⚽) se marcan con un badge sobre su camiseta —
+  `FutbolTeamsSection` recibe `stats` como prop nueva. A pedido
+  explícito del usuario, con una captura de referencia.
 - 2026-09-18: con equipos ya armados, `<FutbolTeamsSection>` dejó de
   mostrar siempre expandido el detalle completo en la página del
   evento — feedback del usuario con captura mostrando que el bloque
