@@ -1,19 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Avatar } from "@/components/ui/Avatar";
-import { GuestNameButton } from "@/components/GuestNameButton";
 import { TeamBuilderModal } from "./TeamBuilderModal";
+import { TeamsPitchView } from "./TeamsPitchView";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null; guestId?: string };
 type Position = "gk" | "def" | "fwd";
 type SavedAssignment = { id: string; team: 1 | 2; position: Position };
-
-const POSITION_LABELS: Record<Position, string> = {
-  gk: "Arquero",
-  def: "Defensores",
-  fwd: "Delanteros",
-};
+type Stats = { mvpId: string | null; goleadorId: string | null } | null;
 
 // Mismo criterio visual que FutbolStatsForm (resumen de solo lectura +
 // botón para editar), pero el editor es un modal (ver TeamBuilderModal),
@@ -23,61 +17,19 @@ export function FutbolTeamsSection({
   eventId,
   candidates,
   initialAssignment,
+  stats,
   isAdmin,
 }: {
   eventId: string;
   candidates: Candidate[];
   initialAssignment: SavedAssignment[];
+  stats: Stats;
   isAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
 
-  const findCandidate = (id: string) => candidates.find((c) => c.id === id);
   const hasTeams = initialAssignment.length > 0;
-
-  const renderTeamSummary = (team: 1 | 2) => {
-    const assignment = initialAssignment.filter((a) => a.team === team);
-    return (
-      <div className="space-y-1.5">
-        {(["gk", "def", "fwd"] as const).map((position) => {
-          const players = assignment.filter((a) => a.position === position);
-          if (players.length === 0) return null;
-          return (
-            <div key={position}>
-              <h5 className="text-[11px] font-medium text-foreground/40">
-                {POSITION_LABELS[position]}
-              </h5>
-              <ul className="mt-0.5 flex flex-wrap gap-2">
-                {players.map((a) => {
-                  const c = findCandidate(a.id);
-                  if (!c) return null;
-                  return (
-                    <li
-                      key={a.id}
-                      className="flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-3 text-xs text-foreground/80"
-                    >
-                      {c.guestId ? (
-                        <GuestNameButton guestId={c.guestId} name={c.name} isAdmin={isAdmin} />
-                      ) : (
-                        <>
-                          <Avatar src={c.avatarUrl} name={c.name} size="sm" />
-                          {c.name}
-                        </>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          );
-        })}
-        {assignment.length === 0 && (
-          <p className="text-xs text-foreground/40">Sin jugadores</p>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="mt-3 rounded-xl border border-surface-border bg-surface p-4 text-sm">
@@ -114,7 +66,10 @@ export function FutbolTeamsSection({
       )}
       {viewOpen && (
         <ViewTeamsModal
-          renderTeamSummary={renderTeamSummary}
+          candidates={candidates}
+          initialAssignment={initialAssignment}
+          stats={stats}
+          isAdmin={isAdmin}
           onEdit={() => {
             setViewOpen(false);
             setOpen(true);
@@ -138,11 +93,17 @@ export function FutbolTeamsSection({
 // bloqueo de scroll del body) — versión de solo lectura del detalle que
 // antes se mostraba siempre expandido en la página del evento.
 function ViewTeamsModal({
-  renderTeamSummary,
+  candidates,
+  initialAssignment,
+  stats,
+  isAdmin,
   onEdit,
   onClose,
 }: {
-  renderTeamSummary: (team: 1 | 2) => React.ReactNode;
+  candidates: Candidate[];
+  initialAssignment: SavedAssignment[];
+  stats: Stats;
+  isAdmin: boolean;
   onEdit: () => void;
   onClose: () => void;
 }) {
@@ -169,7 +130,7 @@ function ViewTeamsModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl bg-background p-5 text-sm"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-background p-5 text-sm"
       >
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-lg font-semibold text-foreground">Equipos</h3>
@@ -184,15 +145,13 @@ function ViewTeamsModal({
             </svg>
           </button>
         </div>
-        <div className="mt-3 space-y-3">
-          <div>
-            <h4 className="text-xs font-medium text-foreground/50">Equipo 1</h4>
-            <div className="mt-1">{renderTeamSummary(1)}</div>
-          </div>
-          <div>
-            <h4 className="text-xs font-medium text-foreground/50">Equipo 2</h4>
-            <div className="mt-1">{renderTeamSummary(2)}</div>
-          </div>
+        <div className="mt-3">
+          <TeamsPitchView
+            candidates={candidates}
+            assignment={initialAssignment}
+            stats={stats}
+            isAdmin={isAdmin}
+          />
         </div>
         <button
           type="button"

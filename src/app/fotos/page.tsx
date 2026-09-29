@@ -30,9 +30,17 @@ export default async function FotosPage({
     );
   }
 
+  // legacy=false: mismo filtro que ya usa la galería de un evento
+  // (0009_legacy_photos.sql) — esas 4 fotos son de antes de que
+  // existiera una asociación real foto↔evento y quedaron atadas al
+  // primer evento que existía en ese momento solo por la restricción de
+  // clave foránea, no porque de verdad sean de ese evento. En el
+  // carrusel de la landing no importa (se muestran sin metadata), pero
+  // acá sí, porque /fotos les atribuye un evento y una fecha.
   let query = supabase
     .from("event_media")
     .select("id, event_id, uploaded_by, storage_path, created_at, google_media_item_id, taken_at")
+    .eq("legacy", false)
     .order("taken_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(PHOTOS_LIMIT);
