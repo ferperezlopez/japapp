@@ -214,7 +214,7 @@ export function TeamBuilderModal({
           event.stopPropagation();
           moveSelectedTo({ team, position });
         }}
-        className="absolute left-0 h-16 w-full cursor-pointer rounded-lg transition-colors duration-150 hover:bg-white/5"
+        className="pointer-events-auto absolute left-0 h-16 w-full cursor-pointer rounded-lg transition-colors duration-150 hover:bg-white/5"
         style={{ top: `${yPercent}%`, transform: "translateY(-50%)" }}
       >
         {players.length > 0 ? (
@@ -246,7 +246,14 @@ export function TeamBuilderModal({
     const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
     const pos = PITCH_POSITIONS[team];
     return (
-      <div key={team} className="absolute inset-0">
+      // pointer-events-none: los dos equipos comparten una sola cancha
+      // (ver `Pitch`) como divs hermanos, cada uno "absolute inset-0" —
+      // sin esto, el equipo que se renderiza después (equipo 2) queda
+      // pintado encima de TODO el área (no solo su mitad visual) e
+      // intercepta los clicks destinados al equipo 1, que queda debajo y
+      // nunca los recibe. Las franjas (`renderRow`) recuperan el click
+      // con `pointer-events-auto`.
+      <div key={team} className="pointer-events-none absolute inset-0">
         <span
           className={`absolute left-2 ${team === 1 ? "top-2" : "bottom-2"} inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white`}
         >
