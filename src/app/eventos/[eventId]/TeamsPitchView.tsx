@@ -108,7 +108,7 @@ export function TeamsPitchView({
     return (
       <div
         key={position}
-        className="absolute left-0 w-full"
+        className="pointer-events-auto absolute left-0 w-full"
         style={{ top: `${yPercent}%`, transform: "translateY(-50%)" }}
       >
         {players.map((c, i) => (
@@ -146,9 +146,14 @@ export function TeamsPitchView({
       </span>
     );
 
+    // pointer-events-none: mismo motivo que en TeamBuilderModal — los dos
+    // equipos comparten una sola cancha como divs hermanos "absolute
+    // inset-0", y el que se renderiza después (equipo 2) queda encima de
+    // TODO el área, tapando el botón de "editar invitado" del equipo 1.
+    // `renderRow` recupera el click con `pointer-events-auto`.
     if (total === 0) {
       return (
-        <div key={team} className="absolute inset-0">
+        <div key={team} className="pointer-events-none absolute inset-0">
           {label}
           <p className="flex h-full items-center justify-center text-xs text-white/70">
             Sin jugadores
@@ -158,7 +163,7 @@ export function TeamsPitchView({
     }
 
     return (
-      <div key={team} className="absolute inset-0">
+      <div key={team} className="pointer-events-none absolute inset-0">
         {label}
         {gk.length > 0 && renderRow("gk", gk, gkVariant, pos.gkY, [50, 50], numbers)}
         {def.length > 0 &&

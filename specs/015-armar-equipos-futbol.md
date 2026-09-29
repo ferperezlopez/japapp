@@ -279,6 +279,20 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-29: fix — en "Armar equipos" (editor) no se podía tocar/mover a
+  ningún jugador del equipo 1. Causa raíz: desde que los dos equipos
+  comparten una sola cancha (`Pitch`) como dos `div`s hermanos
+  `absolute inset-0`, el que se renderiza después (equipo 2) queda
+  pintado encima de TODA el área — no solo su mitad visual — e
+  intercepta los clicks destinados a las franjas del equipo 1, que
+  quedan debajo y nunca los reciben (comportamiento estándar de
+  hit-testing en CSS: un elemento "auto" sin contenido interactivo en
+  ese punto igual se queda con el click si está pintado arriba).
+  Arreglado con el patrón `pointer-events-none` en el contenedor de cada
+  equipo + `pointer-events-auto` en sus franjas/filas, para que solo el
+  contenido realmente interactivo capture el click. Mismo problema
+  existía en la vista de solo lectura (`TeamsPitchView`) para el botón
+  de "editar invitado" del equipo 1 — mismo fix aplicado ahí.
 - 2026-09-29: el usuario generó las 2 camisetas navy (trofeo/pelota) de
   equipo 1 que faltaban en el color correcto — se reemplazan
   `jersey-team1-trophy.webp`/`jersey-team1-ball.webp` (antes en un azul
