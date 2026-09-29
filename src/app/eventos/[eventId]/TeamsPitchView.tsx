@@ -84,27 +84,25 @@ export function TeamsPitchView({
     const isGoleador = stats?.goleadorId === c.id;
     return (
       <div key={c.id} className="flex flex-col items-center gap-0.5">
-        <div className="relative">
-          <Jersey number={number} variant={variant} />
+        {/* En flujo normal (no absoluto) arriba de la camiseta, para que
+            quede pegado siempre a la columna de este jugador puntual sin
+            depender de dónde caiga un elemento posicionado encima de un
+            SVG dentro de una fila que puede envolver. Altura fija
+            siempre reservada (vacía si no aplica) para que todas las
+            camisetas de una misma fila arranquen a la misma altura. */}
+        <div className="flex h-4 items-center gap-0.5 text-sm leading-none">
           {isMvp && (
-            <span
-              title="MVP"
-              aria-label="MVP"
-              className="absolute -right-1 -top-1 text-sm leading-none drop-shadow"
-            >
+            <span title="MVP" aria-label="MVP">
               ⭐
             </span>
           )}
           {isGoleador && (
-            <span
-              title="Goleador"
-              aria-label="Goleador"
-              className="absolute -left-1 -top-1 text-sm leading-none drop-shadow"
-            >
+            <span title="Goleador" aria-label="Goleador">
               ⚽
             </span>
           )}
         </div>
+        <Jersey number={number} variant={variant} />
         <NamePill name={c.name} guestId={c.guestId} isAdmin={isAdmin} />
       </div>
     );

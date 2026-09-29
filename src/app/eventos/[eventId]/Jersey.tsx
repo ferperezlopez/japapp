@@ -76,9 +76,9 @@ export function Jersey({
   );
 }
 
-// Arco con red, para la vista de solo lectura de equipos (estilo cancha
-// con arquero al frente) — no se usa en el editor, que ya tiene su propia
-// cancha compartida entre los dos equipos.
+// Arco con red — usado tanto en el editor (TeamBuilderModal) como en la
+// vista de solo lectura (TeamsPitchView), cada equipo con el suyo propio
+// arriba del arquero.
 export function GoalNet({ className = "h-14 w-36" }: { className?: string }) {
   const vCols = 8;
   const hRows = 4;
