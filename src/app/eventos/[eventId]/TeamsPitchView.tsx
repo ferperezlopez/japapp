@@ -108,12 +108,15 @@ export function TeamsPitchView({
     );
   };
 
-  // Bloque de un equipo dentro de la cancha compartida (ver `Pitch`, que
-  // ancla el bloque del equipo 1 arriba y el del equipo 2 abajo con
-  // `justify-between`). El equipo 1 crece hacia abajo desde su arco
-  // (arquero primero); el equipo 2 va al revés (arquero al final) para
-  // que quede pegado al arco de abajo, el que le corresponde en la
-  // imagen de cancha completa.
+  // Bloque de un equipo: ocupa toda su mitad de la cancha compartida (ver
+  // `Pitch`, que divide la cancha en dos filas de grid iguales). La
+  // etiqueta va en la esquina pegada al arco propio, sin participar del
+  // reparto vertical. Arquero/defensores/delanteros se reparten con
+  // `justify-between` a lo largo de TODA la mitad — así la franja más
+  // cercana al medio (delanteros) siempre termina pegada a la línea de
+  // mitad de cancha, en vez de dejar un hueco de pasto vacío ahí (a
+  // pedido del usuario). El equipo 1 va arquero→delanteros de arriba a
+  // abajo; el equipo 2 al revés (arquero pegado a su arco, abajo).
   const renderTeamBlock = (team: 1 | 2) => {
     const gk = byPosition(team, "gk");
     const def = byPosition(team, "def");
@@ -125,8 +128,7 @@ export function TeamsPitchView({
 
     const label = (
       <span
-        key="label"
-        className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white"
+        className={`absolute left-0 ${team === 1 ? "top-0" : "bottom-0"} inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white`}
       >
         Equipo {team} <span className="text-slate-300">({total})</span>
       </span>
@@ -134,9 +136,11 @@ export function TeamsPitchView({
 
     if (total === 0) {
       return (
-        <div key={team} className="flex flex-col items-center gap-2">
+        <div key={team} className="relative h-full">
           {label}
-          <p className="py-2 text-center text-xs text-white/70">Sin jugadores</p>
+          <p className="flex h-full items-center justify-center text-xs text-white/70">
+            Sin jugadores
+          </p>
         </div>
       );
     }
@@ -163,8 +167,11 @@ export function TeamsPitchView({
     );
 
     return (
-      <div key={team} className="flex flex-col items-center gap-3">
-        {team === 1 ? [label, gkRow, defRow, fwdRow] : [label, fwdRow, defRow, gkRow]}
+      <div key={team} className="relative h-full">
+        {label}
+        <div className="flex h-full flex-col items-center justify-between">
+          {team === 1 ? [gkRow, defRow, fwdRow] : [fwdRow, defRow, gkRow]}
+        </div>
       </div>
     );
   };

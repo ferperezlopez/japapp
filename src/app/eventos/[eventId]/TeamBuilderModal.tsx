@@ -206,25 +206,21 @@ export function TeamBuilderModal({
     );
   };
 
-  // Bloque de un equipo dentro de la cancha compartida (ver `Pitch`, que
-  // ancla el bloque del equipo 1 arriba y el del equipo 2 abajo con
-  // `justify-between`). El equipo 1 crece hacia abajo desde su arco
-  // (arquero primero, delanteros al final); el equipo 2 va al revés
-  // (arquero al final) para que quede pegado al arco de abajo, que es el
-  // que le corresponde en la imagen de cancha completa.
+  // Bloque de un equipo: ocupa toda su mitad de la cancha compartida (ver
+  // `Pitch`, que divide la cancha en dos filas de grid iguales). La
+  // etiqueta va en la esquina pegada al arco propio, sin participar del
+  // reparto vertical. Arquero/defensores/delanteros se reparten con
+  // `justify-between` a lo largo de TODA la mitad — así, sea cual sea la
+  // cantidad de jugadores, la franja más cercana al medio (delanteros)
+  // siempre termina pegada a la línea de mitad de cancha, en vez de
+  // dejar un hueco de pasto vacío ahí (a pedido del usuario). El equipo 1
+  // va arquero→delanteros de arriba a abajo (arquero pegado a su arco,
+  // arriba); el equipo 2 al revés (arquero pegado a su arco, abajo).
   const renderTeamBlock = (team: 1 | 2) => {
     const t = team === 1 ? team1 : team2;
     const numbers = team === 1 ? team1Numbers : team2Numbers;
     const variant: JerseyVariant = team === 2 ? "team2" : "team1";
     const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
-    const label = (
-      <span
-        key="label"
-        className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white"
-      >
-        Equipo {team} <span className="text-slate-300">({t.total})</span>
-      </span>
-    );
     const gkZone = (
       <div
         key="gk"
@@ -246,10 +242,15 @@ export function TeamBuilderModal({
     const defZone = <div key="def">{renderZone(team, "def", t.def, variant)}</div>;
     const fwdZone = <div key="fwd">{renderZone(team, "fwd", t.fwd, variant)}</div>;
     return (
-      <div key={team} className="flex flex-col items-center gap-3">
-        {team === 1
-          ? [label, gkZone, defZone, fwdZone]
-          : [label, fwdZone, defZone, gkZone]}
+      <div key={team} className="relative h-full">
+        <span
+          className={`absolute left-0 ${team === 1 ? "top-0" : "bottom-0"} inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white`}
+        >
+          Equipo {team} <span className="text-slate-300">({t.total})</span>
+        </span>
+        <div className="flex h-full flex-col items-center justify-between">
+          {team === 1 ? [gkZone, defZone, fwdZone] : [fwdZone, defZone, gkZone]}
+        </div>
       </div>
     );
   };

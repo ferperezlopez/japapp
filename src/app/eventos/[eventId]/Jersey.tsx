@@ -55,16 +55,19 @@ export function Jersey({
 // enfoque anterior de dos tarjetas separadas, cada una con su propio
 // medio-arco repetido, que quedaba redundante. `pitch.png` es la foto
 // real de cancha completa que generó el usuario, con relación de aspecto
-// fija (700×1050) para que la imagen nunca se recorte/distorsione: el
-// contenedor respeta ese `aspect-ratio` y dentro se acomodan dos bloques
-// con `justify-between` (uno por equipo, ver `renderTeamPitch` en
-// TeamBuilderModal.tsx / `renderTeam` en TeamsPitchView.tsx) — el de
-// arriba crece hacia abajo desde el arco de arriba, el de abajo crece
-// hacia arriba desde el arco de abajo, dejando el círculo central libre
-// en el medio. En planteles muy grandes (10+ jugadores por equipo, poco
-// común en fútbol 5) los bloques pueden llegar a invadir la zona central
-// — límite aceptado del enfoque "una sola foto real con proporción fija"
-// en vez de un dibujo vectorial que escala sin límite.
+// fija (700×1050) para que la imagen nunca se recorte/distorsione.
+//
+// Adentro, `grid-rows-2` divide la cancha EXACTAMENTE a la mitad (fila de
+// arriba = mitad del equipo 1, fila de abajo = mitad del equipo 2) — a
+// pedido del usuario, para que cada equipo ocupe toda su propia mitad
+// hasta la línea de mitad de cancha (antes, con `flex justify-between`,
+// cada bloque medía solo lo que su contenido pedía y quedaba un hueco de
+// pasto vacío en el medio). Cada mitad es responsabilidad de
+// `renderTeamBlock` (TeamBuilderModal.tsx) / `renderTeamBlock`
+// (TeamsPitchView.tsx), que a su vez reparte arquero/defensores/
+// delanteros con su propio `justify-between` para que la franja más
+// cercana al medio siempre llegue hasta la línea de mitad de cancha, sea
+// cual sea la cantidad de jugadores.
 export function Pitch({
   children,
   className = "",
@@ -81,7 +84,7 @@ export function Pitch({
         backgroundSize: "100% 100%",
       }}
     >
-      <div className="relative flex h-full flex-col justify-between p-3">{children}</div>
+      <div className="relative grid h-full grid-rows-2 p-3">{children}</div>
     </div>
   );
 }
