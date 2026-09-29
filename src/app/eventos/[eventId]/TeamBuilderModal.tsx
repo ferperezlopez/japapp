@@ -7,7 +7,7 @@ import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
 import { abbreviateName } from "@/lib/formatName";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Jersey, GoalNet, type JerseyVariant } from "./Jersey";
+import { Jersey, GoalNet, Pitch, type JerseyVariant } from "./Jersey";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null };
 type Position = "gk" | "def" | "fwd";
@@ -202,14 +202,12 @@ export function TeamBuilderModal({
   const renderTeamPitch = (team: 1 | 2) => {
     const t = team === 1 ? team1 : team2;
     const numbers = team === 1 ? team1Numbers : team2Numbers;
-    const variant: JerseyVariant = team === 2 ? "dark" : "light";
+    const variant: JerseyVariant = team === 2 ? "team2" : "team1";
+    const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
     return (
-      <div
-        key={team}
-        className="overflow-hidden rounded-2xl border-2 border-white bg-green-600 p-3 dark:border-green-900"
-      >
+      <Pitch key={team}>
         <span className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white">
-          Equipo {team} ({t.total})
+          Equipo {team} <span className="text-slate-300">({t.total})</span>
         </span>
         <div className="mt-2 flex flex-col items-center gap-2">
           <div
@@ -222,7 +220,7 @@ export function TeamBuilderModal({
             <GoalNet className="h-12 w-32" />
             <div className="-mt-3 flex flex-wrap items-center justify-center gap-1">
               {t.gk.length > 0 ? (
-                t.gk.map((c) => renderPitchChip(c, "gk", numbers.get(c.id) ?? 0))
+                t.gk.map((c) => renderPitchChip(c, gkVariant, numbers.get(c.id) ?? 0))
               ) : (
                 <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
                   {POSITION_LABELS.gk}
@@ -233,7 +231,7 @@ export function TeamBuilderModal({
           {renderZone(team, "def", t.def, variant)}
           {renderZone(team, "fwd", t.fwd, variant)}
         </div>
-      </div>
+      </Pitch>
     );
   };
 
