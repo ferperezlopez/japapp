@@ -57,17 +57,15 @@ export function Jersey({
 // real de cancha completa que generó el usuario, con relación de aspecto
 // fija (700×1050) para que la imagen nunca se recorte/distorsione.
 //
-// Adentro, `grid-rows-2` divide la cancha EXACTAMENTE a la mitad (fila de
-// arriba = mitad del equipo 1, fila de abajo = mitad del equipo 2) — a
-// pedido del usuario, para que cada equipo ocupe toda su propia mitad
-// hasta la línea de mitad de cancha (antes, con `flex justify-between`,
-// cada bloque medía solo lo que su contenido pedía y quedaba un hueco de
-// pasto vacío en el medio). Cada mitad es responsabilidad de
-// `renderTeamBlock` (TeamBuilderModal.tsx) / `renderTeamBlock`
-// (TeamsPitchView.tsx), que a su vez reparte arquero/defensores/
-// delanteros con su propio `justify-between` para que la franja más
-// cercana al medio siempre llegue hasta la línea de mitad de cancha, sea
-// cual sea la cantidad de jugadores.
+// El posicionamiento de los jugadores es absoluto (ver PITCH_POSITIONS y
+// rowXPositions más abajo) en vez de repartirlos con flexbox: el usuario
+// mandó una imagen con la formación exacta que quería (5 vs 5, arquero +
+// 2 filas de 2), y esas coordenadas se midieron directamente sobre esa
+// imagen (detección de color por jugador con Pillow/scipy) en vez de
+// aproximarse con `justify-around`/`justify-between`. Por eso ya no hace
+// falta ningún contenedor intermedio por equipo: cada jugador se ubica
+// directo sobre esta cancha con su propio `top`/`left` en % — ver
+// `renderTeamBlock` en TeamBuilderModal.tsx / TeamsPitchView.tsx.
 export function Pitch({
   children,
   className = "",
@@ -84,7 +82,35 @@ export function Pitch({
         backgroundSize: "100% 100%",
       }}
     >
-      <div className="relative grid h-full grid-rows-2 p-3">{children}</div>
+      <div className="relative h-full">{children}</div>
     </div>
   );
+}
+
+// Coordenadas (% del alto/ancho de la cancha completa) medidas sobre la
+// imagen de formación exacta que mandó el usuario — no estimadas a ojo.
+// `gkY`/`defY`/`fwdY` son % verticales; `def`/`fwd` en ROW_X_SPAN son los
+// % horizontales de los dos jugadores de esa fila en la imagen de
+// referencia (equipo 1, que después se reusan tal cual para el equipo 2
+// porque las filas midieron prácticamente simétricas).
+export const PITCH_POSITIONS: Record<1 | 2, { gkY: number; defY: number; fwdY: number }> = {
+  1: { gkY: 9, defY: 21, fwdY: 36 },
+  2: { gkY: 85, defY: 72, fwdY: 55 },
+};
+
+export const ROW_X_SPAN: Record<"def" | "fwd", [number, number]> = {
+  def: [29, 69],
+  fwd: [18, 80],
+};
+
+// Reparte `count` jugadores a lo ancho de `span` (mismos extremos que la
+// imagen de referencia para 2 jugadores); con 1 solo jugador se centra,
+// con 3+ se interpola pareja entre los mismos dos extremos medidos — no
+// hay referencia para esos casos, pero mantiene la misma lógica.
+export function rowXPositions(count: number, span: [number, number]): number[] {
+  if (count <= 0) return [];
+  if (count === 1) return [50];
+  const [min, max] = span;
+  const step = (max - min) / (count - 1);
+  return Array.from({ length: count }, (_, i) => min + step * i);
 }

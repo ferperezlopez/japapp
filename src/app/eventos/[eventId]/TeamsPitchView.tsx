@@ -4,7 +4,7 @@ import { useState } from "react";
 import { EditGuestNameModal } from "@/components/EditGuestNameModal";
 import { abbreviateName } from "@/lib/formatName";
 import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
-import { Jersey, Pitch, type JerseyVariant } from "./Jersey";
+import { Jersey, Pitch, PITCH_POSITIONS, ROW_X_SPAN, rowXPositions, type JerseyVariant } from "./Jersey";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null; guestId?: string };
 type Position = "gk" | "def" | "fwd";
@@ -108,15 +108,43 @@ export function TeamsPitchView({
     );
   };
 
-  // Bloque de un equipo: ocupa toda su mitad de la cancha compartida (ver
-  // `Pitch`, que divide la cancha en dos filas de grid iguales). La
-  // etiqueta va en la esquina pegada al arco propio, sin participar del
-  // reparto vertical. Arquero/defensores/delanteros se reparten con
-  // `justify-between` a lo largo de TODA la mitad — así la franja más
-  // cercana al medio (delanteros) siempre termina pegada a la línea de
-  // mitad de cancha, en vez de dejar un hueco de pasto vacío ahí (a
-  // pedido del usuario). El equipo 1 va arquero→delanteros de arriba a
-  // abajo; el equipo 2 al revés (arquero pegado a su arco, abajo).
+  // Franja de posición: una banda horizontal absoluta a la altura exacta
+  // (`yPercent`, ver PITCH_POSITIONS en Jersey.tsx) medida sobre la
+  // imagen de formación que mandó el usuario. Cada jugador se ubica en
+  // su propio % horizontal (`rowXPositions`, mismos extremos que esa
+  // imagen) en vez de repartirse con flexbox.
+  const renderRow = (
+    position: Position,
+    players: Candidate[],
+    variant: JerseyVariant,
+    yPercent: number,
+    xSpan: [number, number],
+    numbers: Map<string, number>,
+  ) => {
+    const xs = rowXPositions(players.length, xSpan);
+    return (
+      <div
+        key={position}
+        className="absolute left-0 w-full"
+        style={{ top: `${yPercent}%`, transform: "translateY(-50%)" }}
+      >
+        {players.map((c, i) => (
+          <div
+            key={c.id}
+            className="absolute top-1/2"
+            style={{ left: `${xs[i]}%`, transform: "translate(-50%, -50%)" }}
+          >
+            {renderPlayer(c, variant, numbers.get(c.id) ?? 0)}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Bloque de un equipo: se superpone entero sobre la cancha compartida
+  // (ver `Pitch`) — cada jugador se posiciona directo con sus coordenadas
+  // exactas, no hace falta dividir la cancha en mitades. La etiqueta va
+  // en la esquina pegada al arco propio.
   const renderTeamBlock = (team: 1 | 2) => {
     const gk = byPosition(team, "gk");
     const def = byPosition(team, "def");
@@ -125,10 +153,11 @@ export function TeamsPitchView({
     const total = gk.length + def.length + fwd.length;
     const variant: JerseyVariant = team === 2 ? "team2" : "team1";
     const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
+    const pos = PITCH_POSITIONS[team];
 
     const label = (
       <span
-        className={`absolute left-0 ${team === 1 ? "top-0" : "bottom-0"} inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white`}
+        className={`absolute left-2 ${team === 1 ? "top-2" : "bottom-2"} inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white`}
       >
         Equipo {team} <span className="text-slate-300">({total})</span>
       </span>
@@ -136,7 +165,7 @@ export function TeamsPitchView({
 
     if (total === 0) {
       return (
-        <div key={team} className="relative h-full">
+        <div key={team} className="absolute inset-0">
           {label}
           <p className="flex h-full items-center justify-center text-xs text-white/70">
             Sin jugadores
@@ -145,33 +174,12 @@ export function TeamsPitchView({
       );
     }
 
-    // Defensores más adentro (cerca del área), delanteros más abiertos
-    // (cerca de la línea lateral), como en una formación real — mismo
-    // criterio que TeamBuilderModal (ver ZONE_PADDING ahí). `w-full` +
-    // `justify-around` reparte a los jugadores a lo ancho en vez de
-    // amontonarlos al medio.
-    const gkRow = gk.length > 0 && (
-      <div key="gk" className="flex w-full flex-wrap justify-center gap-x-4 gap-y-2 px-2">
-        {gk.map((c) => renderPlayer(c, gkVariant, numbers.get(c.id) ?? 0))}
-      </div>
-    );
-    const defRow = def.length > 0 && (
-      <div key="def" className="flex w-full flex-wrap justify-around gap-x-2 gap-y-2 px-10">
-        {def.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
-      </div>
-    );
-    const fwdRow = fwd.length > 0 && (
-      <div key="fwd" className="flex w-full flex-wrap justify-around gap-x-2 gap-y-2 px-2">
-        {fwd.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
-      </div>
-    );
-
     return (
-      <div key={team} className="relative h-full">
+      <div key={team} className="absolute inset-0">
         {label}
-        <div className="flex h-full flex-col items-center justify-between">
-          {team === 1 ? [gkRow, defRow, fwdRow] : [fwdRow, defRow, gkRow]}
-        </div>
+        {gk.length > 0 && renderRow("gk", gk, gkVariant, pos.gkY, [50, 50], numbers)}
+        {def.length > 0 && renderRow("def", def, variant, pos.defY, ROW_X_SPAN.def, numbers)}
+        {fwd.length > 0 && renderRow("fwd", fwd, variant, pos.fwdY, ROW_X_SPAN.fwd, numbers)}
       </div>
     );
   };
