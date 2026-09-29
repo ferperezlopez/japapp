@@ -7,7 +7,7 @@ import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
 import { abbreviateName } from "@/lib/formatName";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Jersey, GoalNet, type JerseyVariant } from "./Jersey";
+import { Jersey, Pitch, PITCH_POSITIONS, ROW_X_SPAN, rowXPositions, type JerseyVariant } from "./Jersey";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null };
 type Position = "gk" | "def" | "fwd";
@@ -71,10 +71,26 @@ export function TeamBuilderModal({
     setSelectedId((prev) => (prev === id ? null : id));
   };
 
+  const countInLine = (
+    state: Record<string, { location: Location; position: Position }>,
+    team: 1 | 2,
+    position: Position,
+    excludeIds: string[],
+  ) =>
+    Object.entries(state).filter(
+      ([id, s]) => !excludeIds.includes(id) && s.location === team && s.position === position,
+    ).length;
+
   const moveSelectedTo = (
     destination: "unassigned" | { team: 1 | 2; position: Position },
   ) => {
     if (!selectedId) return;
+    // Si la línea de destino ya tiene 2 (el máximo permitido — fútbol 5,
+    // arquero + hasta 2 defensores + hasta 2 delanteros), el movimiento
+    // queda bloqueado: no se limpia la selección, para que quede claro
+    // que hay que elegir otra franja en vez de que el jugador
+    // seleccionado desaparezca sin explicación.
+    let blocked = false;
     setPlayerState((prev) => {
       if (destination === "unassigned") {
         if (prev[selectedId]?.location === "unassigned") return prev;
@@ -90,9 +106,14 @@ export function TeamBuilderModal({
       ) {
         return prev;
       }
+      if (position !== "gk" && countInLine(prev, team, position, [selectedId]) >= 2) {
+        blocked = true;
+        return prev;
+      }
       const next = { ...prev };
       // Un solo arquero a la vez por equipo: al arquero anterior se lo
-      // pasa a defensores en vez de dejarlo sin equipo.
+      // pasa a defensores, salvo que esa línea ya esté llena — en ese
+      // caso queda sin asignar en vez de sumar un tercero.
       if (position === "gk") {
         for (const id of Object.keys(next)) {
           if (
@@ -100,14 +121,19 @@ export function TeamBuilderModal({
             next[id].location === team &&
             next[id].position === "gk"
           ) {
-            next[id] = { ...next[id], position: "def" };
+            const defFull = countInLine(next, team, "def", [id, selectedId]) >= 2;
+            next[id] = {
+              ...next[id],
+              location: defFull ? "unassigned" : team,
+              position: "def",
+            };
           }
         }
       }
       next[selectedId] = { location: team, position };
       return next;
     });
-    setSelectedId(null);
+    if (!blocked) setSelectedId(null);
   };
 
   const byPosition = (team: 1 | 2, position: Position) =>
@@ -164,29 +190,45 @@ export function TeamBuilderModal({
     );
   };
 
-  // Franja de posición: tocarla mueve ahí al jugador seleccionado. Un
-  // placeholder con el nombre de la posición solo se muestra vacía —
-  // con jugadores ya puestos, alcanza con verlos (mismo criterio que
-  // TeamsPitchView, la vista de solo lectura con el mismo estilo).
-  const renderZone = (
+  // Franja de posición: una banda horizontal absoluta a la altura exacta
+  // (`yPercent`, ver PITCH_POSITIONS en Jersey.tsx) medida sobre la
+  // imagen de formación que mandó el usuario. Tocarla mueve ahí al
+  // jugador seleccionado. Cada jugador de la franja se ubica en su propio
+  // % horizontal (`rowXPositions`, mismos extremos que esa imagen) en vez
+  // de repartirse con flexbox — con jugadores ya puestos, un placeholder
+  // con el nombre de la posición solo se muestra vacía.
+  const renderRow = (
     team: 1 | 2,
     position: Position,
     players: Candidate[],
     variant: JerseyVariant,
+    yPercent: number,
+    xSpan: [number, number],
   ) => {
     const numbers = team === 1 ? team1Numbers : team2Numbers;
+    const xs = rowXPositions(players.length, xSpan);
     return (
       <div
+        key={position}
         onClick={(event) => {
           event.stopPropagation();
           moveSelectedTo({ team, position });
         }}
-        className="flex min-h-12 w-full cursor-pointer flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-white/5"
+        className="absolute left-0 h-16 w-full cursor-pointer rounded-lg transition-colors duration-150 hover:bg-white/5"
+        style={{ top: `${yPercent}%`, transform: "translateY(-50%)" }}
       >
         {players.length > 0 ? (
-          players.map((c) => renderPitchChip(c, variant, numbers.get(c.id) ?? 0))
+          players.map((c, i) => (
+            <div
+              key={c.id}
+              className="absolute top-1/2"
+              style={{ left: `${xs[i]}%`, transform: "translate(-50%, -50%)" }}
+            >
+              {renderPitchChip(c, variant, numbers.get(c.id) ?? 0)}
+            </div>
+          ))
         ) : (
-          <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-medium uppercase tracking-wide text-white/50">
             {POSITION_LABELS[position]}
           </span>
         )}
@@ -194,45 +236,25 @@ export function TeamBuilderModal({
     );
   };
 
-  // Cancha propia por equipo (arco + arquero al frente, defensores y
-  // delanteros debajo) — mismo estilo visual que TeamsPitchView (vista
-  // de solo lectura), a pedido explícito del usuario con una captura de
-  // referencia. Equipo 1 primero, Equipo 2 después (antes compartían una
-  // sola cancha partida en dos mitades).
-  const renderTeamPitch = (team: 1 | 2) => {
+  // Bloque de un equipo: se superpone entero sobre la cancha compartida
+  // (ver `Pitch`) — cada jugador se posiciona directo con sus coordenadas
+  // exactas, no hace falta dividir la cancha en mitades. La etiqueta va
+  // en la esquina pegada al arco propio.
+  const renderTeamBlock = (team: 1 | 2) => {
     const t = team === 1 ? team1 : team2;
-    const numbers = team === 1 ? team1Numbers : team2Numbers;
-    const variant: JerseyVariant = team === 2 ? "dark" : "light";
+    const variant: JerseyVariant = team === 2 ? "team2" : "team1";
+    const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
+    const pos = PITCH_POSITIONS[team];
     return (
-      <div
-        key={team}
-        className="overflow-hidden rounded-2xl border-2 border-white bg-green-600 p-3 dark:border-green-900"
-      >
-        <span className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white">
-          Equipo {team} ({t.total})
+      <div key={team} className="absolute inset-0">
+        <span
+          className={`absolute left-2 ${team === 1 ? "top-2" : "bottom-2"} inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white`}
+        >
+          Equipo {team} <span className="text-slate-300">({t.total})</span>
         </span>
-        <div className="mt-2 flex flex-col items-center gap-2">
-          <div
-            onClick={(event) => {
-              event.stopPropagation();
-              moveSelectedTo({ team, position: "gk" });
-            }}
-            className="relative flex min-h-[4.5rem] cursor-pointer flex-col items-center rounded-lg px-2 pt-1 transition-colors duration-150 hover:bg-white/5"
-          >
-            <GoalNet className="h-12 w-32" />
-            <div className="-mt-3 flex flex-wrap items-center justify-center gap-1">
-              {t.gk.length > 0 ? (
-                t.gk.map((c) => renderPitchChip(c, "gk", numbers.get(c.id) ?? 0))
-              ) : (
-                <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
-                  {POSITION_LABELS.gk}
-                </span>
-              )}
-            </div>
-          </div>
-          {renderZone(team, "def", t.def, variant)}
-          {renderZone(team, "fwd", t.fwd, variant)}
-        </div>
+        {renderRow(team, "gk", t.gk, gkVariant, pos.gkY, [50, 50])}
+        {renderRow(team, "def", t.def, variant, pos.defY, ROW_X_SPAN.def)}
+        {renderRow(team, "fwd", t.fwd, variant, pos.fwdY, ROW_X_SPAN.fwd)}
       </div>
     );
   };
@@ -326,10 +348,10 @@ export function TeamBuilderModal({
           delanteros o &quot;Sin asignar&quot;) donde va.
         </p>
 
-        <div className="mt-4 space-y-3">
-          {renderTeamPitch(1)}
-          {renderTeamPitch(2)}
-        </div>
+        <Pitch className="mt-4">
+          {renderTeamBlock(1)}
+          {renderTeamBlock(2)}
+        </Pitch>
         {(warnTeam1 || warnTeam2) && (
           <p className="mt-2 rounded-lg bg-amber-soft p-2 text-xs text-amber-ink">
             Cada equipo debería tener al menos 4 jugadores.

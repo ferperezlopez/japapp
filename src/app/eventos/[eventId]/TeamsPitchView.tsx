@@ -4,7 +4,7 @@ import { useState } from "react";
 import { EditGuestNameModal } from "@/components/EditGuestNameModal";
 import { abbreviateName } from "@/lib/formatName";
 import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
-import { Jersey, GoalNet } from "./Jersey";
+import { Jersey, Pitch, PITCH_POSITIONS, ROW_X_SPAN, rowXPositions, type JerseyVariant } from "./Jersey";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null; guestId?: string };
 type Position = "gk" | "def" | "fwd";
@@ -79,7 +79,7 @@ export function TeamsPitchView({
       .map((a) => findCandidate(a.id))
       .filter((c): c is Candidate => !!c);
 
-  const renderPlayer = (c: Candidate, variant: "light" | "dark" | "gk", number: number) => {
+  const renderPlayer = (c: Candidate, variant: JerseyVariant, number: number) => {
     const isMvp = stats?.mvpId === c.id;
     const isGoleador = stats?.goleadorId === c.id;
     return (
@@ -108,53 +108,90 @@ export function TeamsPitchView({
     );
   };
 
-  const renderTeam = (team: 1 | 2) => {
+  // Franja de posición: una banda horizontal absoluta a la altura exacta
+  // (`yPercent`, ver PITCH_POSITIONS en Jersey.tsx) medida sobre la
+  // imagen de formación que mandó el usuario. Cada jugador se ubica en
+  // su propio % horizontal (`rowXPositions`, mismos extremos que esa
+  // imagen) en vez de repartirse con flexbox.
+  const renderRow = (
+    position: Position,
+    players: Candidate[],
+    variant: JerseyVariant,
+    yPercent: number,
+    xSpan: [number, number],
+    numbers: Map<string, number>,
+  ) => {
+    const xs = rowXPositions(players.length, xSpan);
+    return (
+      <div
+        key={position}
+        className="absolute left-0 w-full"
+        style={{ top: `${yPercent}%`, transform: "translateY(-50%)" }}
+      >
+        {players.map((c, i) => (
+          <div
+            key={c.id}
+            className="absolute top-1/2"
+            style={{ left: `${xs[i]}%`, transform: "translate(-50%, -50%)" }}
+          >
+            {renderPlayer(c, variant, numbers.get(c.id) ?? 0)}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Bloque de un equipo: se superpone entero sobre la cancha compartida
+  // (ver `Pitch`) — cada jugador se posiciona directo con sus coordenadas
+  // exactas, no hace falta dividir la cancha en mitades. La etiqueta va
+  // en la esquina pegada al arco propio.
+  const renderTeamBlock = (team: 1 | 2) => {
     const gk = byPosition(team, "gk");
     const def = byPosition(team, "def");
     const fwd = byPosition(team, "fwd");
     const numbers = assignJerseyNumbers([gk, def, fwd]);
     const total = gk.length + def.length + fwd.length;
-    const variant = team === 2 ? "dark" : "light";
+    const variant: JerseyVariant = team === 2 ? "team2" : "team1";
+    const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
+    const pos = PITCH_POSITIONS[team];
+
+    const label = (
+      <span
+        className={`absolute left-2 ${team === 1 ? "top-2" : "bottom-2"} inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white`}
+      >
+        Equipo {team} <span className="text-slate-300">({total})</span>
+      </span>
+    );
+
+    if (total === 0) {
+      return (
+        <div key={team} className="absolute inset-0">
+          {label}
+          <p className="flex h-full items-center justify-center text-xs text-white/70">
+            Sin jugadores
+          </p>
+        </div>
+      );
+    }
 
     return (
-      <div className="overflow-hidden rounded-2xl border-2 border-white bg-green-600 p-3 dark:border-green-900">
-        <span className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white">
-          Equipo {team} ({total})
-        </span>
-        {total === 0 ? (
-          <p className="mt-3 py-4 text-center text-xs text-white/70">Sin jugadores</p>
-        ) : (
-          <div className="mt-2 flex flex-col items-center gap-3">
-            {gk.length > 0 && (
-              <div className="relative flex flex-col items-center">
-                <GoalNet className="h-12 w-32" />
-                <div className="-mt-3">
-                  {gk.map((c) => renderPlayer(c, "gk", numbers.get(c.id) ?? 0))}
-                </div>
-              </div>
-            )}
-            {def.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-                {def.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
-              </div>
-            )}
-            {fwd.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-                {fwd.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
-              </div>
-            )}
-          </div>
-        )}
+      <div key={team} className="absolute inset-0">
+        {label}
+        {gk.length > 0 && renderRow("gk", gk, gkVariant, pos.gkY, [50, 50], numbers)}
+        {def.length > 0 && renderRow("def", def, variant, pos.defY, ROW_X_SPAN.def, numbers)}
+        {fwd.length > 0 && renderRow("fwd", fwd, variant, pos.fwdY, ROW_X_SPAN.fwd, numbers)}
       </div>
     );
   };
 
   return (
-    <div className="space-y-3">
-      {renderTeam(1)}
-      {renderTeam(2)}
+    <div>
+      <Pitch>
+        {renderTeamBlock(1)}
+        {renderTeamBlock(2)}
+      </Pitch>
       {(stats?.mvpId || stats?.goleadorId) && (
-        <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-foreground/50">
+        <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-foreground/50">
           {stats?.mvpId && <span>⭐ MVP</span>}
           {stats?.goleadorId && <span>⚽ Goleador</span>}
         </p>

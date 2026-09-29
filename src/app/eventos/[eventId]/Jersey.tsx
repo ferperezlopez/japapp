@@ -1,102 +1,116 @@
 // Compartido entre TeamBuilderModal (editor) y FutbolTeamsSection (vista
-// de solo lectura) — extraído para no duplicar el SVG y los colores.
-export type JerseyVariant = "light" | "dark" | "gk";
+// de solo lectura). Camiseta y cancha son assets PNG reales que generó el
+// usuario a partir de su imagen de referencia (ChatGPT, editando esa
+// imagen para sacar los jugadores y extraer cada camiseta sola sin
+// número) — reemplazan un intento anterior en SVG/CSS a mano que el
+// usuario consideró que no se parecía lo suficiente. Ver
+// specs/015-armar-equipos-futbol.md, sección "Réplica visual de cancha".
+export type JerseyVariant = "team1" | "team2" | "gk1" | "gk2";
 
-export const JERSEY_COLORS: Record<
-  JerseyVariant,
-  { fill: string; stroke: string; text: string }
-> = {
-  light: { fill: "#f8fafc", stroke: "#94a3b8", text: "#111827" },
-  dark: { fill: "#111827", stroke: "#4b5563", text: "#f8fafc" },
-  // El arquero se destaca con el mismo amarillo que ya usa la app para
-  // "aviso/pendiente" (--color-amber en globals.css) — se adapta solo a
-  // dark mode al ser una variable CSS, sin necesidad de un segundo set
-  // de colores hardcodeados.
-  gk: {
-    fill: "var(--color-amber)",
-    stroke: "var(--color-amber-hover)",
-    text: "var(--color-amber-ink)",
-  },
+const JERSEY_SRC: Record<JerseyVariant, string> = {
+  team1: "/futbol/jersey-team1.png",
+  team2: "/futbol/jersey-team2.png",
+  gk1: "/futbol/jersey-gk1.png",
+  gk2: "/futbol/jersey-gk2.png",
 };
 
-// Camiseta con dorsal numérico, SVG inline (sin dependencia nueva): clara
-// para el Equipo 1, oscura para el Equipo 2, y un tercer color (arquero)
-// sin importar el equipo — para que el arquero se distinga de un vistazo.
-// El número es puramente visual (no se guarda en la base, ver
-// src/lib/eventos/jerseyNumbers.ts): el nombre va aparte, en una
-// etiqueta debajo.
+// Color del número superpuesto: blanco sobre la camiseta navy (equipo 1),
+// oscuro sobre el resto (blanca, amarilla, naranja) para que siempre haya
+// contraste — el PNG no trae número, es una plantilla en blanco.
+const NUMBER_COLOR: Record<JerseyVariant, string> = {
+  team1: "#ffffff",
+  team2: "#111827",
+  gk1: "#111827",
+  gk2: "#111827",
+};
+
 export function Jersey({
   number,
   variant,
-  className = "h-20 w-16",
+  className = "w-16",
 }: {
   number: number;
   variant: JerseyVariant;
   className?: string;
 }) {
-  const { fill, stroke, text } = JERSEY_COLORS[variant];
   return (
-    <svg viewBox="0 0 64 64" className={`shrink-0 ${className}`}>
-      <path
-        d="M20 4 L8 14 L14 24 L18 21 L18 58 L46 58 L46 21 L50 24 L56 14 L44 4 L36 9 L28 9 Z"
-        fill={fill}
-        stroke={stroke}
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      {/* Rayas de puño (manga raglán) */}
-      <path
-        d="M9.5 15.5 L13 21.5"
-        stroke={text}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        opacity="0.85"
-      />
-      <path
-        d="M54.5 15.5 L51 21.5"
-        stroke={text}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        opacity="0.85"
-      />
-      {/* Raya del ruedo */}
-      <rect x="20" y="52" width="24" height="2.5" rx="1" fill={text} opacity="0.85" />
-      {/* Escudo en el pecho */}
-      <path
-        d="M40 14.5 L43 16 L42.3 20 L40 22 L37.7 20 L37 16 Z"
-        fill="none"
-        stroke={text}
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <text x="32" y="38" textAnchor="middle" fontSize="20" fontWeight="700" fill={text}>
+    <div
+      className={`relative shrink-0 ${className}`}
+      style={{ filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.4))" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- ícono chico repetido muchas veces por cancha, no vale la pena next/image acá */}
+      <img src={JERSEY_SRC[variant]} alt="" className="block w-full" />
+      <span
+        className="absolute left-1/2 top-[53%] -translate-x-1/2 -translate-y-1/2 text-xl font-extrabold"
+        style={{ color: NUMBER_COLOR[variant] }}
+      >
         {number}
-      </text>
-    </svg>
+      </span>
+    </div>
   );
 }
 
-// Arco con red — usado tanto en el editor (TeamBuilderModal) como en la
-// vista de solo lectura (TeamsPitchView), cada equipo con el suyo propio
-// arriba del arquero.
-export function GoalNet({ className = "h-14 w-36" }: { className?: string }) {
-  const vCols = 8;
-  const hRows = 4;
+// Una sola cancha COMPLETA (arco de cada lado, línea de mitad de cancha y
+// círculo central), compartida entre los dos equipos — reemplaza el
+// enfoque anterior de dos tarjetas separadas, cada una con su propio
+// medio-arco repetido, que quedaba redundante. `pitch.png` es la foto
+// real de cancha completa que generó el usuario, con relación de aspecto
+// fija (700×1050) para que la imagen nunca se recorte/distorsione.
+//
+// El posicionamiento de los jugadores es absoluto (ver PITCH_POSITIONS y
+// rowXPositions más abajo) en vez de repartirlos con flexbox: el usuario
+// mandó una imagen con la formación exacta que quería (5 vs 5, arquero +
+// 2 filas de 2), y esas coordenadas se midieron directamente sobre esa
+// imagen (detección de color por jugador con Pillow/scipy) en vez de
+// aproximarse con `justify-around`/`justify-between`. Por eso ya no hace
+// falta ningún contenedor intermedio por equipo: cada jugador se ubica
+// directo sobre esta cancha con su propio `top`/`left` en % — ver
+// `renderTeamBlock` en TeamBuilderModal.tsx / TeamsPitchView.tsx.
+export function Pitch({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <svg viewBox="0 0 120 56" className={`shrink-0 ${className}`} aria-hidden="true">
-      <rect x="3" y="3" width="114" height="50" fill="none" stroke="white" strokeWidth="3" />
-      {Array.from({ length: vCols }).map((_, i) => {
-        const x = 3 + ((i + 1) * 114) / (vCols + 1);
-        return (
-          <line key={`v${i}`} x1={x} y1={3} x2={x} y2={53} stroke="white" strokeOpacity="0.35" strokeWidth="1" />
-        );
-      })}
-      {Array.from({ length: hRows }).map((_, i) => {
-        const y = 3 + ((i + 1) * 50) / (hRows + 1);
-        return (
-          <line key={`h${i}`} x1={3} y1={y} x2={117} y2={y} stroke="white" strokeOpacity="0.35" strokeWidth="1" />
-        );
-      })}
-    </svg>
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-white/40 shadow-lg ${className}`}
+      style={{
+        aspectRatio: "700 / 1050",
+        backgroundImage: "url(/futbol/pitch.png)",
+        backgroundSize: "100% 100%",
+      }}
+    >
+      <div className="relative h-full">{children}</div>
+    </div>
   );
+}
+
+// Coordenadas (% del alto/ancho de la cancha completa) medidas sobre la
+// imagen de formación exacta que mandó el usuario — no estimadas a ojo.
+// `gkY`/`defY`/`fwdY` son % verticales; `def`/`fwd` en ROW_X_SPAN son los
+// % horizontales de los dos jugadores de esa fila en la imagen de
+// referencia (equipo 1, que después se reusan tal cual para el equipo 2
+// porque las filas midieron prácticamente simétricas).
+export const PITCH_POSITIONS: Record<1 | 2, { gkY: number; defY: number; fwdY: number }> = {
+  1: { gkY: 9, defY: 21, fwdY: 36 },
+  2: { gkY: 85, defY: 72, fwdY: 55 },
+};
+
+export const ROW_X_SPAN: Record<"def" | "fwd", [number, number]> = {
+  def: [29, 69],
+  fwd: [18, 80],
+};
+
+// Reparte `count` jugadores a lo ancho de `span` (mismos extremos que la
+// imagen de referencia para 2 jugadores); con 1 solo jugador se centra,
+// con 3+ se interpola pareja entre los mismos dos extremos medidos — no
+// hay referencia para esos casos, pero mantiene la misma lógica.
+export function rowXPositions(count: number, span: [number, number]): number[] {
+  if (count <= 0) return [];
+  if (count === 1) return [50];
+  const [min, max] = span;
+  const step = (max - min) / (count - 1);
+  return Array.from({ length: count }, (_, i) => min + step * i);
 }

@@ -36,8 +36,15 @@ hacerlo a mano por WhatsApp cada vez que se junta el grupo.
   "aviso/pendiente"), para distinguirlo de un vistazo sin tener que
   fijarse en la franja.
 - Un arquero por equipo (mover a otro jugador ahí pasa al anterior a
-  defensores); defensores y delanteros sin tope estricto (se acomodan
-  varios en la misma franja si la convocatoria da para más de 2).
+  defensores, o lo deja sin asignar si esa franja ya está llena).
+- **Tope estricto de 2 jugadores por franja de defensores/delanteros**
+  (fútbol 5: arquero + hasta 2 defensores + hasta 2 delanteros = 5 por
+  equipo como máximo) — tocar una franja ya llena con un tercer jugador
+  no hace nada (el jugador seleccionado queda seleccionado, para que
+  quede claro que hay que elegir otra franja). Con exactamente 1
+  jugador en una franja, se centra en la cancha en vez de ir pegado a
+  un costado (ver `PITCH_POSITIONS`/`rowXPositions` en
+  `src/app/eventos/[eventId]/Jersey.tsx`).
 - Aviso no bloqueante si un equipo queda con menos de 4 jugadores.
 - Los equipos armados se guardan en la base y quedan visibles/editables
   por cualquier miembro logueado, igual que el resto de la app.
@@ -55,10 +62,6 @@ hacerlo a mano por WhatsApp cada vez que se junta el grupo.
   de DnD instalada ni drag nativo de HTML5 en uso, y esto es una PWA
   touch-first (el drag nativo anda mal en celular); se usa un patrón de
   tocar-y-ubicar en su lugar (decisión confirmada con el usuario).
-- Tope estricto de jugadores por franja — se eligió "máximo 2 por línea
-  recomendado, sin límite estricto" (decisión confirmada con el
-  usuario): si sobran confirmados, se acomodan igual en la misma franja
-  en vez de forzarlos a "Sin asignar".
 - Resultado del partido por equipo — sigue siendo el campo de texto
   libre `resultado` de `futbol_stats` (`specs/010-estadisticas-de-partidos.md`),
   sin relación con esta tabla.
@@ -211,8 +214,11 @@ Puntos que el SQL no explica por sí solo:
       asignar" lo saca de cualquier equipo.
 - [x] Mover a un segundo jugador a la franja de arquero de un equipo
       pasa al arquero anterior a defensores (no desaparece).
-- [x] Sumar un tercer jugador a defensores o delanteros de un mismo
-      equipo no rompe el layout (sin tope estricto).
+- [x] Intentar sumar un tercer jugador a defensores o delanteros de un
+      mismo equipo no hace nada (tope de 2 por franja); el jugador
+      seleccionado sigue seleccionado, no desaparece.
+- [x] Con exactamente 1 jugador en defensores o delanteros, se lo ve
+      centrado en la cancha, no pegado a un costado.
 - [x] Si un equipo queda con menos de 4 jugadores en total, aparece un
       aviso no bloqueante — "Guardar equipos" sigue funcionando igual.
 - [x] Guardar y volver a abrir el modal (o recargar la página) muestra
@@ -249,7 +255,7 @@ Puntos que el SQL no explica por sí solo:
 |---|---|---|
 | Tocar y ubicar (tocar jugador, tocar destino) | Arrastrar y soltar (drag-and-drop) | La app no tenía ninguna librería de DnD instalada ni drag nativo de HTML5 en uso; es una PWA touch-first donde el drag nativo anda mal en celular. Decisión confirmada con el usuario. |
 | Cancha vertical con formación fija (arquero, defensores, delanteros) | Cancha horizontal con solo el arquero destacado (primer diseño, PR #31) | El usuario vio el primer diseño (dos mitades lado a lado, sin formación) y pidió explícitamente cancha vertical, camisetas con dorsal por equipo (clara/oscura) y posiciones fijas, con una imagen ilustrativa de referencia conceptual. |
-| Defensores/delanteros sin tope estricto (máximo 2 por línea "recomendado") | Cupos estrictos 1-2-2 con excedente en "Sin asignar" | Decisión confirmada con el usuario: una convocatoria real de 8 a 12 personas no siempre da justo 5 por equipo: forzar el excedente a "Sin asignar" bloquearía sin necesidad a alguien que sí va a jugar. |
+| Tope estricto de 2 por franja de defensores/delanteros, movimiento bloqueado (no reasigna a "Sin asignar") | Sin tope estricto, "recomendado" nomás (decisión anterior) | El usuario revirtió la decisión anterior con reglas explícitas: fútbol 5 nunca pasa de arquero + 2 + 2 por equipo; con 1 solo jugador en una franja, se centra en la cancha en vez de ir pegado a un costado. |
 | Dorsal numérico secuencial (arquero=1, correlativo por equipo) + nombre abreviado en etiqueta debajo | (a) Nombre en la casaca sin dorsal (decisión anterior, PR #32); (b) reproducir números "estilo camiseta real" (arquero=1, defensores=4-5, delanteros=9-11) | El usuario mandó una imagen de referencia mostrando dorsal numérico y pidió puntualmente ese cambio — revierte la decisión anterior de "nombre en la casaca, sin dorsal". Se descartó (b) porque el usuario aclaró que la imagen era referencia direccional, no pixel-exacta: un esquema secuencial simple es más fácil de razonar y de testear que reproducir los huecos de una numeración real. |
 | Arquero con un tercer color (amarillo) sin importar el equipo | Mantener el color de camiseta del equipo también para el arquero | Pedido explícito del usuario ("arquero destacado con otro color"); reusa el amarillo que la app ya usa para "aviso/pendiente" (`--color-amber`) en vez de inventar un color nuevo, y se adapta solo a dark mode al ser una variable CSS. |
 | Alto mínimo chico (`min-h-9`) por franja vacía, que crece solo con contenido | Alto fijo pensado para una camiseta completa (`min-h-[6rem]`) | Con las 6 franjas (arquero/defensores/delanteros × 2 equipos) vacías al abrir el modal — el caso normal, todos arrancan en "Sin asignar" — reservar el alto de una camiseta en cada una sumaba ~575px de blanco antes de tener un solo jugador ubicado, y el modal terminaba más alto que una pantalla de celular común. |
@@ -273,6 +279,19 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-29: la cancha y las 4 camisetas pasan de SVG/CSS dibujado a
+  mano a los PNG reales que generó el usuario (ChatGPT, editando su
+  imagen de referencia) — el usuario había preguntado explícitamente si
+  podía lograrse "pixel por pixel" y se le explicó que no sin el asset
+  real; una vez que lo generó, se integró tal cual. Además: (a) pasa a
+  usarse una sola cancha COMPLETA (arco de cada lado) compartida por los
+  dos equipos, en vez de dos tarjetas separadas con medio-arco repetido;
+  (b) las posiciones de arquero/defensores/delanteros pasan de reparto
+  por flexbox a coordenadas absolutas medidas sobre una imagen de
+  formación exacta que mandó el usuario (detección de color por jugador
+  con Pillow/scipy); (c) tope estricto de 2 jugadores por franja de
+  defensores/delanteros (revierte la decisión anterior de "sin tope
+  estricto", ver sección 6), con 1 solo jugador centrado en la cancha.
 - 2026-09-29: corrección sobre el punto anterior — la captura de
   referencia del usuario era de "Armar equipos" (el editor), no de la
   vista de solo lectura. `TeamBuilderModal` pasa de una sola cancha
