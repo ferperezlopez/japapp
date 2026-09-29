@@ -168,6 +168,18 @@ export function TeamBuilderModal({
   // placeholder con el nombre de la posición solo se muestra vacía —
   // con jugadores ya puestos, alcanza con verlos (mismo criterio que
   // TeamsPitchView, la vista de solo lectura con el mismo estilo).
+  // Separación horizontal: los defensores van más adentro (cerca del
+  // área) y los delanteros más abiertos (cerca de la línea lateral),
+  // como en una formación real — a pedido del usuario, que mandó una
+  // captura marcando las posiciones deseadas. `justify-around` en vez de
+  // `justify-center` reparte a los jugadores a lo ancho de la franja en
+  // vez de amontonarlos al medio, sea cual sea la cantidad.
+  const ZONE_PADDING: Record<Position, string> = {
+    gk: "px-2",
+    def: "px-10",
+    fwd: "px-2",
+  };
+
   const renderZone = (
     team: 1 | 2,
     position: Position,
@@ -181,7 +193,7 @@ export function TeamBuilderModal({
           event.stopPropagation();
           moveSelectedTo({ team, position });
         }}
-        className="flex min-h-12 w-full cursor-pointer flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-white/5"
+        className={`flex min-h-12 w-full cursor-pointer flex-wrap items-center justify-around gap-x-2 gap-y-1 rounded-lg py-1.5 transition-colors duration-150 hover:bg-white/5 ${ZONE_PADDING[position]}`}
       >
         {players.length > 0 ? (
           players.map((c) => renderPitchChip(c, variant, numbers.get(c.id) ?? 0))
@@ -234,7 +246,7 @@ export function TeamBuilderModal({
     const defZone = <div key="def">{renderZone(team, "def", t.def, variant)}</div>;
     const fwdZone = <div key="fwd">{renderZone(team, "fwd", t.fwd, variant)}</div>;
     return (
-      <div key={team} className="flex flex-col items-center gap-2">
+      <div key={team} className="flex flex-col items-center gap-3">
         {team === 1
           ? [label, gkZone, defZone, fwdZone]
           : [label, fwdZone, defZone, gkZone]}

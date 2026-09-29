@@ -141,24 +141,29 @@ export function TeamsPitchView({
       );
     }
 
+    // Defensores más adentro (cerca del área), delanteros más abiertos
+    // (cerca de la línea lateral), como en una formación real — mismo
+    // criterio que TeamBuilderModal (ver ZONE_PADDING ahí). `w-full` +
+    // `justify-around` reparte a los jugadores a lo ancho en vez de
+    // amontonarlos al medio.
     const gkRow = gk.length > 0 && (
-      <div key="gk" className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+      <div key="gk" className="flex w-full flex-wrap justify-center gap-x-4 gap-y-2 px-2">
         {gk.map((c) => renderPlayer(c, gkVariant, numbers.get(c.id) ?? 0))}
       </div>
     );
     const defRow = def.length > 0 && (
-      <div key="def" className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+      <div key="def" className="flex w-full flex-wrap justify-around gap-x-2 gap-y-2 px-10">
         {def.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
       </div>
     );
     const fwdRow = fwd.length > 0 && (
-      <div key="fwd" className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+      <div key="fwd" className="flex w-full flex-wrap justify-around gap-x-2 gap-y-2 px-2">
         {fwd.map((c) => renderPlayer(c, variant, numbers.get(c.id) ?? 0))}
       </div>
     );
 
     return (
-      <div key={team} className="flex flex-col items-center gap-2">
+      <div key={team} className="flex flex-col items-center gap-3">
         {team === 1 ? [label, gkRow, defRow, fwdRow] : [label, fwdRow, defRow, gkRow]}
       </div>
     );
