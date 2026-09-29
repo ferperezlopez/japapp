@@ -18,14 +18,10 @@ const JERSEY_SRC: Record<JerseyVariant, string> = {
   gk2: "/futbol/jersey-gk2.webp",
 };
 
-// Camisetas con trofeo/pelota superpuestos (mismas 8 imágenes que el
-// usuario generó junto con las 4 limpias, en la misma tanda) para marcar
-// MVP/goleador en "Ver equipos" en vez de un emoji ⭐/⚽ al lado de la
-// camiseta — reemplaza la camiseta entera, no superpone nada.
-// team1-trophy/ball: placeholder temporal en un azul más claro que el
-// navy real (el usuario no generó esa combinación en el color correcto;
-// va a mandar las 2 que faltan y ahí se reemplazan estos 2 archivos sin
-// tocar código).
+// Camisetas con trofeo/pelota superpuestos (mismas 10 imágenes que el
+// usuario generó junto con las 4 limpias) para marcar MVP/goleador en
+// "Ver equipos" en vez de un emoji ⭐/⚽ al lado de la camiseta —
+// reemplaza la camiseta entera, no superpone nada.
 const JERSEY_SRC_MVP: Record<JerseyVariant, string> = {
   team1: "/futbol/jersey-team1-trophy.webp",
   team2: "/futbol/jersey-team2-trophy.webp",

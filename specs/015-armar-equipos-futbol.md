@@ -279,6 +279,10 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-29: el usuario generó las 2 camisetas navy (trofeo/pelota) de
+  equipo 1 que faltaban en el color correcto — se reemplazan
+  `jersey-team1-trophy.webp`/`jersey-team1-ball.webp` (antes en un azul
+  placeholder más claro, ver entrada anterior) sin tocar código.
 - 2026-09-29: tres ajustes a pedido del usuario sobre la vista gráfica
   recién implementada. (a) Los badges de MVP (⭐) y goleador (⚽) dejan de
   ser un emoji al lado de la camiseta — el usuario aclaró que, de las 13
@@ -288,10 +292,7 @@ Puntos que el SQL no explica por sí solo:
   un prop opcional `badge?: "mvp" | "goleador"` que cambia la camiseta
   entera por la versión con trofeo/pelota (si es MVP y goleador a la
   vez, gana MVP); la fila de emoji reservada arriba de la camiseta se
-  elimina. Pendiente: la camiseta de trofeo/pelota del equipo 1 (navy)
-  usa un azul más claro como placeholder temporal — el usuario no generó
-  esa combinación en el color correcto y va a mandar las 2 que faltan
-  (se reemplazan 2 archivos, sin tocar código). (b) Cuando queda un solo
+  elimina. (b) Cuando queda un solo
   defensor centrado (misma columna x=50% que el arquero), su nombre
   quedaba pegado/tapando el del arquero — se agrega `defYSingle` en
   `PITCH_POSITIONS`, un Y más alejado del arco propio que se usa solo en
