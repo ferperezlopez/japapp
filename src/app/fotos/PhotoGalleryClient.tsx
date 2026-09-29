@@ -39,13 +39,27 @@ function ListIcon() {
   );
 }
 
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-3.5 w-3.5" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v10m0 0 3.5-3.5M12 14l-3.5-3.5M5 16.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1.5" />
+    </svg>
+  );
+}
+
 // Estilo Google Photos: agrupado por mes, toggle grilla/lista, click abre
 // el detalle grande (ImageZoomModal con footer de metadata). Recibe los
 // grupos ya armados y ordenados desde el server component — no vuelve a
 // pedir datos, ambas vistas usan el mismo array.
 export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]][] }) {
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [openPhoto, setOpenPhoto] = useState<GalleryPhoto | null>(null);
+  // Índice sobre el array aplanado (no por grupo) — así ← → recorren
+  // todas las fotos en orden cronológico sin importar el límite de mes,
+  // igual que en Google Photos. Los grupos ya vienen en orden, así que
+  // aplanarlos preserva el orden general.
+  const flatPhotos = groups.flatMap(([, photos]) => photos);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const openPhoto = openIndex !== null ? flatPhotos[openIndex] : null;
 
   return (
     <div>
@@ -84,25 +98,40 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
           {view === "grid" ? (
             <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
               {photos.map((photo) => (
-                <button
+                <div
                   key={photo.id}
-                  type="button"
-                  onClick={() => setOpenPhoto(photo)}
-                  className="aspect-square overflow-hidden rounded-lg bg-surface"
+                  className="relative aspect-square overflow-hidden rounded-lg bg-surface"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- fotos de Google Photos / Supabase Storage, no vale next/image para esto */}
-                  <img src={photo.thumbUrl} alt="" className="h-full w-full object-cover" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpenIndex(flatPhotos.indexOf(photo))}
+                    className="block h-full w-full"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- fotos de Google Photos / Supabase Storage, no vale next/image para esto */}
+                    <img src={photo.thumbUrl} alt="" className="h-full w-full object-cover" />
+                  </button>
+                  {photo.downloadUrl && (
+                    <a
+                      href={photo.downloadUrl}
+                      download
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label="Descargar"
+                      className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1.5 text-white transition-colors duration-200 hover:bg-black/80"
+                    >
+                      <DownloadIcon />
+                    </a>
+                  )}
+                </div>
               ))}
             </div>
           ) : (
             <ul className="mt-2 divide-y divide-surface-border">
               {photos.map((photo) => (
-                <li key={photo.id}>
+                <li key={photo.id} className="flex items-center gap-3 py-2">
                   <button
                     type="button"
-                    onClick={() => setOpenPhoto(photo)}
-                    className="flex w-full items-center gap-3 py-2 text-left"
+                    onClick={() => setOpenIndex(flatPhotos.indexOf(photo))}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- ídem */}
                     <img
@@ -120,6 +149,16 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
                       </p>
                     </div>
                   </button>
+                  {photo.downloadUrl && (
+                    <a
+                      href={photo.downloadUrl}
+                      download
+                      aria-label="Descargar"
+                      className="shrink-0 rounded-full p-2 text-foreground/40 transition-colors duration-200 hover:bg-surface hover:text-foreground"
+                    >
+                      <DownloadIcon />
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>
@@ -127,11 +166,15 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
         </section>
       ))}
 
-      {openPhoto && (
+      {openPhoto && openIndex !== null && (
         <ImageZoomModal
           src={openPhoto.detailUrl}
           alt={openPhoto.eventName}
-          onClose={() => setOpenPhoto(null)}
+          onClose={() => setOpenIndex(null)}
+          onPrev={openIndex > 0 ? () => setOpenIndex(openIndex - 1) : undefined}
+          onNext={
+            openIndex < flatPhotos.length - 1 ? () => setOpenIndex(openIndex + 1) : undefined
+          }
           footer={
             <div className="max-w-full rounded-lg bg-black/60 px-4 py-2 text-center text-sm text-white">
               <p className="font-medium">{openPhoto.eventName}</p>
@@ -146,7 +189,7 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
                   onClick={(event) => event.stopPropagation()}
                   className="mt-1 inline-block text-xs font-medium underline"
                 >
-                  Descargar original
+                  Descargar
                 </a>
               )}
             </div>

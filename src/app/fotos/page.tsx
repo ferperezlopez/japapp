@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getBaseUrls } from "@/lib/googlePhotos/mediaItems";
 import { PhotoGalleryClient, type GalleryPhoto } from "./PhotoGalleryClient";
-import { MigrateOldPhotosButton } from "./MigrateOldPhotosButton";
 
 const monthFormatter = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" });
 
@@ -30,13 +29,6 @@ export default async function FotosPage({
       </div>
     );
   }
-
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("is_admin")
-    .eq("id", user.id)
-    .maybeSingle();
-  const isAdmin = me?.is_admin ?? false;
 
   let query = supabase
     .from("event_media")
@@ -75,11 +67,17 @@ export default async function FotosPage({
   // Se firman TODOS los preview (no solo los que todavía no tienen
   // Google Photos) — sirve de respaldo si la API de Google no está
   // configurada, si falló puntualmente el batchGet, o si el media item
-  // fue borrado a mano desde Google Photos.
+  // fue borrado a mano desde Google Photos. `download: true` agrega
+  // Content-Disposition: attachment — necesario para que el botón de
+  // descarga funcione como descarga real y no como "abrir en pestaña
+  // nueva" (no afecta que la misma URL se use en un <img> para mostrar
+  // el thumbnail/detalle, el navegador la renderiza igual).
   const allPaths = (mediaRows ?? []).map((r) => r.storage_path);
   const { data: fallbackSigned } =
     allPaths.length > 0
-      ? await supabase.storage.from("event-photos").createSignedUrls(allPaths, 3600)
+      ? await supabase.storage
+          .from("event-photos")
+          .createSignedUrls(allPaths, 3600, { download: true })
       : { data: [] as { path: string | null; signedUrl: string }[] };
   const fallbackUrlByPath = new Map(
     (fallbackSigned ?? []).map((s) => [s.path, s.signedUrl]),
@@ -100,7 +98,10 @@ export default async function FotosPage({
       uploadedByName: uploaderNameById.get(row.uploaded_by) ?? "Alguien",
       thumbUrl,
       detailUrl,
-      downloadUrl: baseUrl ? `${baseUrl}=d` : null,
+      // Original real vía Google si ya está sincronizada; si no, se
+      // ofrece igual el preview de Supabase como descarga — toda foto
+      // tiene que poder bajarse, aunque no sea su tamaño original.
+      downloadUrl: baseUrl ? `${baseUrl}=d` : (fallbackUrl ?? null),
     });
   }
 
@@ -119,16 +120,6 @@ export default async function FotosPage({
     groups[index][1].push(photo);
   }
 
-  let pendingBackfillCount = 0;
-  if (isAdmin) {
-    const { count } = await supabase
-      .from("event_media")
-      .select("id", { count: "exact", head: true })
-      .is("google_media_item_id", null)
-      .is("original_staging_path", null);
-    pendingBackfillCount = count ?? 0;
-  }
-
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-eventos">Recuerdos</p>
@@ -140,17 +131,6 @@ export default async function FotosPage({
       <div className="mt-6">
         <PhotoGalleryClient groups={groups} />
       </div>
-
-      {isAdmin && (
-        <details className="mt-10 rounded-xl border border-surface-border bg-surface p-4 text-sm">
-          <summary className="cursor-pointer font-medium text-foreground">
-            Migrar fotos existentes a Google Photos
-          </summary>
-          <div className="mt-2">
-            <MigrateOldPhotosButton initialRemaining={pendingBackfillCount} />
-          </div>
-        </details>
-      )}
     </div>
   );
 }
