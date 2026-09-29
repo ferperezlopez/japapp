@@ -273,6 +273,19 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-29: corrección sobre el punto anterior — la captura de
+  referencia del usuario era de "Armar equipos" (el editor), no de la
+  vista de solo lectura. `TeamBuilderModal` pasa de una sola cancha
+  compartida (partida en dos mitades, franjas en columnas lado a lado)
+  a una cancha propia por equipo, apiladas Equipo 1 y Equipo 2 (arco +
+  arquero al frente, defensores y delanteros en filas debajo) — mismo
+  estilo que `ViewTeamsModal`/`TeamsPitchView` de más abajo, ahora sí
+  coherente entre editar y ver. También se corrigen los badges de
+  MVP/goleador: pasan de un `absolute` superpuesto a la camiseta (se
+  veían mal ubicados, feedback del usuario) a una fila en flujo normal
+  arriba de la camiseta, siempre reservada del mismo alto exista o no
+  badge, para que quede inequívocamente asociada a la columna de ese
+  jugador puntual.
 - 2026-09-29: "Ver equipos" (`ViewTeamsModal`) pasa de una lista de
   texto agrupada por posición a una vista gráfica: cada equipo en su
   propia cancha (arco + arquero al frente, filas de defensores y

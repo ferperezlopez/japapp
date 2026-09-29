@@ -7,7 +7,7 @@ import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
 import { abbreviateName } from "@/lib/formatName";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Jersey, type JerseyVariant } from "./Jersey";
+import { Jersey, GoalNet, type JerseyVariant } from "./Jersey";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null };
 type Position = "gk" | "def" | "fwd";
@@ -164,14 +164,15 @@ export function TeamBuilderModal({
     );
   };
 
-  // Las 3 posiciones van en columnas lado a lado (no apiladas): con la
-  // cancha vertical, apilar arquero/defensores/delanteros dentro de cada
-  // equipo desperdiciaba todo el ancho disponible a los costados y hacía
-  // que el modal no entrara en la pantalla — ver specs/015-armar-equipos-futbol.md.
+  // Franja de posición: tocarla mueve ahí al jugador seleccionado. Un
+  // placeholder con el nombre de la posición solo se muestra vacía —
+  // con jugadores ya puestos, alcanza con verlos (mismo criterio que
+  // TeamsPitchView, la vista de solo lectura con el mismo estilo).
   const renderZone = (
     team: 1 | 2,
     position: Position,
     players: Candidate[],
+    variant: JerseyVariant,
   ) => {
     const numbers = team === 1 ? team1Numbers : team2Numbers;
     return (
@@ -180,19 +181,57 @@ export function TeamBuilderModal({
           event.stopPropagation();
           moveSelectedTo({ team, position });
         }}
-        className="flex min-h-16 min-w-0 flex-1 cursor-pointer flex-col items-center gap-1 px-1 py-1.5"
+        className="flex min-h-12 w-full cursor-pointer flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-white/5"
       >
-        <span className="text-[9px] font-medium uppercase tracking-wide text-white/60">
-          {POSITION_LABELS[position]}
+        {players.length > 0 ? (
+          players.map((c) => renderPitchChip(c, variant, numbers.get(c.id) ?? 0))
+        ) : (
+          <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
+            {POSITION_LABELS[position]}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  // Cancha propia por equipo (arco + arquero al frente, defensores y
+  // delanteros debajo) — mismo estilo visual que TeamsPitchView (vista
+  // de solo lectura), a pedido explícito del usuario con una captura de
+  // referencia. Equipo 1 primero, Equipo 2 después (antes compartían una
+  // sola cancha partida en dos mitades).
+  const renderTeamPitch = (team: 1 | 2) => {
+    const t = team === 1 ? team1 : team2;
+    const numbers = team === 1 ? team1Numbers : team2Numbers;
+    const variant: JerseyVariant = team === 2 ? "dark" : "light";
+    return (
+      <div
+        key={team}
+        className="overflow-hidden rounded-2xl border-2 border-white bg-green-600 p-3 dark:border-green-900"
+      >
+        <span className="inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white">
+          Equipo {team} ({t.total})
         </span>
-        <div className="flex flex-wrap items-center justify-center gap-1">
-          {players.map((c) =>
-            renderPitchChip(
-              c,
-              position === "gk" ? "gk" : team === 2 ? "dark" : "light",
-              numbers.get(c.id) ?? 0,
-            ),
-          )}
+        <div className="mt-2 flex flex-col items-center gap-2">
+          <div
+            onClick={(event) => {
+              event.stopPropagation();
+              moveSelectedTo({ team, position: "gk" });
+            }}
+            className="relative flex min-h-[4.5rem] cursor-pointer flex-col items-center rounded-lg px-2 pt-1 transition-colors duration-150 hover:bg-white/5"
+          >
+            <GoalNet className="h-12 w-32" />
+            <div className="-mt-3 flex flex-wrap items-center justify-center gap-1">
+              {t.gk.length > 0 ? (
+                t.gk.map((c) => renderPitchChip(c, "gk", numbers.get(c.id) ?? 0))
+              ) : (
+                <span className="text-[9px] font-medium uppercase tracking-wide text-white/50">
+                  {POSITION_LABELS.gk}
+                </span>
+              )}
+            </div>
+          </div>
+          {renderZone(team, "def", t.def, variant)}
+          {renderZone(team, "fwd", t.fwd, variant)}
         </div>
       </div>
     );
@@ -262,7 +301,7 @@ export function TeamBuilderModal({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl bg-background p-5"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-background p-5"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">⚽ Armar equipos</h3>
@@ -287,37 +326,9 @@ export function TeamBuilderModal({
           delanteros o &quot;Sin asignar&quot;) donde va.
         </p>
 
-        <div className="mt-4 overflow-hidden rounded-2xl border-2 border-white bg-green-600 dark:border-green-900">
-          <div className="relative flex flex-col divide-y-2 divide-white/70 dark:divide-green-900">
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/40"
-            />
-
-            {/* Equipo 2 (oscuro) — mitad de arriba. */}
-            <div className="p-2">
-              <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-                Equipo 2 ({team2.total})
-              </p>
-              <div className="flex divide-x divide-white/20">
-                {renderZone(2, "gk", team2.gk)}
-                {renderZone(2, "def", team2.def)}
-                {renderZone(2, "fwd", team2.fwd)}
-              </div>
-            </div>
-
-            {/* Equipo 1 (claro) — mitad de abajo. */}
-            <div className="p-2">
-              <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-                Equipo 1 ({team1.total})
-              </p>
-              <div className="flex divide-x divide-white/20">
-                {renderZone(1, "gk", team1.gk)}
-                {renderZone(1, "def", team1.def)}
-                {renderZone(1, "fwd", team1.fwd)}
-              </div>
-            </div>
-          </div>
+        <div className="mt-4 space-y-3">
+          {renderTeamPitch(1)}
+          {renderTeamPitch(2)}
         </div>
         {(warnTeam1 || warnTeam2) && (
           <p className="mt-2 rounded-lg bg-amber-soft p-2 text-xs text-amber-ink">
