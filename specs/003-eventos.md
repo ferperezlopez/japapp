@@ -216,6 +216,18 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-30: se puede compartir por WhatsApp la lista de anotados
+  ("Van", confirmados) de cada sección de RSVP (juntada y, si el evento
+  tiene fútbol, también esa lista aparte) — pedido explícito del
+  usuario, distinto del botón que ya existía para invitar gente al
+  evento (ese comparte el link de RSVP, no quién ya confirmó). Reusa
+  `WhatsAppShareButton` con un link `wa.me` armado dentro de
+  `RsvpSection` (función local en `src/app/eventos/[eventId]/page.tsx`)
+  a partir de los mismos `attendees`/`guests` que ya arma esa sección
+  para "Ver detalle de asistentes" — sin queries nuevas. El texto
+  incluye nombre del evento, fecha, la lista numerada (invitados
+  marcados "(trajo: X)") y el total; el botón solo aparece si hay al
+  menos 1 confirmado.
 - 2026-09-18: el botón "Editar evento" pasó de texto plano a un ícono
   de lápiz (con `aria-label`/`title` para seguir siendo accesible),
   pedido explícito del usuario ("es un standard"). En el mismo cuadro
