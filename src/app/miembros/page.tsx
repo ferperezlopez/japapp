@@ -3,7 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { AttendanceStatsLines } from "@/components/eventos/AttendanceStatsCard";
-import { calcularAsistencia, type RsvpForAttendance } from "@/lib/eventos/attendance";
+import {
+  calcularAsistencia,
+  contarEventosElegibles,
+  type RsvpForAttendance,
+} from "@/lib/eventos/attendance";
 import { startImpersonation } from "@/app/actions/impersonation";
 
 export default async function MiembrosPage() {
@@ -22,15 +26,20 @@ export default async function MiembrosPage() {
     );
   }
 
-  const [{ data: me }, { data: members }, { data: rsvps }] = await Promise.all([
+  const [{ data: me }, { data: members }, { data: rsvps }, { data: events }] = await Promise.all([
     supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle(),
     supabase
       .from("profiles")
-      .select("id, name, email, avatar_url")
+      .select("id, name, email, avatar_url, created_at")
       .order("name"),
     supabase.from("event_rsvps").select("user_id, kind, status"),
+    supabase.from("events").select("event_date, has_futbol"),
   ]);
   const isAdmin = me?.is_admin ?? false;
+  const eventDates = (events ?? []).map((e) => ({
+    eventDate: e.event_date,
+    hasFutbol: e.has_futbol,
+  }));
 
   // Cada persona linkea a /perfil/[userId] — esa ruta ya redirige a /perfil
   // cuando el id es el propio, así que acá no hace falta distinguir "uno
@@ -56,7 +65,8 @@ export default async function MiembrosPage() {
 
       <div className="mt-6 space-y-2">
         {(members ?? []).map((m, index) => {
-          const attendance = calcularAsistencia(rsvpsByUser.get(m.id) ?? []);
+          const eligible = contarEventosElegibles(eventDates, m.created_at);
+          const attendance = calcularAsistencia(rsvpsByUser.get(m.id) ?? [], eligible);
           return (
             <Card
               key={m.id}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { TeamBuilderModal } from "./TeamBuilderModal";
 import { TeamsPitchView } from "./TeamsPitchView";
+import { useBackButtonClose } from "@/lib/useBackButtonClose";
 
 type Candidate = { id: string; name: string; avatarUrl: string | null; guestId?: string };
 type Position = "gk" | "def" | "fwd";
@@ -107,6 +108,8 @@ function ViewTeamsModal({
   onEdit: () => void;
   onClose: () => void;
 }) {
+  useBackButtonClose(onClose);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();

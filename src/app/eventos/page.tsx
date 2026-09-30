@@ -18,7 +18,7 @@ export default async function EventosPage() {
   // reflejar el estado de esa persona, no el del admin real.
   const actor = await getActingUser(supabase);
 
-  const [{ data: events }, { data: rsvps }, { data: venues }, { data: members }, { data: eventGuests }] =
+  const [{ data: events }, { data: rsvps }, { data: venues }, { data: members }, { data: eventGuests }, { data: photoRows }] =
     await Promise.all([
       supabase
         .from("events")
@@ -28,6 +28,7 @@ export default async function EventosPage() {
       supabase.from("venues").select("id, name").order("name"),
       supabase.from("profiles").select("id, name, email").order("name"),
       supabase.from("event_guests").select("event_id, kind"),
+      supabase.from("event_media").select("event_id").eq("legacy", false),
     ]);
 
   // La confirmación de la juntada (kind="juntada") es la que define el
@@ -56,6 +57,13 @@ export default async function EventosPage() {
   for (const g of eventGuests ?? []) {
     const key = `${g.event_id}:${g.kind}`;
     guestCountByEventKind.set(key, (guestCountByEventKind.get(key) ?? 0) + 1);
+  }
+
+  // Link a /fotos desde cada evento (ver EventListCard) — solo hace
+  // falta el conteo, no las fotos en sí.
+  const photoCountByEvent = new Map<string, number>();
+  for (const p of photoRows ?? []) {
+    photoCountByEvent.set(p.event_id, (photoCountByEvent.get(p.event_id) ?? 0) + 1);
   }
 
   // Route is already forced dynamic by the cookie-based auth call above,
@@ -103,6 +111,7 @@ export default async function EventosPage() {
         myStatus={myStatus}
         counts={counts}
         futbolCounts={futbolCounts}
+        photoCount={photoCountByEvent.get(event.id) ?? 0}
       />
     );
   };

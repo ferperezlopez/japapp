@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { useBackButtonClose } from "@/lib/useBackButtonClose";
 
 export function ImageZoomModal({
   src,
@@ -24,6 +25,8 @@ export function ImageZoomModal({
   onPrev?: () => void;
   onNext?: () => void;
 }) {
+  useBackButtonClose(onClose);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();

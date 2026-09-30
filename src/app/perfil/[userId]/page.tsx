@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ZoomableAvatar } from "@/components/ui/ZoomableAvatar";
 import { CopyableText } from "@/components/ui/CopyableText";
 import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
-import { calcularAsistencia } from "@/lib/eventos/attendance";
+import { calcularAsistencia, contarEventosElegibles } from "@/lib/eventos/attendance";
 import { AdminEditProfileForm } from "./AdminEditProfileForm";
 import { AdminUploadAvatarForm } from "./AdminUploadAvatarForm";
 
@@ -22,20 +22,25 @@ export default async function UserProfilePage({
   // solo lectura de uno mismo.
   if (userId === user.id) redirect("/perfil");
 
-  const [{ data: me }, { data: profile }, { data: rsvps }] = await Promise.all([
+  const [{ data: me }, { data: profile }, { data: rsvps }, { data: events }] = await Promise.all([
     supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle(),
     supabase
       .from("profiles")
-      .select("name, email, alias, avatar_url")
+      .select("name, email, alias, avatar_url, created_at")
       .eq("id", userId)
       .maybeSingle(),
     supabase.from("event_rsvps").select("kind, status").eq("user_id", userId),
+    supabase.from("events").select("event_date, has_futbol"),
   ]);
 
   if (!profile) notFound();
 
   const isAdmin = me?.is_admin ?? false;
-  const attendance = calcularAsistencia(rsvps ?? []);
+  const eligible = contarEventosElegibles(
+    (events ?? []).map((e) => ({ eventDate: e.event_date, hasFutbol: e.has_futbol })),
+    profile.created_at,
+  );
+  const attendance = calcularAsistencia(rsvps ?? [], eligible);
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
