@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { saveFutbolTeams } from "../actions";
 import { withMinDuration } from "@/lib/withMinDuration";
+import { useBackButtonClose } from "@/lib/useBackButtonClose";
 import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
 import { abbreviateName } from "@/lib/formatName";
 import { Avatar } from "@/components/ui/Avatar";
@@ -53,6 +54,8 @@ export function TeamBuilderModal({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useBackButtonClose(onClose);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

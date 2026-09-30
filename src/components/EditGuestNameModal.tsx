@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { renameGuest } from "@/app/eventos/actions";
 import { withMinDuration } from "@/lib/withMinDuration";
+import { useBackButtonClose } from "@/lib/useBackButtonClose";
 import { Button } from "@/components/ui/Button";
 
 // Mismo shell que ImageZoomModal/ViewTeamsModal (overlay, Escape/click
@@ -19,6 +20,8 @@ export function EditGuestNameModal({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useBackButtonClose(onClose);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

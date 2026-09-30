@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularAsistencia } from "./attendance";
+import { calcularAsistencia, contarEventosElegibles } from "./attendance";
 
 describe("calcularAsistencia", () => {
   it("devuelve 0/0 y porcentaje null si no hay rsvps", () => {
@@ -55,5 +55,67 @@ describe("calcularAsistencia", () => {
       { kind: "futbol", status: "no" },
     ]);
     expect(result.futbol.porcentaje).toBe(0);
+  });
+
+  it("un evento ya ocurrido sin ninguna respuesta cuenta como ausencia", () => {
+    const result = calcularAsistencia(
+      [{ kind: "juntada", status: "yes" }],
+      { juntada: 3, futbol: 0 },
+    );
+    // 1 evento respondido (yes) + 2 sin ninguna respuesta = 2 ausencias
+    expect(result.juntada).toEqual({
+      asistencias: 1,
+      ausencias: 2,
+      porcentaje: (1 / 3) * 100,
+    });
+  });
+
+  it("maybe cuenta como 'respondido' — no se suma además como sin respuesta", () => {
+    const result = calcularAsistencia(
+      [{ kind: "juntada", status: "maybe" }],
+      { juntada: 1, futbol: 0 },
+    );
+    expect(result.juntada).toEqual({ asistencias: 0, ausencias: 0, porcentaje: null });
+  });
+
+  it("no baja de 0 ausencias si hay más respuestas que eventos elegibles", () => {
+    const result = calcularAsistencia(
+      [
+        { kind: "juntada", status: "yes" },
+        { kind: "juntada", status: "no" },
+      ],
+      { juntada: 1, futbol: 0 },
+    );
+    expect(result.juntada).toEqual({ asistencias: 1, ausencias: 1, porcentaje: 50 });
+  });
+
+  it("sin el tercer parámetro, se comporta igual que antes (sin penalizar no-respuesta)", () => {
+    const result = calcularAsistencia([{ kind: "juntada", status: "yes" }]);
+    expect(result.juntada).toEqual({ asistencias: 1, ausencias: 0, porcentaje: 100 });
+  });
+});
+
+describe("contarEventosElegibles", () => {
+  const now = new Date("2026-06-01T00:00:00Z");
+
+  it("cuenta solo eventos pasados desde que la persona es miembro", () => {
+    const result = contarEventosElegibles(
+      [
+        { eventDate: "2026-01-01T00:00:00Z", hasFutbol: false }, // antes de ser miembro
+        { eventDate: "2026-02-01T00:00:00Z", hasFutbol: true }, // elegible
+        { eventDate: "2026-03-01T00:00:00Z", hasFutbol: false }, // elegible
+        { eventDate: "2026-12-01T00:00:00Z", hasFutbol: true }, // futuro, no cuenta
+      ],
+      "2026-01-15T00:00:00Z",
+      now,
+    );
+    expect(result).toEqual({ juntada: 2, futbol: 1 });
+  });
+
+  it("devuelve 0/0 si no hay eventos elegibles", () => {
+    expect(contarEventosElegibles([], "2026-01-01T00:00:00Z", now)).toEqual({
+      juntada: 0,
+      futbol: 0,
+    });
   });
 });

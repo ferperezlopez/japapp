@@ -731,7 +731,7 @@ export default async function EventoPage({
       <section className="mt-8">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-medium">Fotos</h2>
-          {(totalPhotoCount ?? 0) > PHOTO_PREVIEW_COUNT && (
+          {(totalPhotoCount ?? 0) > 0 && (
             <Link
               href={`/fotos?event=${eventId}`}
               className="text-xs font-medium text-eventos hover:underline"

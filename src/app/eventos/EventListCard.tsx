@@ -109,6 +109,7 @@ export function EventListCard({
   myStatus,
   counts,
   futbolCounts,
+  photoCount,
 }: {
   event: { id: string; name: string; location: string | null; has_futbol: boolean };
   index: number;
@@ -116,6 +117,7 @@ export function EventListCard({
   myStatus?: Status;
   counts: Counts;
   futbolCounts: Counts;
+  photoCount: number;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -191,6 +193,15 @@ export function EventListCard({
                 <StatItem status="no" value={futbolCounts.no} label="no juegan" />
               </div>
             </div>
+          )}
+
+          {photoCount > 0 && (
+            <Link
+              href={`/fotos?event=${event.id}`}
+              className="mt-3 inline-block text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
+            >
+              📷 Ver fotos ({photoCount}) →
+            </Link>
           )}
         </>
       )}

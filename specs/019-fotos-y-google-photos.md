@@ -294,6 +294,18 @@ estado propio duplicado).
 
 ## 8. Changelog
 
+- 2026-09-30: la sección Eventos no tenía ninguna forma de llegar a
+  `/fotos`. Tres arreglos: (a) el link "Ver todas las fotos →" en el
+  detalle de un evento (`src/app/eventos/[eventId]/page.tsx`) aparecía
+  solo con más de 6 fotos (`PHOTO_PREVIEW_COUNT`) — pasa a aparecer con
+  al menos 1; (b) las miniaturas de `PhotoGrid.tsx` no eran clickeables
+  — ahora cada una es un link a `/fotos?event=<id>` (no se agrega un
+  lightbox individual ahí, `/fotos` ya tiene uno completo); (c) la lista
+  `/eventos` (`EventListCard.tsx`) no mostraba nada de fotos — se agrega
+  un link "📷 Ver fotos (n) →" en el bloque expandido de cada evento
+  cuando tiene al menos 1 foto (conteo traído en `src/app/eventos/page.tsx`
+  vía una query liviana a `event_media`, agrupada en un `Map` igual que
+  ya se hacía con los invitados).
 - 2026-09-29: `/fotos` filtra `legacy = false` — las 4 fotos legacy
   (`0009_legacy_photos.sql`) aparecían atribuidas a un evento
   ("JAPA de empanadas y apps") al que en realidad no pertenecen, solo

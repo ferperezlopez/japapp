@@ -329,24 +329,45 @@ Puntos que el SQL no explica por sí solo:
 
 1. `src/lib/eventos/attendance.ts`: función pura `calcularAsistencia`,
    mismo molde que `src/lib/gastos/balances.ts` — recibe las filas de
-   `event_rsvps` de una persona (`{kind, status}[]`) y devuelve
-   `{ juntada: {asistencias, ausencias, porcentaje}, futbol: {...} }`.
-   `porcentaje = asistencias / (asistencias + ausencias)`, contando
-   `status='yes'` como asistencia y `status='no'` como ausencia;
-   `'maybe'` y la ausencia de respuesta no suman a ningún lado (no hay
-   señal clara de si la persona fue o no). `porcentaje` es `null`
-   cuando no hay señal en absoluto (0 asistencias + 0 ausencias).
-2. `src/components/eventos/AttendanceStatsCard.tsx` exporta dos
+   `event_rsvps` de una persona (`{kind, status}[]`) y un segundo
+   argumento opcional `{ juntada, futbol }` (cantidad de eventos ya
+   ocurridos y elegibles de cada tipo, ver `contarEventosElegibles` más
+   abajo), y devuelve `{ juntada: {asistencias, ausencias, porcentaje},
+   futbol: {...} }`. `porcentaje = asistencias / (asistencias +
+   ausencias)`, contando `status='yes'` como asistencia y `status='no'`
+   como ausencia explícita; `'maybe'` no suma a ningún lado (no hay señal
+   clara de si la persona fue o no), pero SÍ cuenta como "ya respondió"
+   para el punto siguiente. Un evento ya ocurrido para el que la persona
+   **nunca respondió nada** (ni sí/no/tal vez) también cuenta como
+   ausencia — el evento pasó y no participó, aunque nunca haya dicho
+   explícitamente que no (decisión explícita del usuario: antes esos
+   casos quedaban totalmente afuera del cálculo, lo que inflaba el
+   porcentaje de quien simplemente nunca contestaba nada). `porcentaje`
+   es `null` cuando no hay señal en absoluto (0 asistencias + 0
+   ausencias, es decir la persona es miembro desde antes de que existiera
+   cualquier evento de ese tipo).
+2. `contarEventosElegibles(events, memberSince, now?)`: función pura
+   auxiliar — cuenta cuántos eventos de la tabla `events` ya ocurrieron
+   (`event_date < now`) desde que la persona es miembro
+   (`event_date >= profiles.created_at`, para no penalizarla por eventos
+   previos a su alta) separado en `juntada` (todos) y `futbol` (solo los
+   que tienen `has_futbol=true`). Los 3 call sites (`/perfil`,
+   `/perfil/[userId]`, `/miembros`) traen `profiles.created_at` y una
+   query liviana a `events (event_date, has_futbol)` para alimentarla —
+   en `/miembros` se trae una sola vez para todos los miembros (se llama
+   una vez por miembro dentro del `.map` ya existente), no una query por
+   persona.
+3. `src/components/eventos/AttendanceStatsCard.tsx` exporta dos
    componentes sobre el mismo cálculo: `<AttendanceStatsLines>` (solo
    las líneas de texto, sin tarjeta propia) y `<AttendanceStatsCard>`
    (esas mismas líneas envueltas en su propia card con borde). Ambos
    omiten el bloque de fútbol si la persona nunca tuvo un RSVP de
    `kind='futbol'`, y no renderizan nada si no hay ninguna señal en
    absoluto (persona sin ningún RSVP todavía).
-3. `<AttendanceStatsCard>` se usa tanto en `/perfil` (uno mismo) como
+4. `<AttendanceStatsCard>` se usa tanto en `/perfil` (uno mismo) como
    en `/perfil/[userId]` (de solo lectura, de otra persona) — decisión
    explícita del usuario de mostrarlo en ambos lados.
-4. `/miembros` (nueva): trae todos los `profiles` (ordenados por
+5. `/miembros` (nueva): trae todos los `profiles` (ordenados por
    nombre) y todos los `event_rsvps` en un único `Promise.all`,
    agrupando estos últimos por `user_id` en un `Map` — mismo patrón que
    ya usan `/eventos` (agrupar RSVPs por evento) y `/gastos/[groupId]`

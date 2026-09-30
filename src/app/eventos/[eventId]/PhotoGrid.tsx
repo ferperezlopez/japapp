@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DeletePhotoButton } from "./DeletePhotoButton";
 
 interface Photo {
@@ -39,14 +40,19 @@ export function PhotoGrid({
           className={`animate-reveal group relative overflow-hidden rounded-lg border border-surface-border bg-surface ${spanFor(index)}`}
           style={{ animationDelay: `${index * 40}ms` }}
         >
-          {photo.url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- fotos de usuario via URL firmada de Supabase Storage, no vale el pipeline de next/image para esto
-            <img src={photo.url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs text-foreground/40">
-              Sin vista previa
-            </div>
-          )}
+          {/* Lleva a la galería completa (/fotos), que ya tiene su propio
+              visor con zoom, flechas y descarga — no hace falta un
+              segundo lightbox acá para una sola foto. */}
+          <Link href={`/fotos?event=${eventId}`} className="block h-full w-full">
+            {photo.url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- fotos de usuario via URL firmada de Supabase Storage, no vale el pipeline de next/image para esto
+              <img src={photo.url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xs text-foreground/40">
+                Sin vista previa
+              </div>
+            )}
+          </Link>
           {(photo.uploadedBy === currentUserId ||
             eventCreatorId === currentUserId) && (
             <div className="absolute right-1 top-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">

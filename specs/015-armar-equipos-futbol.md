@@ -279,6 +279,16 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-09-30: fix — con "Ver equipos" o "Armar equipos" abierto, el
+  botón atrás (físico en Android o del navegador) navegaba hacia atrás
+  en la página en vez de cerrar el modal. Investigado a fondo: era un
+  problema sistémico de los 4 modales del código (estos dos más
+  `EditGuestNameModal` e `ImageZoomModal`), ninguno interceptaba el
+  historial del navegador. Arreglado una sola vez con un hook
+  compartido, `src/lib/useBackButtonClose.ts` (empuja una entrada de
+  historial al abrir el modal y la consume al cerrar, por cualquier vía),
+  aplicado a los 4 — no es específico de esta spec, pero se documenta acá
+  porque el reporte del usuario fue sobre estos modales puntualmente.
 - 2026-09-29: la leyenda de texto debajo de la cancha en "Ver equipos"
   ("MVP" / "Goleador", sin ícono desde la ronda de "sacar los emojis")
   recupera el emoji junto al texto — a pedido puntual del usuario para
