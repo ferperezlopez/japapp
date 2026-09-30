@@ -142,6 +142,8 @@ function SectionDivider({
 function RsvpSection({
   title,
   eventId,
+  eventName,
+  eventDateLabel,
   kind,
   myStatus,
   attendees,
@@ -154,6 +156,8 @@ function RsvpSection({
 }: {
   title: string;
   eventId: string;
+  eventName: string;
+  eventDateLabel: string;
   kind: "juntada" | "futbol";
   myStatus: "yes" | "no" | "maybe" | null;
   attendees: Attendee[];
@@ -164,6 +168,24 @@ function RsvpSection({
   members: { id: string; name: string | null; email: string }[];
   isAdmin: boolean;
 }) {
+  // Lista de anotados para compartir por WhatsApp: mismos datos que ya
+  // se muestran en "Ver detalle de asistentes" (attendees confirmados +
+  // guests, que ya vienen filtrados a solo confirmados desde el padre).
+  const confirmedPeople = attendees.filter((a) => a.status === "yes");
+  const totalConfirmed = confirmedPeople.length + guests.length;
+  const shareText = [
+    `📋 *Lista de anotados — ${eventName}*`,
+    `${kind === "futbol" ? "⚽ Fútbol" : "🎉 Juntada"} · ${eventDateLabel}`,
+    "",
+    ...confirmedPeople.map((p, i) => `${i + 1}. ${p.name}`),
+    ...guests.map(
+      (g, i) => `${confirmedPeople.length + i + 1}. ${g.name} (trajo: ${g.broughtByName})`,
+    ),
+    "",
+    `Total: ${totalConfirmed}`,
+  ].join("\n");
+  const shareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+
   return (
     <section className="mt-8">
       <h2 className="text-sm font-medium">{title}</h2>
@@ -244,6 +266,10 @@ function RsvpSection({
             currentUserId={currentUserId}
           />
         </div>
+
+        {totalConfirmed > 0 && (
+          <WhatsAppShareButton href={shareUrl} label="Compartir lista por WhatsApp" />
+        )}
       </details>
     </section>
   );
@@ -610,6 +636,8 @@ export default async function EventoPage({
       <RsvpSection
         title="¿Vas a la juntada?"
         eventId={eventId}
+        eventName={event.name}
+        eventDateLabel={dateFormatter.format(new Date(event.event_date))}
         kind="juntada"
         myStatus={myStatus}
         attendees={attendeesJuntada}
@@ -690,6 +718,8 @@ export default async function EventoPage({
           <RsvpSection
             title="⚽ ¿Jugás al fútbol?"
             eventId={eventId}
+            eventName={event.name}
+            eventDateLabel={dateFormatter.format(new Date(event.event_date))}
             kind="futbol"
             myStatus={myFutbolStatus}
             attendees={attendeesFutbol}
