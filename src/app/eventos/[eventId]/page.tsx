@@ -659,7 +659,7 @@ export default async function EventoPage({
           </p>
           <div className="mt-3 space-y-3">
             {TASK_TYPES.map((t) => (
-              <div key={t.type}>
+              <div key={t.type} id={`tarea-${t.type}`}>
                 <label className="block text-xs font-medium text-foreground/50">
                   {t.label}
                 </label>
@@ -730,7 +730,7 @@ export default async function EventoPage({
             members={members}
             isAdmin={isAdmin}
           />
-          <div className="mt-4 rounded-xl border border-surface-border bg-surface p-4">
+          <div id="tarea-reserva_cancha" className="mt-4 rounded-xl border border-surface-border bg-surface p-4">
             <label className="block text-xs font-medium text-foreground/50">
               Reserva de cancha
             </label>
@@ -777,6 +777,7 @@ export default async function EventoPage({
             photos={photos}
             currentUserId={user?.id}
             eventCreatorId={event.created_by}
+            isAdmin={isAdmin}
           />
         </div>
       </section>

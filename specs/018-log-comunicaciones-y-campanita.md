@@ -198,6 +198,21 @@ Dos pedidos de Fernando sobre la infraestructura de push ya existente
 
 ## 8. Changelog
 
+- 2026-10-02: pedido explícito del usuario — que la notificación lleve
+  directo a la tarea, no solo al evento. Revisé los 7 `kind` existentes:
+  6 ya apuntaban al lugar correcto (`evento_nuevo`,
+  `quorum_futbol/juntada`, `equipos_armados/modificados` →
+  `/eventos/${eventId}`; `gasto_nuevo`/`saldo_pendiente` →
+  `/gastos/${groupId}`); solo `tarea_asignada` se quedaba en
+  `/eventos/${eventId}` a secas, sin apuntar a la tarea puntual
+  (adentro de un `<details>` colapsado, o al bloque de reserva de
+  cancha). Se agrega un fragmento `#tarea-<tipo>` a esa `url`
+  (`notifyTaskAssigned`, `src/app/eventos/actions.ts`) y el `id`
+  correspondiente en cada bloque de tarea de
+  `src/app/eventos/[eventId]/page.tsx` — sin JS nuevo: los navegadores
+  modernos (Chrome ≥90, Safari ≥16, Firefox ≥110) ya auto-expanden un
+  `<details>` cerrado y hacen scroll hasta un `id` interno al navegar a
+  ese hash.
 - 2026-09-18: sumada la página `/notificaciones` y el fallback de link:
   una notificación sin `url` propia (hoy solo una comunicación manual
   sin link cargado) ahora lleva ahí en vez de a `/`, tanto desde el

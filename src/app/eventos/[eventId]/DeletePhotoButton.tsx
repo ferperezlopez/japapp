@@ -9,20 +9,47 @@ export function DeletePhotoButton({
   eventId,
   mediaId,
   storagePath,
+  variant = "icon",
+  onDeleted,
 }: {
   eventId: string;
   mediaId: string;
   storagePath: string;
+  // "text": link subrayado chico, para encajar en el footer del visor
+  // grande de /fotos (ya oscuro, un botón redondo encima quedaba mal).
+  variant?: "icon" | "text";
+  // Avisa después de un borrado exitoso — lo usa el visor grande de
+  // /fotos para cerrarse solo si se borra la foto que está abierta
+  // (si no, `openIndex` queda apuntando a un array que cambió de tamaño).
+  onDeleted?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
 
+  const handleClick = () =>
+    startTransition(async () => {
+      const result = await withMinDuration(
+        deleteEventMedia(eventId, mediaId, storagePath),
+      );
+      if (!result.error) onDeleted?.();
+    });
+
+  if (variant === "text") {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={pending}
+        className="text-xs font-medium text-red-300 underline transition-colors duration-200 hover:text-red-200 disabled:opacity-60"
+      >
+        {pending ? "Borrando..." : "Borrar"}
+      </button>
+    );
+  }
+
   return (
     <button
-      onClick={() =>
-        startTransition(async () => {
-          await withMinDuration(deleteEventMedia(eventId, mediaId, storagePath));
-        })
-      }
+      type="button"
+      onClick={handleClick}
       disabled={pending}
       className="rounded-full bg-black/60 p-1 text-white transition-colors duration-200 hover:bg-red-600 disabled:opacity-60"
       title="Borrar foto"

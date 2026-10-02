@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import { ImageZoomModal } from "@/components/ui/ImageZoomModal";
+import { DeletePhotoButton } from "@/app/eventos/[eventId]/DeletePhotoButton";
 
 export type GalleryPhoto = {
   id: string;
+  eventId: string;
+  storagePath: string;
   eventName: string;
   takenAt: string;
   uploadedByName: string;
@@ -51,7 +54,13 @@ function DownloadIcon() {
 // el detalle grande (ImageZoomModal con footer de metadata). Recibe los
 // grupos ya armados y ordenados desde el server component — no vuelve a
 // pedir datos, ambas vistas usan el mismo array.
-export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]][] }) {
+export function PhotoGalleryClient({
+  groups,
+  isAdmin,
+}: {
+  groups: [string, GalleryPhoto[]][];
+  isAdmin: boolean;
+}) {
   const [view, setView] = useState<"grid" | "list">("grid");
   // Índice sobre el array aplanado (no por grupo) — así ← → recorren
   // todas las fotos en orden cronológico sin importar el límite de mes,
@@ -121,6 +130,18 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
                       <DownloadIcon />
                     </a>
                   )}
+                  {isAdmin && (
+                    <div
+                      className="absolute bottom-1 left-1"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <DeletePhotoButton
+                        eventId={photo.eventId}
+                        mediaId={photo.id}
+                        storagePath={photo.storagePath}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -159,6 +180,13 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
                       <DownloadIcon />
                     </a>
                   )}
+                  {isAdmin && (
+                    <DeletePhotoButton
+                      eventId={photo.eventId}
+                      mediaId={photo.id}
+                      storagePath={photo.storagePath}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
@@ -182,16 +210,27 @@ export function PhotoGalleryClient({ groups }: { groups: [string, GalleryPhoto[]
                 {detailDateFormatter.format(new Date(openPhoto.takenAt))} ·{" "}
                 {openPhoto.uploadedByName}
               </p>
-              {openPhoto.downloadUrl && (
-                <a
-                  href={openPhoto.downloadUrl}
-                  download
-                  onClick={(event) => event.stopPropagation()}
-                  className="mt-1 inline-block text-xs font-medium underline"
-                >
-                  Descargar
-                </a>
-              )}
+              <span className="mt-1 inline-flex items-center gap-3">
+                {openPhoto.downloadUrl && (
+                  <a
+                    href={openPhoto.downloadUrl}
+                    download
+                    onClick={(event) => event.stopPropagation()}
+                    className="text-xs font-medium underline"
+                  >
+                    Descargar
+                  </a>
+                )}
+                {isAdmin && (
+                  <DeletePhotoButton
+                    eventId={openPhoto.eventId}
+                    mediaId={openPhoto.id}
+                    storagePath={openPhoto.storagePath}
+                    variant="text"
+                    onDeleted={() => setOpenIndex(null)}
+                  />
+                )}
+              </span>
             </div>
           }
         />

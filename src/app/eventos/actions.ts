@@ -40,7 +40,7 @@ async function notifyTaskAssigned(
     {
       title: "📋 Te tocó laburar",
       body: `${assignerName} te asignó: ${taskLabel} para ${eventName}.`,
-      url: `/eventos/${eventId}`,
+      url: `/eventos/${eventId}#tarea-${taskType}`,
     },
     { kind: "tarea_asignada" },
   );
@@ -730,5 +730,6 @@ export async function deleteEventMedia(
   if (error) return { error: error.message };
 
   revalidatePath(`/eventos/${eventId}`);
+  revalidatePath("/fotos");
   return { ok: true };
 }

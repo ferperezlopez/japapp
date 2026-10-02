@@ -22,11 +22,13 @@ export function PhotoGrid({
   photos,
   currentUserId,
   eventCreatorId,
+  isAdmin,
 }: {
   eventId: string;
   photos: Photo[];
   currentUserId: string | undefined;
   eventCreatorId: string;
+  isAdmin: boolean;
 }) {
   if (photos.length === 0) {
     return <p className="text-sm text-foreground/50">Todavía no hay fotos.</p>;
@@ -54,7 +56,8 @@ export function PhotoGrid({
             )}
           </Link>
           {(photo.uploadedBy === currentUserId ||
-            eventCreatorId === currentUserId) && (
+            eventCreatorId === currentUserId ||
+            isAdmin) && (
             <div className="absolute right-1 top-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
               <DeletePhotoButton
                 eventId={eventId}

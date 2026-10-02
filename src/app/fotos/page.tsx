@@ -30,6 +30,13 @@ export default async function FotosPage({
     );
   }
 
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isAdmin = me?.is_admin ?? false;
+
   // legacy=false: mismo filtro que ya usa la galería de un evento
   // (0009_legacy_photos.sql) — esas 4 fotos son de antes de que
   // existiera una asociación real foto↔evento y quedaron atadas al
@@ -101,6 +108,8 @@ export default async function FotosPage({
 
     photos.push({
       id: row.id,
+      eventId: row.event_id,
+      storagePath: row.storage_path,
       eventName: eventNameById.get(row.event_id) ?? "Evento",
       takenAt: row.taken_at ?? row.created_at,
       uploadedByName: uploaderNameById.get(row.uploaded_by) ?? "Alguien",
@@ -137,7 +146,7 @@ export default async function FotosPage({
       </p>
 
       <div className="mt-6">
-        <PhotoGalleryClient groups={groups} />
+        <PhotoGalleryClient groups={groups} isAdmin={isAdmin} />
       </div>
     </div>
   );
