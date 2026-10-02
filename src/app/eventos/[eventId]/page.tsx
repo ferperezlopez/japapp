@@ -777,6 +777,7 @@ export default async function EventoPage({
             photos={photos}
             currentUserId={user?.id}
             eventCreatorId={event.created_by}
+            isAdmin={isAdmin}
           />
         </div>
       </section>

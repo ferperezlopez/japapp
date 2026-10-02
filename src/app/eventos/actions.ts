@@ -730,5 +730,6 @@ export async function deleteEventMedia(
   if (error) return { error: error.message };
 
   revalidatePath(`/eventos/${eventId}`);
+  revalidatePath("/fotos");
   return { ok: true };
 }

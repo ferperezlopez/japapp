@@ -294,6 +294,21 @@ estado propio duplicado).
 
 ## 8. Changelog
 
+- 2026-10-02: un admin puede borrar cualquier foto, no solo quien la
+  subió o quien creó el evento — pedido explícito del usuario. Antes de
+  tocar la UI, se detectó que el permiso real lo da la RLS de Postgres
+  (no la action `deleteEventMedia`, que no valida nada ella misma), así
+  que hacía falta una migración (`0037_admin_delete_any_photo.sql`) con
+  2 policies nuevas (`event_media` y `storage.objects`, bucket
+  `event-photos`) con `using (public.is_admin(auth.uid()))` — mismo
+  patrón que `0025_admin_delete_any_guest.sql`, sin tocar las policies
+  existentes. `PhotoGrid.tsx` (mosaico del evento) suma `isAdmin` a la
+  condición que ya mostraba el botón al uploader/creador del evento.
+  `/fotos` (la galería completa) no tenía NINGUNA opción de borrar hoy
+  — se agrega ahí también, solo para admin: `DeletePhotoButton.tsx`
+  suma un `variant?: "icon" | "text"` (texto para el footer oscuro del
+  visor grande, ícono para grilla/lista) y un `onDeleted` opcional (para
+  que el visor se cierre solo si se borra la foto que está abierta).
 - 2026-09-30: la sección Eventos no tenía ninguna forma de llegar a
   `/fotos`. Tres arreglos: (a) el link "Ver todas las fotos →" en el
   detalle de un evento (`src/app/eventos/[eventId]/page.tsx`) aparecía
