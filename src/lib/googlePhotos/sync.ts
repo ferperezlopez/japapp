@@ -29,7 +29,16 @@ export async function syncEventMediaToGooglePhotos(
   const result = await uploadOriginalToGooglePhotos(bytes, mimeType, filename);
   if ("error" in result) return { error: result.error };
 
-  const { error: updateError } = await supabase
+  // `.select("id")` para poder distinguir "0 filas afectadas" de un
+  // update exitoso: sin esto, un `update` bloqueado en silencio por RLS
+  // (sin policy de UPDATE que lo permita) devuelve `error: null` igual
+  // que uno exitoso, y el código de abajo terminaba borrando el archivo
+  // original sin que la sincronización se haya registrado de verdad —
+  // bug real ya detectado (ver migración 0039_event_media_sync_update_policy.sql).
+  // Esta verificación queda como red de seguridad aunque la policy ya
+  // esté arreglada, para no repetir la pérdida de datos ante cualquier
+  // otra causa futura de un update silenciosamente vacío.
+  const { data: updated, error: updateError } = await supabase
     .from("event_media")
     .update({
       google_media_item_id: result.mediaItemId,
@@ -38,8 +47,12 @@ export async function syncEventMediaToGooglePhotos(
       height: result.height,
       original_staging_path: null,
     })
-    .eq("id", mediaId);
+    .eq("id", mediaId)
+    .select("id");
   if (updateError) return { error: updateError.message };
+  if (!updated || updated.length === 0) {
+    return { error: "No se pudo registrar la sincronización (0 filas actualizadas)." };
+  }
 
   if (deleteSourceOnSuccess) {
     await supabase.storage.from(bucket).remove([path]);

@@ -12,6 +12,8 @@ export type GalleryPhoto = {
   takenAt: string;
   uploadedByName: string;
   mediaType: "photo" | "video";
+  // Solo relevante si mediaType === "video" — ver src/app/fotos/page.tsx.
+  videoStatus?: "ready" | "pending" | "lost";
   thumbUrl: string;
   detailUrl: string;
   downloadUrl: string | null;
@@ -220,6 +222,7 @@ export function PhotoGalleryClient({
           src={openPhoto.detailUrl}
           alt={openPhoto.eventName}
           mediaType={openPhoto.mediaType}
+          videoStatus={openPhoto.videoStatus}
           onClose={() => setOpenIndex(null)}
           onPrev={openIndex > 0 ? () => setOpenIndex(openIndex - 1) : undefined}
           onNext={

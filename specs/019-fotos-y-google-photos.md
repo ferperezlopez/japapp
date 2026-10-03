@@ -3,7 +3,7 @@
 - **Estado:** Implemented (requiere setup manual de Google Cloud antes de andar — ver sección 4)
 - **Rutas:** `/fotos` (nueva), `/eventos/[eventId]` (extendida), `/api/cron/sync-photos-to-google` (nueva)
 - **Migraciones relacionadas:** `supabase/migrations/0036_event_media_google_photos.sql`,
-  `0038_event_media_video.sql`
+  `0038_event_media_video.sql`, `0039_event_media_sync_update_policy.sql`
 - **Última actualización:** 2026-10-03
 
 ## 1. Resumen
@@ -310,6 +310,35 @@ estado propio duplicado).
 
 ## 8. Changelog
 
+- 2026-10-03: **bug de pérdida de datos corregido** — el usuario reportó
+  que un video recién subido no reproducía en `/fotos`. Investigando en
+  la base real se encontró que, desde que esta feature existe, **0 de
+  los `event_media` subidos sincronizaron jamás con Google Photos**
+  (`google_media_item_id` siempre `null`), y el bucket de tránsito
+  `event-photos-originals` estaba completamente vacío — el original se
+  borraba igual aunque el registro de sincronización nunca se guardara.
+  Causa: `public.event_media` tiene RLS activado desde `0004` pero
+  **nunca tuvo policy de UPDATE** — la sincronización inline (con el
+  cliente de la sesión del usuario, a diferencia del cron que usa
+  service-role) hacía un `update` que Postgres aceptaba sin error pero
+  afectaba 0 filas, y el código interpretaba "sin error" como éxito,
+  borrando el archivo original de todos modos. Para una foto esto era
+  invisible (el preview de 1600px sigue sirviendo); para un video era
+  fatal, porque el "preview" es solo un frame JPEG — sin el original no
+  queda nada reproducible. Fix en 2 partes: migración
+  `0039_event_media_sync_update_policy.sql` agrega la policy de UPDATE
+  que faltaba (mismo criterio de ownership que la de INSERT), y
+  `src/lib/googlePhotos/sync.ts` ahora pide `.select("id")` al hacer el
+  `update` y trata "0 filas actualizadas" como error explícito — no
+  vuelve a borrar el archivo si la sincronización no se registró de
+  verdad, pase lo que pase en el futuro. Se limpiaron además las 7 filas
+  que habían quedado con `original_staging_path` colgando de un archivo
+  ya borrado (sin poder reciclarse — el video del usuario, entre ellas,
+  quedó irrecuperable, hubo que pedirle que lo suba de nuevo).
+  `/fotos` ahora distingue 3 estados para un video sin sincronizar
+  (`"ready"`/`"pending"`/`"lost"`, ver `src/app/fotos/page.tsx`) y el
+  visor (`ImageZoomModal.tsx`) muestra un aviso honesto en vez de
+  intentar reproducir el frame JPEG como si fuera el video.
 - 2026-10-03: habilitado subir video, no solo foto — pedido explícito
   del usuario. Se evaluó primero subir el video directo del browser a
   Google Photos para esquivar el tope de tamaño de Supabase, pero no es
