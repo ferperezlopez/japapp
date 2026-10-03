@@ -6,6 +6,7 @@ import { addEventMedia } from "../actions";
 import { Spinner } from "@/components/ui/Spinner";
 import { resizeImage } from "@/lib/images/resizeImage";
 import { extractVideoFrame } from "@/lib/images/extractVideoFrame";
+import { uploadFileWithProgress } from "@/lib/supabase/uploadWithProgress";
 import { withMinDuration } from "@/lib/withMinDuration";
 
 const ALLOWED_IMAGE_TYPES = [
@@ -25,6 +26,7 @@ const MAX_SIZE_BYTES = 45 * 1024 * 1024;
 
 export function UploadPhotoForm({ eventId }: { eventId: string }) {
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,9 +78,15 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
           // falla, no bloquea nada — el preview ya quedó guardado.
           const originalExt = file.name.split(".").pop() || previewExt;
           const originalPath = `${eventId}/${uuid}-original.${originalExt}`;
-          const { error: originalError } = await supabase.storage
-            .from("event-photos-originals")
-            .upload(originalPath, file, { contentType: file.type });
+          setProgress(0);
+          const { error: originalError } = await uploadFileWithProgress(
+            supabase,
+            "event-photos-originals",
+            originalPath,
+            file,
+            setProgress,
+          );
+          setProgress(null);
 
           const result = await addEventMedia(
             eventId,
@@ -100,7 +108,11 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
         }`}
       >
         {pending && <Spinner />}
-        {pending ? "Subiendo..." : "+ Subir foto o video"}
+        {pending
+          ? progress !== null
+            ? `Subiendo... ${progress}%`
+            : "Subiendo..."
+          : "+ Subir foto o video"}
         <input
           type="file"
           accept={ALLOWED_TYPES.join(",")}
