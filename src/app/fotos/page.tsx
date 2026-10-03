@@ -47,7 +47,7 @@ export default async function FotosPage({
   let query = supabase
     .from("event_media")
     .select(
-      "id, event_id, uploaded_by, storage_path, created_at, google_media_item_id, taken_at, media_type",
+      "id, event_id, uploaded_by, storage_path, created_at, google_media_item_id, taken_at, media_type, original_staging_path",
     )
     .eq("legacy", false)
     .order("taken_at", { ascending: false, nullsFirst: false })
@@ -113,7 +113,28 @@ export default async function FotosPage({
     // escalada / original completo). Un video necesita "=dv" en cambio,
     // el sufijo documentado por Google para servir los bytes reales del
     // video — "=w2000"/"=d" en un video devuelven solo un frame estático.
-    const detailUrl = baseUrl ? `${baseUrl}${mediaType === "video" ? "=dv" : "=w2000"}` : fallbackUrl;
+    // Un video sin baseUrl no tiene ningún archivo reproducible todavía
+    // (el "preview" es solo un frame JPEG) — a diferencia de una foto,
+    // donde el preview de Supabase sigue siendo una imagen real y sirve
+    // de respaldo honesto. Hay que distinguir 3 estados, no solo
+    // "listo o no": "pending" (todavía puede sincronizar — el cron de
+    // reintento lo va a tomar) vs "lost" (no queda ningún archivo en
+    // ningún lado, el original se perdió — ver migración
+    // 0039_event_media_sync_update_policy.sql, bug ya corregido pero que
+    // dejó filas viejas sin remedio).
+    const videoStatus: "ready" | "pending" | "lost" | undefined =
+      mediaType === "video"
+        ? baseUrl
+          ? "ready"
+          : row.original_staging_path
+            ? "pending"
+            : "lost"
+        : undefined;
+    const detailUrl = baseUrl
+      ? `${baseUrl}${mediaType === "video" ? "=dv" : "=w2000"}`
+      : mediaType === "video"
+        ? thumbUrl // no reproducible, pero sigue sirviendo para mostrar el frame de respaldo en el footer
+        : fallbackUrl;
     if (!thumbUrl || !detailUrl) continue;
 
     photos.push({
@@ -124,12 +145,18 @@ export default async function FotosPage({
       takenAt: row.taken_at ?? row.created_at,
       uploadedByName: uploaderNameById.get(row.uploaded_by) ?? "Alguien",
       mediaType,
+      videoStatus,
       thumbUrl,
       detailUrl,
       // Original real vía Google si ya está sincronizado; si no, se
-      // ofrece igual el preview de Supabase como descarga — todo archivo
-      // tiene que poder bajarse, aunque no sea su tamaño/calidad original.
-      downloadUrl: baseUrl ? `${baseUrl}${mediaType === "video" ? "=dv" : "=d"}` : (fallbackUrl ?? null),
+      // ofrece igual el preview de Supabase como descarga para una foto
+      // (sigue siendo una imagen real) — para un video sin sincronizar
+      // no hay nada honesto que ofrecer como descarga, así que es null.
+      downloadUrl: baseUrl
+        ? `${baseUrl}${mediaType === "video" ? "=dv" : "=d"}`
+        : mediaType === "video"
+          ? null
+          : (fallbackUrl ?? null),
     });
   }
 

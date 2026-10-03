@@ -7,6 +7,7 @@ export function ImageZoomModal({
   src,
   alt = "",
   mediaType = "photo",
+  videoStatus,
   onClose,
   footer,
   onPrev,
@@ -18,6 +19,12 @@ export function ImageZoomModal({
   // esto se comporta igual que antes (siempre imagen) — no rompe
   // ZoomableAvatar.tsx ni otros usos actuales que no lo pasan.
   mediaType?: "photo" | "video";
+  // Solo relevante con mediaType="video": si no es "ready" (todavía no
+  // sincronizó con Google Photos, o se perdió el original — ver
+  // src/app/fotos/page.tsx), no hay ningún archivo de video real que
+  // reproducir todavía — se muestra el frame de `src` con un aviso en
+  // vez de un <video> roto apuntando a una imagen.
+  videoStatus?: "ready" | "pending" | "lost";
   onClose: () => void;
   // Opcional: contenido debajo de la imagen (ej. metadata de la foto en
   // /fotos — evento, fecha, quién la subió, link de descarga). Sin esto
@@ -104,7 +111,7 @@ export function ImageZoomModal({
         className="flex max-h-full max-w-full flex-col items-center gap-3"
         onClick={(event) => event.stopPropagation()}
       >
-        {mediaType === "video" ? (
+        {mediaType === "video" && videoStatus === "ready" ? (
           <video
             src={src}
             controls
@@ -112,12 +119,21 @@ export function ImageZoomModal({
             className="max-h-[80vh] max-w-full rounded-lg"
           />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- visor a pantalla completa
-          <img
-            src={src}
-            alt={alt}
-            className="max-h-[80vh] max-w-full rounded-lg object-contain"
-          />
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element -- visor a pantalla completa */}
+            <img
+              src={src}
+              alt={alt}
+              className="max-h-[80vh] max-w-full rounded-lg object-contain"
+            />
+            {mediaType === "video" && videoStatus !== "ready" && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 p-4 text-center text-sm text-white">
+                {videoStatus === "pending"
+                  ? "Este video se está terminando de guardar — va a estar disponible en un rato."
+                  : "Este video no se pudo guardar completo. Probá subirlo de nuevo."}
+              </div>
+            )}
+          </div>
         )}
         {footer}
       </div>
