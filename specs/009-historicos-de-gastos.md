@@ -3,7 +3,7 @@
 - **Estado:** Implemented
 - **Rutas:** `/gastos/historicos`
 - **Migraciones relacionadas:** No aplica.
-- **Última actualización:** 2026-09-15
+- **Última actualización:** 2026-10-03
 
 ## 1. Resumen
 
@@ -51,17 +51,27 @@ persistido en `groups` ni en `events`.
 ## 4. Diseño / flujo
 
 1. `getGroupsWithEventDates(supabase, userId)`
-   (`src/lib/gastos/groups.ts`, nuevo, compartido entre `/gastos` y
+   (`src/lib/gastos/groups.ts`, compartido entre `/gastos` y
    `/gastos/historicos`) trae los grupos de los que el usuario es
-   miembro (igual que antes) y, en una segunda consulta, la
-   `event_date` del evento enlazado a cada uno (si tiene).
+   miembro (igual que antes), la `event_date` del evento enlazado a cada
+   uno (si tiene), y (desde 2026-10-03) `hasPendingBalance: boolean` —
+   calculado en batch con `hasPendingSettlement`
+   (`src/lib/gastos/balances.ts`), mismo criterio que usa
+   `/gastos/[groupId]` para decidir si mostrar "Para saldar cuentas".
 2. `/gastos` filtra a `!eventDate || eventDate >= ahora` para la lista
-   principal, y muestra el link a históricos con el conteo de los que
-   quedaron afuera.
+   principal, ordena primero los grupos con `hasPendingBalance` (el/los
+   "vigente(s)", destacados con un badge "Pendiente" en
+   `GroupListCard.tsx`), y muestra el link a históricos con el conteo de
+   los que quedaron afuera.
 3. `/gastos/historicos` filtra al complemento (`eventDate < ahora`),
    ordenado por `eventDate` descendente (no por `created_at` del grupo,
-   que no es lo relevante acá).
-4. `/gastos/[groupId]` no cambió: un grupo histórico se ve y se comporta
+   que no es lo relevante acá) — nunca destaca ningún grupo como
+   "vigente", ya pasaron todos.
+4. `src/app/gastos/GroupListCard.tsx` (nuevo) es el componente
+   compartido que renderizan ambas listas: nombre, fecha/etiqueta
+   temporal, y el badge de pendiente cuando aplica — reemplaza el
+   `<Link><Card>` que antes estaba duplicado en los dos archivos.
+5. `/gastos/[groupId]` no cambió: un grupo histórico se ve y se comporta
    exactamente igual que uno vigente (balances, gastos, "para saldar
    cuentas" — incluso se puede seguir cargando gastos ahí si alguien
    todavía no arregló cuentas de esa juntada).
@@ -97,3 +107,11 @@ persistido en `groups` ni en `events`.
 ## 8. Changelog
 
 - 2026-09-15: creada e implementada.
+- 2026-10-03: `/gastos` dejó de mostrar siempre expandido el formulario
+  de crear grupo (pasa a un botoncito chico "+ Nuevo grupo" colapsado) y
+  ahora muestra la fecha de cada grupo (la del evento enlazado, o "Creado
+  el ..." para uno standalone) + un badge "Pendiente" y reordenamiento
+  arriba de todo para el/los grupo(s) que todavía tienen saldo sin
+  saldar — el mismo cálculo (`calcularBalances` + `simplificarDeudas`)
+  que ya usaba `/gastos/[groupId]` para "Para saldar cuentas", ahora
+  batcheado para toda la lista vía `getGroupsWithEventDates`.

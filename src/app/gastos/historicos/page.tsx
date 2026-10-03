@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card } from "@/components/ui/Card";
+import { GroupListCard } from "../GroupListCard";
 import { getGroupsWithEventDates } from "@/lib/gastos/groups";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
@@ -42,17 +42,11 @@ export default async function GastosHistoricosPage() {
       <ul className="mt-8 space-y-2">
         {historicos.map((group, index) => (
           <li key={group.id}>
-            <Link href={`/gastos/${group.id}`} className="block">
-              <Card
-                className="animate-reveal px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:bg-gastos-soft hover:shadow-md"
-                style={{ animationDelay: `${index * 60}ms` }}
-              >
-                <p className="text-sm font-medium">{group.name}</p>
-                <p className="text-xs text-foreground/50">
-                  {dateFormatter.format(new Date(group.eventDate!))}
-                </p>
-              </Card>
-            </Link>
+            <GroupListCard
+              group={group}
+              index={index}
+              dateLabel={dateFormatter.format(new Date(group.eventDate!))}
+            />
           </li>
         ))}
         {historicos.length === 0 && (
