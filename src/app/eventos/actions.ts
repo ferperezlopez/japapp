@@ -286,6 +286,7 @@ export async function addEventMedia(
   eventId: string,
   storagePath: string,
   originalStagingPath?: string,
+  mediaType: "photo" | "video" = "photo",
 ) {
   const supabase = await createClient();
   const {
@@ -300,11 +301,12 @@ export async function addEventMedia(
       uploaded_by: user.id,
       storage_path: storagePath,
       original_staging_path: originalStagingPath ?? null,
+      media_type: mediaType,
     })
     .select("id")
     .single();
 
-  if (error || !inserted) return { error: error?.message ?? "No se pudo guardar la foto." };
+  if (error || !inserted) return { error: error?.message ?? "No se pudo guardar el archivo." };
 
   revalidatePath(`/eventos/${eventId}`);
 

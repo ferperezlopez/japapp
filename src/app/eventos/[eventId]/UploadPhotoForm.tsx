@@ -5,18 +5,22 @@ import { createClient } from "@/lib/supabase/client";
 import { addEventMedia } from "../actions";
 import { Spinner } from "@/components/ui/Spinner";
 import { resizeImage } from "@/lib/images/resizeImage";
+import { extractVideoFrame } from "@/lib/images/extractVideoFrame";
 import { withMinDuration } from "@/lib/withMinDuration";
 
-const ALLOWED_TYPES = [
+const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/heic",
   "image/heif",
 ];
+const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
+const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES];
 // El original (sin comprimir) va a un bucket de tránsito de hasta 45MB
 // (ver 0036_event_media_google_photos.sql) antes de guardarse en tamaño
-// completo en Google Photos — margen amplio sobre una foto de celular.
+// completo en Google Photos — margen amplio sobre una foto de celular, y
+// el mismo tope que se decidió aceptar para video (sin chunked upload).
 const MAX_SIZE_BYTES = 45 * 1024 * 1024;
 
 export function UploadPhotoForm({ eventId }: { eventId: string }) {
@@ -31,13 +35,14 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
     setError(null);
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      setError("Solo se aceptan fotos (jpg, png, webp, heic).");
+      setError("Solo se aceptan fotos o videos.");
       return;
     }
     if (file.size > MAX_SIZE_BYTES) {
-      setError("La foto no puede pesar más de 45MB.");
+      setError("El archivo no puede pesar más de 45MB.");
       return;
     }
+    const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type);
 
     startTransition(async () => {
       await withMinDuration(
@@ -46,9 +51,13 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
           const uuid = crypto.randomUUID();
 
           // Preview: alimenta la galería del evento y el carrusel de la
-          // landing sin depender de Google Photos — bajarlo a 1600px de
-          // lado más largo alcanza de sobra para pantalla.
-          const resized = await resizeImage(file, { maxDimension: 1600, quality: 0.82 });
+          // landing sin depender de Google Photos. Para una foto, bajarla
+          // a 1600px de lado más largo alcanza de sobra para pantalla.
+          // Para un video, el "preview" es un frame real extraído del
+          // propio archivo (no hay nada que resamplear).
+          const resized = isVideo
+            ? await extractVideoFrame(file, { maxDimension: 1600, quality: 0.82 })
+            : await resizeImage(file, { maxDimension: 1600, quality: 0.82 });
           const previewExt = resized.name.split(".").pop() || "jpg";
           const previewPath = `${eventId}/${uuid}.${previewExt}`;
 
@@ -57,7 +66,7 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
             .upload(previewPath, resized, { contentType: resized.type });
 
           if (previewError) {
-            setError("No se pudo subir la foto.");
+            setError(isVideo ? "No se pudo subir el video." : "No se pudo subir la foto.");
             return;
           }
 
@@ -75,6 +84,7 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
             eventId,
             previewPath,
             originalError ? undefined : originalPath,
+            isVideo ? "video" : "photo",
           );
           if (result.error) setError(result.error);
         })(),
@@ -90,7 +100,7 @@ export function UploadPhotoForm({ eventId }: { eventId: string }) {
         }`}
       >
         {pending && <Spinner />}
-        {pending ? "Subiendo..." : "+ Subir foto"}
+        {pending ? "Subiendo..." : "+ Subir foto o video"}
         <input
           type="file"
           accept={ALLOWED_TYPES.join(",")}

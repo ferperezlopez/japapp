@@ -99,6 +99,9 @@ export default async function Home() {
     const { data: mediaRows } = await supabase
       .from("event_media")
       .select("storage_path")
+      // El carrusel pinta con background-image en CSS — un video no
+      // tiene forma de reproducirse ahí, se excluye de raíz.
+      .eq("media_type", "photo")
       .order("created_at", { ascending: false })
       .limit(60);
 

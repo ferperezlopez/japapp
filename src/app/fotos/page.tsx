@@ -46,7 +46,9 @@ export default async function FotosPage({
   // acá sí, porque /fotos les atribuye un evento y una fecha.
   let query = supabase
     .from("event_media")
-    .select("id, event_id, uploaded_by, storage_path, created_at, google_media_item_id, taken_at")
+    .select(
+      "id, event_id, uploaded_by, storage_path, created_at, google_media_item_id, taken_at, media_type",
+    )
     .eq("legacy", false)
     .order("taken_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -100,10 +102,18 @@ export default async function FotosPage({
 
   const photos: GalleryPhoto[] = [];
   for (const row of mediaRows ?? []) {
+    const mediaType = row.media_type === "video" ? "video" : "photo";
     const baseUrl = row.google_media_item_id ? baseUrls.get(row.google_media_item_id) : undefined;
     const fallbackUrl = fallbackUrlByPath.get(row.storage_path);
-    const thumbUrl = baseUrl ? `${baseUrl}=w500-h500-c` : fallbackUrl;
-    const detailUrl = baseUrl ? `${baseUrl}=w2000` : fallbackUrl;
+    // El thumbnail siempre es el preview de Supabase (una imagen real, el
+    // frame extraído en el caso de video) — nunca depende de Google, ni
+    // siquiera cuando ya está sincronizado.
+    const thumbUrl = fallbackUrl;
+    // Para foto, "=w2000"/"=d" sirven sobre el baseUrl de Google (imagen
+    // escalada / original completo). Un video necesita "=dv" en cambio,
+    // el sufijo documentado por Google para servir los bytes reales del
+    // video — "=w2000"/"=d" en un video devuelven solo un frame estático.
+    const detailUrl = baseUrl ? `${baseUrl}${mediaType === "video" ? "=dv" : "=w2000"}` : fallbackUrl;
     if (!thumbUrl || !detailUrl) continue;
 
     photos.push({
@@ -113,12 +123,13 @@ export default async function FotosPage({
       eventName: eventNameById.get(row.event_id) ?? "Evento",
       takenAt: row.taken_at ?? row.created_at,
       uploadedByName: uploaderNameById.get(row.uploaded_by) ?? "Alguien",
+      mediaType,
       thumbUrl,
       detailUrl,
-      // Original real vía Google si ya está sincronizada; si no, se
-      // ofrece igual el preview de Supabase como descarga — toda foto
-      // tiene que poder bajarse, aunque no sea su tamaño original.
-      downloadUrl: baseUrl ? `${baseUrl}=d` : (fallbackUrl ?? null),
+      // Original real vía Google si ya está sincronizado; si no, se
+      // ofrece igual el preview de Supabase como descarga — todo archivo
+      // tiene que poder bajarse, aunque no sea su tamaño/calidad original.
+      downloadUrl: baseUrl ? `${baseUrl}${mediaType === "video" ? "=dv" : "=d"}` : (fallbackUrl ?? null),
     });
   }
 

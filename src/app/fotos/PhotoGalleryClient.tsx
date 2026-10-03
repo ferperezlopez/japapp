@@ -11,6 +11,7 @@ export type GalleryPhoto = {
   eventName: string;
   takenAt: string;
   uploadedByName: string;
+  mediaType: "photo" | "video";
   thumbUrl: string;
   detailUrl: string;
   downloadUrl: string | null;
@@ -38,6 +39,14 @@ function ListIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4" aria-hidden="true">
       <path strokeLinecap="round" d="M8 6h12M8 12h12M8 18h12" />
       <path strokeLinecap="round" d="M4 6h.01M4 12h.01M4 18h.01" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8 drop-shadow" aria-hidden="true">
+      <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14Z" />
     </svg>
   );
 }
@@ -118,6 +127,11 @@ export function PhotoGalleryClient({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- fotos de Google Photos / Supabase Storage, no vale next/image para esto */}
                     <img src={photo.thumbUrl} alt="" className="h-full w-full object-cover" />
+                    {photo.mediaType === "video" && (
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+                        <PlayIcon />
+                      </span>
+                    )}
                   </button>
                   {photo.downloadUrl && (
                     <a
@@ -154,12 +168,19 @@ export function PhotoGalleryClient({
                     onClick={() => setOpenIndex(flatPhotos.indexOf(photo))}
                     className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element -- ídem */}
-                    <img
-                      src={photo.thumbUrl}
-                      alt=""
-                      className="h-14 w-14 shrink-0 rounded-lg object-cover"
-                    />
+                    <div className="relative h-14 w-14 shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- ídem */}
+                      <img
+                        src={photo.thumbUrl}
+                        alt=""
+                        className="h-full w-full rounded-lg object-cover"
+                      />
+                      {photo.mediaType === "video" && (
+                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+                          <PlayIcon />
+                        </span>
+                      )}
+                    </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
                         {photo.eventName}
@@ -198,6 +219,7 @@ export function PhotoGalleryClient({
         <ImageZoomModal
           src={openPhoto.detailUrl}
           alt={openPhoto.eventName}
+          mediaType={openPhoto.mediaType}
           onClose={() => setOpenIndex(null)}
           onPrev={openIndex > 0 ? () => setOpenIndex(openIndex - 1) : undefined}
           onNext={

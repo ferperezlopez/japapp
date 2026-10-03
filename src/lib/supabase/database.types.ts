@@ -896,6 +896,7 @@ export interface Database {
           width: number | null;
           height: number | null;
           original_staging_path: string | null;
+          media_type: string;
         };
         Insert: {
           id?: string;
@@ -909,6 +910,7 @@ export interface Database {
           width?: number | null;
           height?: number | null;
           original_staging_path?: string | null;
+          media_type?: string;
         };
         Update: {
           id?: string;
@@ -922,6 +924,7 @@ export interface Database {
           width?: number | null;
           height?: number | null;
           original_staging_path?: string | null;
+          media_type?: string;
         };
         Relationships: [
           {
