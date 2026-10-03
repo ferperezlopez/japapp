@@ -6,6 +6,7 @@ import { useBackButtonClose } from "@/lib/useBackButtonClose";
 export function ImageZoomModal({
   src,
   alt = "",
+  mediaType = "photo",
   onClose,
   footer,
   onPrev,
@@ -13,6 +14,10 @@ export function ImageZoomModal({
 }: {
   src: string;
   alt?: string;
+  // Opcional: con "video" renderiza <video controls> en vez de <img>. Sin
+  // esto se comporta igual que antes (siempre imagen) — no rompe
+  // ZoomableAvatar.tsx ni otros usos actuales que no lo pasan.
+  mediaType?: "photo" | "video";
   onClose: () => void;
   // Opcional: contenido debajo de la imagen (ej. metadata de la foto en
   // /fotos — evento, fecha, quién la subió, link de descarga). Sin esto
@@ -99,12 +104,21 @@ export function ImageZoomModal({
         className="flex max-h-full max-w-full flex-col items-center gap-3"
         onClick={(event) => event.stopPropagation()}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- visor a pantalla completa */}
-        <img
-          src={src}
-          alt={alt}
-          className="max-h-[80vh] max-w-full rounded-lg object-contain"
-        />
+        {mediaType === "video" ? (
+          <video
+            src={src}
+            controls
+            autoPlay
+            className="max-h-[80vh] max-w-full rounded-lg"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- visor a pantalla completa
+          <img
+            src={src}
+            alt={alt}
+            className="max-h-[80vh] max-w-full rounded-lg object-contain"
+          />
+        )}
         {footer}
       </div>
     </div>

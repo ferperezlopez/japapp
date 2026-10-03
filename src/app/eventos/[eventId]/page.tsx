@@ -525,7 +525,7 @@ export default async function EventoPage({
   const PHOTO_PREVIEW_COUNT = 6;
   const { data: mediaRows, count: totalPhotoCount } = await supabase
     .from("event_media")
-    .select("id, storage_path, uploaded_by", { count: "exact" })
+    .select("id, storage_path, uploaded_by, media_type", { count: "exact" })
     .eq("event_id", eventId)
     .eq("legacy", false)
     .order("created_at", { ascending: false })
@@ -541,6 +541,7 @@ export default async function EventoPage({
     id: m.id,
     storagePath: m.storage_path,
     uploadedBy: m.uploaded_by,
+    mediaType: (m.media_type === "video" ? "video" : "photo") as "photo" | "video",
     url:
       signedUrls?.find((s) => s.path === m.storage_path)?.signedUrl ?? null,
   }));

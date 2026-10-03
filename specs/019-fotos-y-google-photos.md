@@ -2,8 +2,9 @@
 
 - **Estado:** Implemented (requiere setup manual de Google Cloud antes de andar — ver sección 4)
 - **Rutas:** `/fotos` (nueva), `/eventos/[eventId]` (extendida), `/api/cron/sync-photos-to-google` (nueva)
-- **Migraciones relacionadas:** `supabase/migrations/0036_event_media_google_photos.sql`
-- **Última actualización:** 2026-09-29
+- **Migraciones relacionadas:** `supabase/migrations/0036_event_media_google_photos.sql`,
+  `0038_event_media_video.sql`
+- **Última actualización:** 2026-10-03
 
 ## 1. Resumen
 
@@ -43,6 +44,12 @@ segura.
   baja el original real si ya está sincronizada con Google, o el
   preview de Supabase si no — toda foto se puede descargar, aunque no
   siempre sea su tamaño original.
+- También se puede subir video (mp4, mov, webm), con el mismo tope de
+  ~45MB que ya regía para el original de una foto — ver changelog de
+  2026-10-03. La miniatura es un frame real extraído en el browser (no
+  un ícono genérico); la grilla, la lista y el detalle ampliado marcan
+  con un ícono de play cuál es video, y el visor lo reproduce con
+  controles nativos.
 
 ### No incluye (por ahora)
 
@@ -53,7 +60,8 @@ segura.
 - Borrar la copia en Google Photos al borrar una foto en la app — ver
   sección 6, es una decisión de seguridad, no una limitación técnica
   temporal.
-- Video. Se mantiene el alcance actual (solo imágenes).
+- Chunked upload o subir de plan de Supabase para permitir video de más
+  de ~45MB — ver sección 6 y el changelog de 2026-10-03.
 - Migrar a Google Photos las fotos que ya estaban cargadas antes de
   este cambio (se evaluó un backfill admin-only y se sacó — ver sección
   6: el beneficio era chico, porque esas fotos nunca tuvieron un
@@ -81,7 +89,15 @@ detalle. Resumen de lo que no se ve leyendo el SQL:
 - Bucket `event-photos-originals`: privado, ~45MB por objeto, mismas
   policies (insert/select/delete del propio `owner`) que ya usa
   `event-photos` desde `0004_event_groups_and_media.sql` — es solo
-  tránsito, no almacenamiento final.
+  tránsito, no almacenamiento final. Desde `0038_event_media_video.sql`
+  también acepta `video/mp4`, `video/quicktime` y `video/webm`, mismo
+  tope de tamaño.
+- `event_media.media_type` (`'photo'` | `'video'`, default `'photo'`):
+  distingue qué renderizar — ícono de play en grilla/lista, `<video>`
+  en vez de `<img>` en el visor ampliado. El preview (`storage_path`) de
+  un video es un frame real extraído en el browser, no el archivo de
+  video — así la galería sigue mostrando solo imágenes livianas, el
+  video pesado nunca se baja hasta que alguien lo abre.
 
 ## 4. Diseño / flujo
 
@@ -294,6 +310,29 @@ estado propio duplicado).
 
 ## 8. Changelog
 
+- 2026-10-03: habilitado subir video, no solo foto — pedido explícito
+  del usuario. Se evaluó primero subir el video directo del browser a
+  Google Photos para esquivar el tope de tamaño de Supabase, pero no es
+  viable de forma segura: la Library API de Google requiere el
+  `Authorization: Bearer` real en el momento de subir (no hay patrón de
+  URL firmada que permita dárselo al browser sin exponer el token
+  server-only de Fernando), y un relay server-side tampoco sirve porque
+  toda función de Vercel tiene un tope de body de ~4.5MB. Se decidió
+  aceptar el mismo tope de ~45MB que ya regía para el original de una
+  foto (`event-photos-originals`), sin chunked upload ni upgrade de plan
+  de Supabase por ahora. Migración `0038_event_media_video.sql`: suma
+  `event_media.media_type` y extiende los `allowed_mime_types` del
+  bucket de tránsito. `UploadPhotoForm.tsx` genera la miniatura con
+  `src/lib/images/extractVideoFrame.ts` (nuevo, mismo espíritu que
+  `resizeImage.ts`: `<video>` oculto + `<canvas>`, busca al 10% de la
+  duración para evitar el frame negro inicial) en vez de redimensionar,
+  pero sube el archivo de video sin tocar al mismo bucket de tránsito
+  que ya usaba el original de una foto. `ImageZoomModal.tsx` suma un
+  prop opcional `mediaType` (default `"photo"`, no rompe
+  `ZoomableAvatar.tsx` ni otros usos) que renderiza `<video controls>`
+  en vez de `<img>`. El detalle/descarga de un video sincronizado usa el
+  sufijo `=dv` del `baseUrl` de Google (bytes reales del video) en vez
+  de `=w2000`/`=d`, que en un video solo devuelven un frame estático.
 - 2026-10-02: un admin puede borrar cualquier foto, no solo quien la
   subió o quien creó el evento — pedido explícito del usuario. Antes de
   tocar la UI, se detectó que el permiso real lo da la RLS de Postgres

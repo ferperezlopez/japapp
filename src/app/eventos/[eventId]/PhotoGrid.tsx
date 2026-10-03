@@ -6,6 +6,15 @@ interface Photo {
   storagePath: string;
   url: string | null;
   uploadedBy: string;
+  mediaType: "photo" | "video";
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 drop-shadow" aria-hidden="true">
+      <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14Z" />
+    </svg>
+  );
 }
 
 // Mosaico tipo galería editorial: una foto "grande" cada 5, una "ancha"
@@ -47,8 +56,15 @@ export function PhotoGrid({
               segundo lightbox acá para una sola foto. */}
           <Link href={`/fotos?event=${eventId}`} className="block h-full w-full">
             {photo.url ? (
-              // eslint-disable-next-line @next/next/no-img-element -- fotos de usuario via URL firmada de Supabase Storage, no vale el pipeline de next/image para esto
-              <img src={photo.url} alt="" className="h-full w-full object-cover" />
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element -- fotos de usuario via URL firmada de Supabase Storage, no vale el pipeline de next/image para esto */}
+                <img src={photo.url} alt="" className="h-full w-full object-cover" />
+                {photo.mediaType === "video" && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-white">
+                    <PlayIcon />
+                  </span>
+                )}
+              </>
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xs text-foreground/40">
                 Sin vista previa
