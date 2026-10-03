@@ -103,6 +103,18 @@ export function simplificarDeudas(balances: Balance[]): Settlement[] {
   return settlements;
 }
 
+// Mismo criterio que ya usa /gastos/[groupId]/page.tsx para decidir si
+// mostrar "Para saldar cuentas": el grupo sigue "vigente" mientras quede
+// alguna transferencia pendiente. Se reusa acá para destacar en /gastos
+// cuál es el grupo actual (ver src/lib/gastos/groups.ts).
+export function hasPendingSettlement(
+  memberIds: string[],
+  expenses: ExpenseForBalance[],
+  payments: PaymentForBalance[] = [],
+): boolean {
+  return simplificarDeudas(calcularBalances(memberIds, expenses, payments)).length > 0;
+}
+
 function roundTo(value: number, decimals: number) {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
