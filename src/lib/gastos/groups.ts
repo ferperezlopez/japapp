@@ -110,3 +110,18 @@ export async function getGroupsWithEventDates(
     };
   });
 }
+
+// Fecha efectiva de un grupo para ordenar/mostrar: la del evento enlazado,
+// o `created_at` para uno standalone. Usado por /gastos y /gastos/historicos
+// para que ambas páginas ordenen y corten la lista de forma consistente —
+// "histórico" ya no es "evento pasado", es "no entra en el top 5" (ver
+// specs/009-historicos-de-gastos.md).
+export function sortGroupsByRecency(groups: GroupWithEventDate[]): GroupWithEventDate[] {
+  return [...groups].sort((a, b) => (b.eventDate ?? b.created_at).localeCompare(a.eventDate ?? a.created_at));
+}
+
+export function formatGroupDateLabel(group: GroupWithEventDate, formatter: Intl.DateTimeFormat): string {
+  return group.eventDate
+    ? formatter.format(new Date(group.eventDate))
+    : `Creado el ${formatter.format(new Date(group.created_at))}`;
+}
