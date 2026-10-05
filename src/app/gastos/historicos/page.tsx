@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { GroupListCard } from "../GroupListCard";
-import { getGroupsWithEventDates } from "@/lib/gastos/groups";
+import { getGroupsWithEventDates, sortGroupsByRecency, formatGroupDateLabel } from "@/lib/gastos/groups";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   day: "numeric",
   month: "short",
   year: "numeric",
 });
+
+const VISIBLE_LIMIT = 5;
 
 export default async function GastosHistoricosPage() {
   const supabase = await createClient();
@@ -17,11 +19,10 @@ export default async function GastosHistoricosPage() {
 
   const allGroups = await getGroupsWithEventDates(supabase, user!.id);
 
-  // eslint-disable-next-line react-hooks/purity -- ruta ya forzada dinámica por el auth.getUser() de arriba
-  const now = Date.now();
-  const historicos = allGroups
-    .filter((g) => !!g.eventDate && new Date(g.eventDate).getTime() < now)
-    .sort((a, b) => b.eventDate!.localeCompare(a.eventDate!));
+  // Mismo orden que /gastos (fecha efectiva descendente) — acá se muestra
+  // lo que no entró en los primeros VISIBLE_LIMIT de la pantalla principal,
+  // sea un grupo realmente pasado o uno vigente que no alcanzó a entrar.
+  const historicos = sortGroupsByRecency(allGroups).slice(VISIBLE_LIMIT);
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
@@ -35,8 +36,8 @@ export default async function GastosHistoricosPage() {
         Históricos
       </h1>
       <p className="mt-2 text-sm text-foreground/60">
-        Gastos de juntadas que ya pasaron. Se pueden seguir revisando, pero
-        ya no aparecen en la lista principal de Gastos.
+        Los grupos que no entran en los primeros {VISIBLE_LIMIT} de la pantalla
+        principal, del más reciente al más viejo.
       </p>
 
       <ul className="mt-8 space-y-2">
@@ -45,13 +46,14 @@ export default async function GastosHistoricosPage() {
             <GroupListCard
               group={group}
               index={index}
-              dateLabel={dateFormatter.format(new Date(group.eventDate!))}
+              dateLabel={formatGroupDateLabel(group, dateFormatter)}
+              isCurrent={group.hasPendingBalance}
             />
           </li>
         ))}
         {historicos.length === 0 && (
           <p className="text-sm text-foreground/50">
-            Todavía no hay gastos históricos.
+            No hay más grupos para mostrar acá.
           </p>
         )}
       </ul>

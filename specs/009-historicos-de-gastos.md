@@ -3,89 +3,101 @@
 - **Estado:** Implemented
 - **Rutas:** `/gastos/historicos`
 - **Migraciones relacionadas:** No aplica.
-- **Última actualización:** 2026-10-03
+- **Última actualización:** 2026-10-05
 
 ## 1. Resumen
 
-Como miembro del grupo, quiero poder revisar los gastos de juntadas que ya
-pasaron sin que se mezclen con la lista principal de grupos vigentes, para
-tener `/gastos` enfocado en lo actual y un archivo aparte para "¿cuánto
-gastamos en tal asado de hace dos meses?".
+Como miembro del grupo, quiero que `/gastos` muestre primero mis grupos
+más recientes/próximos, sin que la pantalla se llene si tengo muchos, y
+poder ir a buscar el resto a un archivo aparte.
 
-Es el primer lugar de la app con este patrón de "vigente vs. histórico";
-la idea explícita del usuario es reusarlo más adelante en otras secciones
-(no solo gastos).
+Desde 2026-10-05 "histórico" ya **no** significa "evento que ya pasó" —
+significa "no entra en los primeros 5 de la pantalla principal", sea un
+grupo realmente pasado o uno vigente que simplemente quedó afuera del
+tope. Ver la sección 8 (Changelog) para el porqué de este cambio de
+criterio.
 
 ## 2. Alcance
 
 ### Incluye
 
-- `/gastos` (lista principal) deja de mostrar los grupos enlazados a un
-  evento cuya fecha ya pasó.
-- Nueva página `/gastos/historicos` con esos grupos, ordenados del más
-  reciente al más viejo, mostrando la fecha del evento (no la fecha de
-  creación del grupo).
-- Link "Ver históricos (N) →" en `/gastos`, visible solo si hay al menos
-  un grupo histórico.
+- `/gastos` (lista principal) muestra como máximo los primeros 5 grupos,
+  ordenados por fecha efectiva descendente (la del evento enlazado, o
+  `created_at` si el grupo es standalone) — sin importar si el evento ya
+  pasó o es futuro.
+- Nueva página `/gastos/historicos` con el resto (posición 6 en
+  adelante), mismo orden.
+- Botón "Ver histórico (N) →" en `/gastos`, visible solo si hay al menos
+  un grupo que no entró en el top 5.
 - Cada grupo histórico linkea a la misma página `/gastos/[groupId]` de
   siempre — no hay una vista "de solo lectura" distinta, el histórico es
   solo una forma distinta de *encontrar* el grupo.
+- El badge "Pendiente" (saldo sin saldar, `hasPendingBalance`) puede
+  aparecer en cualquiera de las dos listas — es independiente de la
+  fecha: un grupo viejo con una deuda sin saldar lo sigue mostrando
+  aunque esté en históricos.
 
 ### No incluye (por ahora)
 
-- Un grupo de gastos standalone (sin evento enlazado) nunca es
-  "histórico": no tiene una fecha natural para decidir si "ya pasó". Se
-  queda siempre en la lista principal.
 - Resumen agregado (cuánto gastó cada persona sumando todos los
   históricos) — se pidió explícitamente para "más adelante", no ahora.
-- Aplicar el mismo patrón vigente/histórico a Eventos — mencionado como
-  intención futura por el usuario, no parte de este alcance.
+- Aplicar el mismo patrón a Eventos — mencionado como intención futura
+  por el usuario, no parte de este alcance.
 - Filtro/búsqueda dentro de históricos (por fecha, por nombre).
 
 ## 3. Modelo de datos
 
-No aplica: no hay tablas ni columnas nuevas. "Histórico" es una condición
-calculada en el server component (`event_date < ahora`), no un estado
-persistido en `groups` ni en `events`.
+No aplica: no hay tablas ni columnas nuevas. El corte "principal vs.
+histórico" es puramente de presentación (posición en un array ordenado
+en memoria), no un estado persistido en `groups` ni en `events`.
 
 ## 4. Diseño / flujo
 
 1. `getGroupsWithEventDates(supabase, userId)`
    (`src/lib/gastos/groups.ts`, compartido entre `/gastos` y
    `/gastos/historicos`) trae los grupos de los que el usuario es
-   miembro (igual que antes), la `event_date` del evento enlazado a cada
-   uno (si tiene), y (desde 2026-10-03) `hasPendingBalance: boolean` —
-   calculado en batch con `hasPendingSettlement`
-   (`src/lib/gastos/balances.ts`), mismo criterio que usa
-   `/gastos/[groupId]` para decidir si mostrar "Para saldar cuentas".
-2. `/gastos` filtra a `!eventDate || eventDate >= ahora` para la lista
-   principal, ordena primero los grupos con `hasPendingBalance` (el/los
-   "vigente(s)", destacados con un badge "Pendiente" en
-   `GroupListCard.tsx`), y muestra el link a históricos con el conteo de
-   los que quedaron afuera.
-3. `/gastos/historicos` filtra al complemento (`eventDate < ahora`),
-   ordenado por `eventDate` descendente (no por `created_at` del grupo,
-   que no es lo relevante acá) — nunca destaca ningún grupo como
-   "vigente", ya pasaron todos.
-4. `src/app/gastos/GroupListCard.tsx` (nuevo) es el componente
-   compartido que renderizan ambas listas: nombre, fecha/etiqueta
-   temporal, y el badge de pendiente cuando aplica — reemplaza el
-   `<Link><Card>` que antes estaba duplicado en los dos archivos.
-5. `/gastos/[groupId]` no cambió: un grupo histórico se ve y se comporta
+   miembro, la `event_date` del evento enlazado a cada uno (si tiene), y
+   `hasPendingBalance: boolean` — calculado en batch con
+   `hasPendingSettlement` (`src/lib/gastos/balances.ts`), mismo criterio
+   que usa `/gastos/[groupId]` para decidir si mostrar "Para saldar
+   cuentas".
+2. `sortGroupsByRecency(groups)` (mismo archivo) ordena por
+   `eventDate ?? created_at` descendente — es la única fuente de verdad
+   de orden, la usan ambas páginas.
+3. `/gastos` toma `sortGroupsByRecency(allGroups).slice(0, 5)` para la
+   lista principal, y muestra el botón a históricos con el conteo de los
+   que quedaron afuera (`sorted.length - 5`).
+4. `/gastos/historicos` toma `sortGroupsByRecency(allGroups).slice(5)` —
+   el complemento exacto de lo anterior, mismo orden.
+5. `formatGroupDateLabel(group, formatter)` (mismo archivo) arma el
+   label de fecha de cada card: la del evento enlazado, o
+   "Creado el ..." para uno standalone — reusado por ambas páginas.
+6. `src/app/gastos/GroupListCard.tsx` es el componente compartido que
+   renderizan ambas listas: nombre, fecha/etiqueta temporal, y el badge
+   "Pendiente" cuando `hasPendingBalance` es true — en ambas páginas por
+   igual, ya no es exclusivo de la lista principal.
+7. El control de crear grupo (`CreateGroupForm`) es un botón de solo
+   ícono (+) arriba a la derecha del encabezado de `/gastos` (un
+   `<details>` cuyo panel se posiciona `absolute` para no empujar el
+   título al abrirse), no un elemento de la lista.
+8. `/gastos/[groupId]` no cambió: un grupo histórico se ve y se comporta
    exactamente igual que uno vigente (balances, gastos, "para saldar
    cuentas" — incluso se puede seguir cargando gastos ahí si alguien
    todavía no arregló cuentas de esa juntada).
 
 ## 5. Criterios de aceptación
 
-- [x] Un grupo enlazado a un evento con fecha futura aparece en `/gastos`,
-      no en históricos.
-- [x] Un grupo enlazado a un evento con fecha pasada aparece en
+- [x] `/gastos` muestra como máximo 5 grupos, los de fecha efectiva más
+      reciente/próxima primero.
+- [x] El grupo 6 en adelante (por esa misma fecha) aparece en
       `/gastos/historicos`, no en la lista principal.
-- [x] Un grupo standalone (sin evento) aparece siempre en `/gastos`,
-      nunca en históricos.
-- [x] El link "Ver históricos" no aparece si no hay ningún grupo
-      histórico.
+- [x] Un grupo standalone (sin evento) entra en el mismo orden usando su
+      `created_at` como fecha efectiva.
+- [x] El botón "Ver histórico" no aparece si hay 5 grupos o menos en
+      total.
+- [x] El badge "Pendiente" aparece en el grupo que corresponda en
+      cualquiera de las dos listas, sin alterar su posición en el orden
+      por fecha.
 - [x] Entrar a un grupo histórico desde `/gastos/historicos` lleva a la
       misma página de siempre, con toda la funcionalidad intacta.
 
@@ -94,13 +106,13 @@ persistido en `groups` ni en `events`.
 | Decisión | Alternativa descartada | Por qué |
 |---|---|---|
 | Página separada `/gastos/historicos` en vez de un filtro/tab en la misma vista | Tabs "Vigentes" / "Históricos" dentro de `/gastos` | Pedido explícito del usuario: quería una sección separada, no todo mezclado con un filtro. |
-| "Histórico" calculado en cada request (`event_date < ahora`), no persistido | Columna `is_historico` mantenida por trigger o cron | No hay necesidad de una columna extra: la condición es barata de calcular (una comparación de fechas) y siempre está actualizada sin mantenimiento. |
-| Grupos standalone nunca son históricos | Usar `created_at` del grupo como fecha de referencia | No hay una noción real de "cuándo pasó" un grupo sin evento — usar `created_at` sería arbitrario y probablemente confuso (un grupo activo desde hace meses no es "viejo"). |
+| Corte por posición (top 5 de la lista ordenada por fecha) en vez de por `event_date < ahora` | Mantener el corte por fecha de evento | Pedido explícito del usuario (2026-10-05): quería la lista principal siempre acotada a 5, sin importar si esos 5 incluyen algún evento ya pasado o si quedan vigentes afuera. |
+| Grupos standalone usan `created_at` como fecha efectiva para ordenar | Excluirlos del ordenamiento por fecha | Con el corte por posición (no por "pasado/futuro"), un standalone necesita algún valor para competir en el orden — `created_at` es lo único disponible y ya se usaba como fallback de *label* antes de este cambio. |
+| El badge "Pendiente" no afecta el orden, solo es un indicador visual | Mantener el reordenamiento "pendiente primero" del cambio anterior (2026-10-03) | El usuario vio esa versión en producción y la rechazó explícitamente: pidió orden puramente cronológico: el destaque se queda, el salto de posición se saca. |
 
 ## 7. Futuro / fuera de alcance
 
-- Mismo patrón vigente/histórico para Eventos y (a futuro) para
-  Estadísticas de partidos.
+- Mismo patrón para Eventos y (a futuro) para Estadísticas de partidos.
 - Resumen agregado de gastos históricos por persona.
 - Filtro/búsqueda dentro de `/gastos/historicos`.
 
@@ -115,3 +127,13 @@ persistido en `groups` ni en `events`.
   saldar — el mismo cálculo (`calcularBalances` + `simplificarDeudas`)
   que ya usaba `/gastos/[groupId]` para "Para saldar cuentas", ahora
   batcheado para toda la lista vía `getGroupsWithEventDates`.
+- 2026-10-05: el usuario vio el cambio anterior en producción y pidió un
+  layout distinto. Cambios: (1) el botón de crear grupo pasa de pastilla
+  de texto a un ícono "+" solo, arriba a la derecha del encabezado; (2) el
+  orden de la lista pasa a ser 100% por fecha descendente (ya no
+  "pendiente primero"); (3) `/gastos` se corta en los primeros 5 grupos;
+  (4) "histórico" deja de significar "evento pasado" y pasa a significar
+  "no entra en el top 5" — `/gastos/historicos` ahora puede incluir
+  grupos vigentes que simplemente no entraron. El badge "Pendiente" se
+  mantiene como indicador visual (pedido explícito), y ahora se muestra
+  también en `/gastos/historicos` (antes nunca aplicaba ahí).
