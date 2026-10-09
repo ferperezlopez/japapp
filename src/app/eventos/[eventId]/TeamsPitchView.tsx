@@ -82,7 +82,8 @@ export function TeamsPitchView({
   const renderPlayer = (c: Candidate, variant: JerseyVariant, number: number) => {
     const isMvp = stats?.mvpId === c.id;
     const isGoleador = stats?.goleadorId === c.id;
-    const badge = isMvp ? "mvp" : isGoleador ? "goleador" : undefined;
+    const badge =
+      isMvp && isGoleador ? "both" : isMvp ? "mvp" : isGoleador ? "goleador" : undefined;
     return (
       <div key={c.id} className="flex flex-col items-center gap-0.5">
         <Jersey number={number} variant={variant} badge={badge} />

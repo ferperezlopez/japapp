@@ -6,7 +6,7 @@
 // usuario consideró que no se parecía lo suficiente. Ver
 // specs/015-armar-equipos-futbol.md, sección "Réplica visual de cancha".
 export type JerseyVariant = "team1" | "team2" | "gk1" | "gk2";
-export type JerseyBadge = "mvp" | "goleador";
+export type JerseyBadge = "mvp" | "goleador" | "both";
 
 // WebP en vez de PNG (mismo contenido visual, ~90% menos peso medido con
 // Pillow: pitch.png 625KB→46KB, cada camiseta ~105KB→~15KB) — la carga
@@ -18,10 +18,11 @@ const JERSEY_SRC: Record<JerseyVariant, string> = {
   gk2: "/futbol/jersey-gk2.webp",
 };
 
-// Camisetas con trofeo/pelota superpuestos (mismas 10 imágenes que el
-// usuario generó junto con las 4 limpias) para marcar MVP/goleador en
-// "Ver equipos" en vez de un emoji ⭐/⚽ al lado de la camiseta —
-// reemplaza la camiseta entera, no superpone nada.
+// Camisetas con trofeo/pelota superpuestos (las imágenes que el usuario
+// generó junto con las 4 limpias) para marcar MVP/goleador en "Ver
+// equipos" en vez de un emoji ⭐/⚽ al lado de la camiseta — reemplaza la
+// camiseta entera, no superpone nada. `both` es para quien es MVP y
+// goleador a la vez (trofeo y pelota juntos).
 const JERSEY_SRC_MVP: Record<JerseyVariant, string> = {
   team1: "/futbol/jersey-team1-trophy.webp",
   team2: "/futbol/jersey-team2-trophy.webp",
@@ -34,6 +35,19 @@ const JERSEY_SRC_GOLEADOR: Record<JerseyVariant, string> = {
   team2: "/futbol/jersey-team2-ball.webp",
   gk1: "/futbol/jersey-gk1-ball.webp",
   gk2: "/futbol/jersey-gk2-ball.webp",
+};
+
+const JERSEY_SRC_BOTH: Record<JerseyVariant, string> = {
+  team1: "/futbol/jersey-team1-both.webp",
+  team2: "/futbol/jersey-team2-both.webp",
+  gk1: "/futbol/jersey-gk1-both.webp",
+  gk2: "/futbol/jersey-gk2-both.webp",
+};
+
+const JERSEY_SRC_BY_BADGE: Record<JerseyBadge, Record<JerseyVariant, string>> = {
+  mvp: JERSEY_SRC_MVP,
+  goleador: JERSEY_SRC_GOLEADOR,
+  both: JERSEY_SRC_BOTH,
 };
 
 // Color del número superpuesto: blanco sobre la camiseta navy (equipo 1),
@@ -57,12 +71,7 @@ export function Jersey({
   badge?: JerseyBadge;
   className?: string;
 }) {
-  const src =
-    badge === "mvp"
-      ? JERSEY_SRC_MVP[variant]
-      : badge === "goleador"
-        ? JERSEY_SRC_GOLEADOR[variant]
-        : JERSEY_SRC[variant];
+  const src = badge ? JERSEY_SRC_BY_BADGE[badge][variant] : JERSEY_SRC[variant];
   return (
     <div
       className={`relative shrink-0 ${className}`}

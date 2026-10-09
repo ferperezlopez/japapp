@@ -5,7 +5,7 @@
 - **Migraciones relacionadas:** `supabase/migrations/0016_futbol_teams.sql`,
   `supabase/migrations/0017_futbol_teams_position.sql`,
   `supabase/migrations/0026_futbol_teams_guests.sql`
-- **Última actualización:** 2026-09-29
+- **Última actualización:** 2026-10-09
 
 ## 1. Resumen
 
@@ -245,9 +245,11 @@ Puntos que el SQL no explica por sí solo:
       arquero al frente y filas de defensores/delanteros debajo), con
       el mismo estilo de camiseta que el editor — no una lista de
       texto.
-- [x] Si ya se cargó el resultado del partido, el MVP y el goleador
-      aparecen con un badge (⭐ / ⚽) sobre su camiseta en "Ver
-      equipos".
+- [x] Si ya se cargó el resultado del partido, el MVP (camiseta con
+      trofeo) y el goleador (camiseta con pelota) se marcan sobre su
+      camiseta en "Ver equipos".
+- [x] (2026-10-09) Si la misma persona es MVP y goleador a la vez, su
+      camiseta muestra trofeo y pelota juntos.
 
 ## 6. Decisiones y tradeoffs
 
@@ -267,6 +269,7 @@ Puntos que el SQL no explica por sí solo:
 | Franjas de posición en columnas lado a lado dentro de cada equipo, modal ensanchado a `max-w-xl` | Mantener las franjas apiladas y solo ensanchar el modal | Feedback del usuario con captura: solo ensanchar no reducía la altura (6 franjas apiladas seguían apiladas), y sobraba mucho espacio a los costados sin usar — pasar a columnas usa ese ancho para bajar la cantidad de franjas apiladas de 6 a 2 (una fila de 3 columnas por equipo). |
 | "Ver equipos" con cancha propia por equipo (arco + arquero + filas), reusando `Jersey`/`assignJerseyNumbers` del editor | Mejorar la lista de texto (`renderTeamSummary`) en vez de construir una vista gráfica nueva | Pedido explícito del usuario con una captura de referencia (el mismo estilo del editor, pero de solo lectura); `Jersey`/`JERSEY_COLORS`/`GoalNet` se extraen a `Jersey.tsx` para no duplicar el SVG entre el editor y la vista nueva. |
 | Badges de MVP (⭐) y goleador (⚽) superpuestos a la camiseta en "Ver equipos" | Mostrar el resultado del partido aparte, sin cruzarlo con la vista de equipos | Pedido explícito del usuario: "reflejalo en la imagen de equipos" — conecta visualmente quién ganó cada reconocimiento con el equipo en el que jugó, sin tener que ir a leer el texto de `FutbolStatsForm` aparte. `FutbolTeamsSection` recibe `stats` como prop nueva (antes solo la tenía `FutbolStatsForm`). |
+| Cuarta variante de camiseta (`both`, trofeo + pelota) para quien es MVP y goleador a la vez | Que gane MVP y se pierda la pelota (decisión del 2026-09-29, cuando no había asset para ese caso) | El usuario generó las 4 camisetas (una por tipo) y las mandó para ese caso puntual (2026-10-09). Mismo mecanismo que `mvp`/`goleador`: `Jersey` cambia la camiseta entera, no superpone nada. La leyenda de abajo no cambia: ya muestra "🏆 MVP" y "⚽ Goleador" por separado. |
 
 ## 7. Futuro / fuera de alcance
 
@@ -279,6 +282,16 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-10-09: quien es MVP y goleador a la vez ya no pierde la pelota.
+  Hasta ahora `renderPlayer` hacía `isMvp ? "mvp" : isGoleador ?
+  "goleador" : undefined`, así que con la misma persona ganaba MVP (ver
+  la entrada de 2026-09-29) porque no había una camiseta con las dos
+  cosas. El usuario generó y mandó las 4 camisetas (una por tipo) con
+  trofeo y pelota: `public/futbol/jersey-{team1,team2,gk1,gk2}-both.webp`
+  (mismo pipeline que el resto de los badge: 360 px de ancho, WebP
+  calidad 85; el mapeo imagen → variante se verificó por muestreo de
+  color del torso). `JerseyBadge` suma `"both"` y `renderPlayer` lo
+  usa cuando `isMvp && isGoleador`.
 - 2026-09-30: fix — con "Ver equipos" o "Armar equipos" abierto, el
   botón atrás (físico en Android o del navegador) navegaba hacia atrás
   en la página en vez de cerrar el modal. Investigado a fondo: era un
@@ -322,7 +335,8 @@ Puntos que el SQL no explica por sí solo:
   pelota superpuestos) las mandó a propósito para esto. `Jersey` recibe
   un prop opcional `badge?: "mvp" | "goleador"` que cambia la camiseta
   entera por la versión con trofeo/pelota (si es MVP y goleador a la
-  vez, gana MVP); la fila de emoji reservada arriba de la camiseta se
+  vez, gana MVP — reemplazado el 2026-10-09 por la variante `both`, ver
+  arriba); la fila de emoji reservada arriba de la camiseta se
   elimina. (b) Cuando queda un solo
   defensor centrado (misma columna x=50% que el arquero), su nombre
   quedaba pegado/tapando el del arquero — se agrega `defYSingle` en
