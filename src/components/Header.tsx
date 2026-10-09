@@ -5,6 +5,7 @@ import { ShareButton } from "@/components/ShareButton";
 import { SectionsMenu } from "@/components/SectionsMenu";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Avatar } from "@/components/ui/Avatar";
+import { appVersion } from "@/lib/appVersion";
 
 export function Header({
   user,
@@ -22,12 +23,20 @@ export function Header({
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           {user && <SectionsMenu isAdmin={isAdmin} />}
-          <Link
-            href="/"
-            className="font-heading text-lg font-semibold tracking-tight text-foreground"
-          >
-            JAP<span className="text-brand">App</span>
-          </Link>
+          <div className="flex flex-col">
+            <Link
+              href="/"
+              className="font-heading text-lg font-semibold leading-none tracking-tight text-foreground"
+            >
+              JAP<span className="text-brand">App</span>
+            </Link>
+            <span
+              title={appVersion.title}
+              className="mt-0.5 text-[10px] font-medium leading-none tabular-nums text-foreground/40"
+            >
+              {appVersion.label}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <Link
