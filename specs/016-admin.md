@@ -237,6 +237,10 @@ completo. Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-10-09: el nombre visible dejó de ser algo que solo edita un admin:
+  cada persona puede editar el suyo desde `/perfil` (ver
+  `specs/008-alias-de-pago.md`). El form de admin de esta spec sigue
+  siendo la forma de editar el de *otra* persona.
 - 2026-09-18: sumada la sección `/comunicaciones` (solo admin) para
   mandar push a demanda a todo el grupo o a miembros elegidos — pedido
   explícito del usuario, sobre la infra de `specs/017-push-notifications.md`.
