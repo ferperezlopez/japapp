@@ -45,6 +45,16 @@ No hace falta ninguna policy de RLS nueva: `profiles` ya tenía (desde
 `using (id = auth.uid())`, y RLS en Postgres es por fila, no por columna
 — esa policy ya cubre escribir la columna nueva.
 
+Justamente porque RLS es por fila, esa policy por sí sola no limita qué
+columnas se pueden escribir: hasta 2026-10-09 el rol `authenticated`
+podía actualizar cualquier columna de su propia fila, incluida
+`is_admin` (un hueco de seguridad con el que cualquiera podía hacerse
+admin). Desde `0040_profiles_update_column_privileges.sql` el `UPDATE` de
+`authenticated` sobre `profiles` está acotado a `name`, `alias` y
+`avatar_url` — ver `specs/016-admin.md`, sección 3. Una columna nueva de
+`profiles` que el propio usuario deba poder editar hay que sumarla a ese
+`grant`, si no el update falla con `permission denied`.
+
 ## 4. Diseño / flujo
 
 1. `/perfil` (server component) trae el `profiles` row del usuario

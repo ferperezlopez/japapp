@@ -3,8 +3,9 @@
 - **Estado:** Implemented (parcial — ver sección 7, "Futuro")
 - **Rutas:** `/miembros` (extendida), `/perfil/[userId]` (extendida)
 - **Migraciones relacionadas:** `supabase/migrations/0023_admin_role.sql`,
-  `supabase/migrations/0025_admin_delete_any_guest.sql`
-- **Última actualización:** 2026-09-17
+  `supabase/migrations/0025_admin_delete_any_guest.sql`,
+  `supabase/migrations/0040_profiles_update_column_privileges.sql`
+- **Última actualización:** 2026-10-09
 
 ## 1. Resumen
 
@@ -113,6 +114,20 @@ completo. Puntos que el SQL no explica por sí solo:
   OR entre policies que el resto de esta spec. No se tocó `brought_by`
   (`0024_event_guests_brought_by.sql`): sigue siendo solo informativo,
   sin efecto en permisos.
+- `0040_profiles_update_column_privileges.sql` (2026-10-09) cierra un
+  hueco que existía desde `0023`: la policy "Un usuario puede actualizar
+  su propio perfil" (`0001_init.sql`) filtra por fila, no por columna, y
+  `0023` sumó `is_admin` sin restringirla — o sea que cualquier usuario
+  logueado podía hacerse admin con un `update profiles set is_admin =
+  true` directo a la API de Supabase usando su propia sesión (y todo el
+  gating de admin de la app se decide leyendo esa columna). Ahora el rol
+  `authenticated` solo tiene `UPDATE` sobre `name`, `alias` y
+  `avatar_url`, las únicas columnas que la app escribe desde una sesión
+  de usuario; `is_admin` solo se cambia por SQL o service role (como ya
+  se hizo en `0023`). Las policies de RLS siguen aplicando encima, así
+  que el admin sigue pudiendo editar el perfil de cualquiera (esas mismas
+  3 columnas). Se detectó al verificar los permisos para que cualquier
+  usuario pueda editar su nombre (`specs/008-alias-de-pago.md`).
 
 ## 4. Diseño / flujo
 
@@ -241,6 +256,10 @@ completo. Puntos que el SQL no explica por sí solo:
   cada persona puede editar el suyo desde `/perfil` (ver
   `specs/008-alias-de-pago.md`). El form de admin de esta spec sigue
   siendo la forma de editar el de *otra* persona.
+- 2026-10-09: migración `0040` — el rol `authenticated` pasa a poder
+  actualizar solo `name`, `alias` y `avatar_url` de `profiles`; antes
+  podía actualizar cualquier columna de su propia fila, incluida
+  `is_admin` (cualquiera podía hacerse admin). Ver sección 3.
 - 2026-09-18: sumada la sección `/comunicaciones` (solo admin) para
   mandar push a demanda a todo el grupo o a miembros elegidos — pedido
   explícito del usuario, sobre la infra de `specs/017-push-notifications.md`.
