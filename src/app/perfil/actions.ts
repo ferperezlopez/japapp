@@ -2,6 +2,33 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeDisplayName } from "@/lib/perfil/displayName";
+
+// A diferencia del alias (opcional), el nombre no puede quedar vacío: sin
+// nombre varias pantallas caen al email. La RLS "Un usuario puede
+// actualizar su propio perfil" (0001_init.sql) es la barrera real.
+export async function updateName(formData: FormData) {
+  const normalized = normalizeDisplayName(String(formData.get("name") ?? ""));
+  if ("error" in normalized) return { error: normalized.error };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ name: normalized.name })
+    .eq("id", user.id);
+
+  if (error) return { error: error.message };
+
+  // El nombre se muestra en toda la app (Header vía layout, Eventos, Gastos,
+  // Miembros, Fotos), no solo en /perfil.
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
 
 export async function updateAlias(formData: FormData) {
   const alias = String(formData.get("alias") ?? "").trim();

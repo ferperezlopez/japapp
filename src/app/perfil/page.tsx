@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { EditAliasForm } from "./EditAliasForm";
+import { EditNameForm } from "./EditNameForm";
 import { UploadAvatarForm } from "./UploadAvatarForm";
 import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
@@ -53,10 +54,8 @@ export default async function PerfilPage() {
           name={profile?.name ?? null}
           avatarUrl={profile?.avatar_url ?? null}
         />
-        <p className="mt-4 text-sm font-medium text-foreground">
-          {profile?.name ?? profile?.email}
-        </p>
-        <p className="text-xs text-foreground/50">{profile?.email}</p>
+        <EditNameForm defaultName={profile?.name ?? ""} />
+        <p className="mt-3 text-xs text-foreground/50">{profile?.email}</p>
       </div>
 
       <div className="mt-6">

@@ -1,0 +1,23 @@
+-- Cierra un hueco de seguridad preexistente: cualquier usuario logueado podía
+-- hacerse admin a sí mismo.
+--
+-- La policy "Un usuario puede actualizar su propio perfil" (0001_init.sql)
+-- filtra por FILA (id = auth.uid()), no por columna, y 0023_admin_role.sql
+-- sumó profiles.is_admin sin restringirla — así que, con su propia sesión,
+-- cualquiera podía mandar `update profiles set is_admin = true` directo a la
+-- API de Supabase. Todo el gating de admin de la app (/comunicaciones,
+-- impersonación, borrar fotos/invitados, email en la ficha de otro) se decide
+-- leyendo esa misma columna.
+--
+-- Se limita el UPDATE del rol authenticated a las únicas 3 columnas que la
+-- app escribe desde una sesión de usuario (name, alias, avatar_url — ver
+-- src/app/perfil/actions.ts; el resto de los usos de profiles son lecturas).
+-- Las policies de RLS siguen aplicando encima: cada usuario edita solo su
+-- fila y el admin (0023) la de cualquiera, pero ninguno puede tocar
+-- is_admin, email, id ni created_at. is_admin pasa a cambiarse solo por SQL
+-- o service role, como ya se hizo en la propia 0023.
+--
+-- No afecta a service_role, ni a handle_new_user (security definer, hace
+-- insert, no update), ni a los select.
+revoke update on public.profiles from authenticated;
+grant update (name, alias, avatar_url) on public.profiles to authenticated;
