@@ -5,7 +5,7 @@
   `/icon-192`, `/icon-512`, `/icon-512-maskable`, `/apple-icon.png`
 - **Migraciones relacionadas:** ninguna (solo estilo + configuración de
   Next.js, sin cambios de esquema ni de RLS)
-- **Última actualización:** 2026-08-26
+- **Última actualización:** 2026-10-09
 
 ## 1. Resumen
 
@@ -141,6 +141,26 @@ de Next.js (no van en `supabase/migrations/`):
 
 ## 8. Changelog
 
+- 2026-10-09: el `Header` muestra la versión de la app, en una línea chica
+  y apagada debajo del logo, para saber de un vistazo si se está usando la
+  última — pedido explícito del usuario. `package.json` dice `0.1.0` y
+  nunca cambia, así que la versión sale de los datos del deploy: Vercel
+  expone `VERCEL_GIT_COMMIT_SHA` y `VERCEL_GIT_COMMIT_MESSAGE` durante el
+  build, `next.config.ts` los reenvía al bundle (clave `env`, junto con la
+  hora del build) y `src/lib/appVersion.ts` arma la etiqueta: `v75` si el
+  mensaje del commit de producción es `Merge pull request #75 ...` (o un
+  squash `... (#75)`) — el mismo número que tiene el link de cada PR, así
+  después de mergear el PR #76 se espera ver `v76`—; si no (un preview,
+  un push directo), los 7 primeros caracteres del SHA; y si no llegan las
+  variables, `dev` en desarrollo o la hora del build en producción (si en
+  producción se ve una fecha en vez de `v76`, las variables de sistema de
+  Vercel no están llegando al build). El tooltip (`title`) suma el commit
+  y la hora del deploy. Como el layout raíz no se vuelve a renderizar en
+  las navegaciones del lado del cliente, muestra la versión con la que se
+  cargó la app: una PWA abierta desde hace días sigue mostrando la vieja
+  hasta recargar. No agrega ancho a la barra (la etiqueta va debajo del
+  logo y es más angosta que él) ni alto (la fila ya mide lo de los
+  botones de la derecha).
 - 2026-09-18: nombre de marca corregido de "JAPapp" a "JAPApp" en todo
   el texto visible de la app (`<title>`, manifest, About, compartir,
   notificaciones push, avisos de nuevo miembro) — pedido explícito del
