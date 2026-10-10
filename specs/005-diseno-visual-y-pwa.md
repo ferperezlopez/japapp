@@ -5,7 +5,7 @@
   `/icon-192`, `/icon-512`, `/icon-512-maskable`, `/apple-icon.png`
 - **Migraciones relacionadas:** ninguna (solo estilo + configuración de
   Next.js, sin cambios de esquema ni de RLS)
-- **Última actualización:** 2026-10-09
+- **Última actualización:** 2026-10-10
 
 ## 1. Resumen
 
@@ -141,6 +141,12 @@ de Next.js (no van en `supabase/migrations/`):
 
 ## 8. Changelog
 
+- 2026-10-10: navegación a la sección nueva **JAPArcade** (ver
+  `specs/020-japarcade-gusty-snake.md`): ítem "JAPArcade" en el menú ☰
+  (`SectionsMenu`, después de Miembros, con los tokens `brand`), tarjeta en
+  la landing (`FEATURES` de `src/app/page.tsx`) y `/arcade` agregada a
+  `PROTECTED_PREFIXES` (`src/lib/supabase/proxy.ts`), para que sin sesión
+  redirija a `/login` como el resto de las secciones.
 - 2026-10-09: el `Header` muestra la versión de la app, en una línea chica
   y apagada debajo del logo, para saber de un vistazo si se está usando la
   última — pedido explícito del usuario. `package.json` dice `0.1.0` y
