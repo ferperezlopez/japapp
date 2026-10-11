@@ -365,11 +365,16 @@ Del juego en general:
       tarjeta de la landing y `/arcade` a las rutas protegidas).
 - [x] Sin timers ni listeners colgados al salir de la página (saldo de
       listeners igual al de antes de entrar; sin animaciones pendientes).
-- [ ] Guardar una partida con una **sesión real** de punta a punta desde el
-      entorno de desarrollo (no hay credenciales de usuario): queda cubierto
-      por los tests de validación y las pruebas de la base; se confirma en
-      producción jugando una partida, porque los previews no guardan (ver la
-      sección 4).
+- [x] El servidor valida partidas **reales del navegador**, no solo del bot
+      de los tests: 10 partidas jugadas en el runner del navegador, con
+      semillas al azar, la config y el tiempo reales (chocando contra el
+      cuerpo y la pared, 6 tocando el queso y una abandonada) pasaron por
+      `validateSubmission`, el mismo código de la server action, con el
+      puntaje recalculado igual y la duración declarada por encima del mínimo.
+- [ ] Guardar una partida de la **versión 2** en producción: el guardado de la
+      versión 1 ya está confirmado (hay partidas guardadas en `arcade_scores`
+      por un usuario real), así que solo falta jugar una partida después del
+      deploy. Los previews no guardan (ver la sección 4).
 
 ## 6. Decisiones y tradeoffs
 
