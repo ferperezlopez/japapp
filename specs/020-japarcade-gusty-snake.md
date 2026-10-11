@@ -177,6 +177,16 @@ over. Una partida en 0 no se guarda.
 Con una versión vieja de la app abierta (otra `version`), el servidor
 responde "Hay una versión nueva del juego. Recargá la app...".
 
+**Los previews de Vercel no guardan puntajes.** El guardado necesita
+`SUPABASE_SERVICE_ROLE_KEY`, y hoy esa variable está cargada **solo en
+Production**: en un preview se puede jugar y ver los rankings, pero al
+terminar la partida aparece "No pudimos guardar el puntaje" (el motivo real
+queda en el log del servidor; `saveArcadeScore` no lanza, devuelve el error).
+Dejarla solo en Production es razonable: salta RLS y los previews corren
+código de ramas todavía sin revisar. Para probar el guardado de punta a punta
+antes de mergear habría que cargarla también en Preview (lo decide quien
+administra Vercel).
+
 ### Assets pendientes (provisorios hoy)
 
 Las rutas son configurables en `src/lib/arcade/gustySnake/assets.ts`. Hoy los
@@ -236,7 +246,8 @@ perfil).
 - [ ] Guardar una partida con una **sesión real** (no se pudo probar de
       punta a punta desde el entorno de desarrollo: queda cubierto por los
       tests de validación y las pruebas de la base; se confirma en
-      producción jugando una partida).
+      producción jugando una partida, porque los previews no guardan: ver
+      la sección 4).
 - [ ] Reemplazar los tres assets provisorios por el arte definitivo.
 
 ## 6. Decisiones y tradeoffs
@@ -271,6 +282,10 @@ perfil).
 
 ## 8. Changelog
 
+- 2026-10-11: `saveArcadeScore` ya no lanza si falta la clave de service role
+  o se cae la red: devuelve el error y la acción responde con su mensaje
+  genérico. Se documenta que los previews de Vercel no guardan puntajes
+  (la clave está solo en Production).
 - 2026-10-10: creada e implementada. Primera versión de JAPArcade con Gusty
   Snake, rankings semanal e histórico y validación de partidas en el
   servidor. Imágenes provisorias (ver sección 4).

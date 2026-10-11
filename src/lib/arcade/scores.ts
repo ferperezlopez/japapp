@@ -26,27 +26,35 @@ export type SaveScoreResult =
 /**
  * Guarda una partida YA VALIDADA. Es idempotente: reintentar con el mismo
  * `client_run_id` (por ejemplo tras un corte de red) no duplica la fila.
+ *
+ * Nunca lanza: si falta la clave de service role (en Vercel está cargada solo
+ * en Production, así que en un preview falta) o se cae la red, devuelve
+ * `{ ok: false }` y la acción responde con su error genérico.
  */
 export async function saveArcadeScore(
   gameId: string,
   userId: string,
   run: ValidatedRun,
 ): Promise<SaveScoreResult> {
-  const admin = createServiceRoleClient();
-  const { error } = await admin.from("arcade_scores").insert({
-    game_id: gameId,
-    user_id: userId,
-    score: run.score,
-    duration_ms: run.durationMs,
-    ticks: run.ticks,
-    config_version: run.replay.v,
-    client_run_id: run.clientRunId,
-    replay: run.replay,
-  });
+  try {
+    const admin = createServiceRoleClient();
+    const { error } = await admin.from("arcade_scores").insert({
+      game_id: gameId,
+      user_id: userId,
+      score: run.score,
+      duration_ms: run.durationMs,
+      ticks: run.ticks,
+      config_version: run.replay.v,
+      client_run_id: run.clientRunId,
+      replay: run.replay,
+    });
 
-  if (!error) return { ok: true, inserted: true };
-  if (error.code === UNIQUE_VIOLATION) return { ok: true, inserted: false };
-  return { ok: false, error: error.message };
+    if (!error) return { ok: true, inserted: true };
+    if (error.code === UNIQUE_VIOLATION) return { ok: true, inserted: false };
+    return { ok: false, error: error.message };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "error desconocido" };
+  }
 }
 
 /**

@@ -9,6 +9,7 @@ import { playWithBot } from "@/lib/arcade/gustySnake/testing";
 // reemplazadas por dobles. Es la parte crítica de la seguridad del ranking.
 const mocks = vi.hoisted(() => ({
   insert: vi.fn(),
+  createAdmin: vi.fn(),
   getUser: vi.fn(),
   rpc: vi.fn(),
   personalBest: { value: 0 },
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/supabase/serviceRole", () => ({
-  createServiceRoleClient: () => ({ from: () => ({ insert: mocks.insert }) }),
+  createServiceRoleClient: () => mocks.createAdmin(),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
@@ -76,6 +77,7 @@ beforeEach(() => {
   mocks.personalBest.value = 0;
   mocks.getUser.mockResolvedValue({ data: { user: USER } });
   mocks.insert.mockResolvedValue({ error: null });
+  mocks.createAdmin.mockImplementation(() => ({ from: () => ({ insert: mocks.insert }) }));
   mocks.rpc.mockImplementation(async (_name: string, args: { p_period: string }) => ({
     data:
       args.p_period === "weekly"
@@ -188,6 +190,23 @@ describe("submitGustyScore", () => {
 
   it("si la base falla al insertar, devuelve un error genérico (sin filtrar el de Postgres)", async () => {
     mocks.insert.mockResolvedValue({ error: { code: "XX000", message: "detalle interno de postgres" } });
+    const result = await submitGustyScore(validSubmission());
+    expect(result).toEqual({ ok: false, error: "No pudimos guardar el puntaje. Probá de nuevo." });
+  });
+
+  it("sin clave de service role (un preview) devuelve el error genérico en vez de reventar", async () => {
+    mocks.createAdmin.mockImplementation(() => {
+      throw new Error("supabaseKey is required.");
+    });
+    const result = await submitGustyScore(validSubmission());
+    expect(result).toEqual({ ok: false, error: "No pudimos guardar el puntaje. Probá de nuevo." });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    // El motivo real queda en el log del servidor, no en la respuesta.
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it("si el insert se cae por la red (rechaza), devuelve el error genérico", async () => {
+    mocks.insert.mockRejectedValue(new Error("fetch failed"));
     const result = await submitGustyScore(validSubmission());
     expect(result).toEqual({ ok: false, error: "No pudimos guardar el puntaje. Probá de nuevo." });
   });
