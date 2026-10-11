@@ -1,4 +1,4 @@
-// El "reloj" de Gusty Snake en el navegador: maneja el bucle de animación, la
+// El "reloj" de Gusty Glotón en el navegador: maneja el bucle de animación, la
 // cuenta regresiva, la pausa (incluida la automática al perder visibilidad) y
 // le dice a la sesión CUÁNDO mover la serpiente. Las reglas están en el motor
 // (engine/session) y el dibujo en render.ts; React solo escucha los eventos.
@@ -8,8 +8,9 @@
 // el juego no depende de setInterval (que se desfasa) y pausar es simplemente
 // no sumar: el estado queda congelado tal cual, incluso a mitad de un paso.
 
+import type { HeadExpression } from "./assets";
 import { GUSTY_SNAKE_CONFIG, type GustySnakeConfig } from "./config";
-import type { Direction } from "./engine";
+import type { Direction, GameOverReason } from "./engine";
 import { BoardRenderer, type Frame, type RenderAssets } from "./render";
 import type { Replay } from "./replay";
 import { DEFAULT_SCENARIO, type Scenario } from "./scenarios";
@@ -24,8 +25,10 @@ export interface RunResult {
   score: number;
   /** Tiempo de juego efectivo (sin pausas ni cuenta regresiva), en ms. */
   durationMs: number;
-  /** true si terminó chocando; false si se abandonó. */
+  /** true si terminó (chocó o tocó el queso); false si se abandonó. */
   over: boolean;
+  /** Por qué terminó (null si se abandonó): decide el mensaje del game over. */
+  overReason: GameOverReason | null;
 }
 
 export interface RunnerEvents {
@@ -41,7 +44,17 @@ const COUNTDOWN_STEP_MS = 500;
 /** Una pestaña dormida no hace "saltar" a la serpiente al despertar. */
 const MAX_FRAME_MS = 100;
 const MAX_TICKS_PER_FRAME = 4;
+/** Duración (ms) del destello al morir, y del efecto verdoso si fue por el queso. */
 const DEATH_FLASH_MS = 450;
+const CHEESE_FX_MS = 700;
+/** La cabeza se desliza a la celda del queso en este tiempo en vez de «saltar». */
+const DEATH_STEP_MS = 110;
+/** Cuánto dura la cara feliz después de comer. */
+const HAPPY_MS = 400;
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
 
 function randomSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
@@ -71,8 +84,16 @@ export class GustySnakeRunner {
   private elapsedMs = 0;
   private countdownLeftMs = 0;
   private countdownShown = 0;
+  /**
+   * Reloj visual (ms): solo avanza mientras el bucle corre en la cuenta
+   * regresiva o jugando, así que la cara feliz, los pulsos y el queso titilando
+   * se congelan junto con la pausa, sin timers propios.
+   */
+  private visualClockMs = 0;
   private foodSince = 0;
+  private happyStartMs = Number.NEGATIVE_INFINITY;
   private deathAt = 0;
+  private reducedMotion = false;
   private destroyed = false;
 
   constructor(
@@ -82,8 +103,8 @@ export class GustySnakeRunner {
     scenario: Scenario = DEFAULT_SCENARIO,
   ) {
     this.renderer = new BoardRenderer(canvas, config, scenario);
-    this.renderer.reducedMotion =
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    this.reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    this.renderer.reducedMotion = this.reducedMotion;
     this.preview = new GustySession(config, 1);
 
     // Pausa automática al perder visibilidad (cambio de pestaña, app en
@@ -102,7 +123,8 @@ export class GustySnakeRunner {
     this.accumulatorMs = 0;
     this.elapsedMs = 0;
     this.deathAt = 0;
-    this.foodSince = performance.now();
+    this.foodSince = this.visualClockMs;
+    this.happyStartMs = Number.NEGATIVE_INFINITY;
     this.events.onScoreChange(0);
     this.beginCountdown();
   }
@@ -153,9 +175,8 @@ export class GustySnakeRunner {
     return size;
   }
 
-  setAssets(assets: RenderAssets, clipHeadToCircle: boolean): void {
+  setAssets(assets: RenderAssets): void {
     if (this.destroyed) return;
-    this.renderer.clipHeadToCircle = clipHeadToCircle;
     this.renderer.setAssets(assets);
     this.drawNow();
   }
@@ -211,16 +232,26 @@ export class GustySnakeRunner {
     const dt = Math.min(Math.max(now - this.lastFrame, 0), MAX_FRAME_MS);
     this.lastFrame = now;
 
+    if (this.phase === "countdown" || this.phase === "playing") this.visualClockMs += dt;
     if (this.phase === "countdown") this.advanceCountdown(dt);
     else if (this.phase === "playing") this.advancePlaying(dt, now);
 
     this.renderer.draw(this.buildFrame(now));
 
-    const flashing = this.phase === "over" && now - this.deathAt < DEATH_FLASH_MS;
-    if (this.phase === "countdown" || this.phase === "playing" || flashing) {
+    if (this.phase === "countdown" || this.phase === "playing" || this.isAnimatingDeath(now)) {
       this.rafId = requestAnimationFrame(this.frame);
     }
   };
+
+  /** Mientras dura el destello (o el efecto del queso) hay que seguir dibujando. */
+  private isAnimatingDeath(now: number): boolean {
+    if (this.phase !== "over" || !this.session) return false;
+    return now - this.deathAt < this.deathFxMs();
+  }
+
+  private deathFxMs(): number {
+    return this.session?.state.overReason === "cheese" ? CHEESE_FX_MS : DEATH_FLASH_MS;
+  }
 
   private advanceCountdown(dt: number): void {
     this.countdownLeftMs -= dt;
@@ -252,7 +283,11 @@ export class GustySnakeRunner {
       const scoreBefore = session.state.score;
       session.tick();
       ticks++;
-      if (session.state.ate) this.foodSince = now;
+      // La comida nueva aparece en el momento en que se come la anterior; la
+      // cara feliz, en cambio, empieza cuando la cabeza (que se ve un
+      // movimiento atrasada) llega a la comida.
+      if (session.state.ate) this.foodSince = this.visualClockMs;
+      if (session.previousState.ate) this.happyStartMs = this.visualClockMs;
       if (session.state.score !== scoreBefore) this.events.onScoreChange(session.state.score);
     }
 
@@ -272,23 +307,39 @@ export class GustySnakeRunner {
       score: session.state.score,
       durationMs: Math.round(this.elapsedMs),
       over,
+      overReason: over ? session.state.overReason : null,
     };
   }
 
   private buildFrame(now: number): Frame {
     const session = this.session ?? this.preview;
+    const over = this.phase === "over";
+    const sinceDeath = over ? now - this.deathAt : 0;
+
     // Mientras se juega (o está en pausa) se dibuja a mitad de camino entre el
-    // estado anterior y el actual; en cualquier otro momento, el estado final.
-    const moving = this.session !== null && this.phase !== "over";
-    const progress = moving ? Math.min(1, this.accumulatorMs / session.intervalMs) : 1;
+    // estado anterior y el actual; al morir contra el queso la cabeza termina
+    // de deslizarse a su celda; en cualquier otro momento, el estado final.
+    let progress = 1;
+    if (this.session !== null && !over) {
+      progress = Math.min(1, this.accumulatorMs / session.intervalMs);
+    } else if (over && session.state.overReason === "cheese" && !this.reducedMotion) {
+      progress = clamp01(sinceDeath / DEATH_STEP_MS);
+    }
+
+    const sinceHappy = this.visualClockMs - this.happyStartMs;
+    let expression: HeadExpression = "normal";
+    if (over) expression = "dead";
+    else if (this.session !== null && sinceHappy >= 0 && sinceHappy < HAPPY_MS) expression = "happy";
+
     return {
       state: session.state,
       previous: session.previousState,
       progress,
-      time: now,
-      foodAge: this.session ? now - this.foodSince : Number.POSITIVE_INFINITY,
-      deathFlash:
-        this.phase === "over" ? Math.max(0, 1 - (now - this.deathAt) / DEATH_FLASH_MS) : 0,
+      time: this.visualClockMs,
+      foodAge: this.session ? this.visualClockMs - this.foodSince : Number.POSITIVE_INFINITY,
+      expression,
+      happyT: clamp01(sinceHappy / HAPPY_MS),
+      deathFlash: over ? Math.max(0, 1 - sinceDeath / this.deathFxMs()) : 0,
     };
   }
 
