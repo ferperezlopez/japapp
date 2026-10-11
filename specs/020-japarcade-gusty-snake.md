@@ -273,7 +273,7 @@ juego, como la ruta) y son WebP con transparencia real:
 | `head-normal.webp`, `head-happy.webp`, `head-dead.webp` | Las tres caras de Gusty | ≤ 256 px |
 | `food-olive.webp`, `food-empanada.webp`, `food-drumstick.webp` | Las comidas | ≤ 160 px |
 | `cheese.webp` | El queso | 160 × 146 |
-| `cover.webp` | Portada de JAPArcade (16:9), armada con los sprites sobre el verde del tablero | 960 × 540 |
+| `cover.webp` | Portada de JAPArcade (16:9): solo el logo, sobre el verde del tablero | 960 × 540 |
 
 **Cómo se prepararon** (la lámina y el script no están en el repo):
 
