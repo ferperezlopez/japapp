@@ -1,24 +1,40 @@
-// Dibujo de Gusty Snake en un <canvas> 2D. Solo dibuja: no sabe de reglas, de
-// tiempo ni de React; recibe el estado del motor y un progreso (0–1) para
+// Dibujo de Gusty Glotón en un <canvas> 2D. Solo dibuja: no sabe de reglas, de
+// tiempo real ni de React; recibe el estado del motor y un progreso (0–1) para
 // animar el paso de un movimiento al siguiente.
 //
 // El motor avanza a saltos de una celda; para que se vea fluido la serpiente
 // se dibuja interpolada entre el estado anterior y el actual. Eso hace que lo
 // que se ve vaya un movimiento "atrasado" respecto de la lógica, lo cual juega
 // a favor: la cabeza se ve llegar a la última celda antes de morir en vez de
-// meterse en la pared.
+// meterse en la pared. TODA la animación es visual: las colisiones, los
+// puntos y el queso se deciden en la grilla (engine.ts).
 
-import type { GustySnakeConfig } from "./config";
-import { GUSTY_SNAKE_HEAD_ORIENTATION } from "./assets";
+import { GUSTY_SNAKE_HEAD_ORIENTATION, type FaceBox, type HeadExpression } from "./assets";
+import { bodyPoints } from "./bodyPath";
+import type { FoodKind, GustySnakeConfig } from "./config";
 import type { Direction, GameState, Point } from "./engine";
 import type { Scenario } from "./scenarios";
+import { intervalForScore } from "./timing";
+
+export interface HeadSprite {
+  image: HTMLImageElement;
+  /** Dónde está la cara dentro del sprite (fracciones 0–1). */
+  face: FaceBox;
+}
 
 export interface RenderAssets {
-  head: HTMLImageElement | null;
-  food: HTMLImageElement | null;
+  heads: Record<HeadExpression, HeadSprite | null>;
+  foods: Record<FoodKind, HTMLImageElement | null>;
+  cheese: HTMLImageElement | null;
   /** Fondo opcional del escenario. */
   background?: HTMLImageElement | null;
 }
+
+export const NO_ASSETS: RenderAssets = {
+  heads: { normal: null, happy: null, dead: null },
+  foods: { olive: null, empanada: null, drumstick: null },
+  cheese: null,
+};
 
 export interface Frame {
   state: GameState;
@@ -26,20 +42,32 @@ export interface Frame {
   previous: GameState;
   /** Avance hacia el próximo movimiento, de 0 a 1. */
   progress: number;
-  /** Reloj en milisegundos (para la pulsación de la patita). */
+  /** Reloj visual en milisegundos: solo corre mientras se juega (pulsaciones). */
   time: number;
-  /** Milisegundos desde que apareció la patita actual. */
+  /** Milisegundos (visuales) desde que apareció la comida actual. */
   foodAge: number;
-  /** Intensidad del destello rojo al morir, de 0 a 1. */
+  /** Qué cara pone Gusty. */
+  expression: HeadExpression;
+  /** Avance (0–1) de la cara feliz: el rebote de la cabeza y la hinchazón del cuerpo. */
+  happyT: number;
+  /** Intensidad (0–1) del destello al morir. */
   deathFlash: number;
 }
 
 const POP_IN_MS = 240;
 const PULSE_PERIOD_MS = 1100;
-const HEAD_SIZE_CELLS = 1.6;
-const FOOD_SIZE_CELLS = 1.18;
+const FOOD_BOX_CELLS = 1.22;
+const CHEESE_BOX_CELLS = 1.3;
+const BODY_WIDTH_CELLS = 0.78;
+const HEAD_FACE_CELLS = 1.5;
+/** Cuánto más ancho se pone el cuerpo al comer (hinchazón elástica). */
+const SWELL = 0.1;
+const CHEESE_POP_MS = 260;
+/** En el último tramo de su vida el queso titila y se achica hasta desaparecer. */
+const CHEESE_BLINK_MS = 1000;
+const CHEESE_FADE_MS = 240;
 
-const TILT_RADIANS = (10 * Math.PI) / 180;
+const TILT_RADIANS = (9 * Math.PI) / 180;
 const ROTATION: Record<Direction, number> = {
   up: 0,
   right: Math.PI / 2,
@@ -47,8 +75,8 @@ const ROTATION: Record<Direction, number> = {
   left: (3 * Math.PI) / 2,
 };
 
-function lerp(a: Point, b: Point, t: number): Point {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 /** Entra con un pequeño rebote. */
@@ -61,14 +89,16 @@ function easeOutBack(t: number): number {
 export class BoardRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private background: HTMLCanvasElement | null = null;
+  /** Lienzo auxiliar para teñir la cara (solo al morir por el queso). */
+  private tint: HTMLCanvasElement | null = null;
   private dpr = 1;
   private cell = 0;
+  /** Último lado (1 derecha, -1 izquierda) al que miró: al subir o bajar lo conserva. */
+  private facing: 1 | -1 = 1;
 
-  assets: RenderAssets = { head: null, food: null };
-  /** Con "reducir movimiento" no hay pulsación ni rebote de la patita. */
+  assets: RenderAssets = NO_ASSETS;
+  /** Con "reducir movimiento" no hay pulsaciones, rebotes ni aparición animada. */
   reducedMotion = false;
-  /** true si la imagen de la cabeza es una foto cuadrada que se recorta en círculo. */
-  clipHeadToCircle = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -99,7 +129,10 @@ export class BoardRenderer {
     this.canvas.height = Math.round(height * dpr);
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
+    // Cambiar el tamaño del canvas reinicia su contexto.
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = "high";
     this.background = null; // se vuelve a armar en el próximo dibujo
     return { width, height };
   }
@@ -120,10 +153,15 @@ export class BoardRenderer {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     this.drawFood(frame);
+    this.drawCheese(frame);
     this.drawSnake(frame);
 
     if (frame.deathFlash > 0) {
-      ctx.fillStyle = `rgba(220, 38, 38, ${0.4 * frame.deathFlash})`;
+      // Rojo al chocar; verdoso al comerse el queso.
+      const byCheese = frame.state.overReason === "cheese";
+      ctx.fillStyle = byCheese
+        ? `rgba(132, 204, 22, ${0.34 * frame.deathFlash})`
+        : `rgba(220, 38, 38, ${0.4 * frame.deathFlash})`;
       ctx.fillRect(0, 0, this.config.cols * this.cell, this.config.rows * this.cell);
     }
   }
@@ -174,150 +212,333 @@ export class BoardRenderer {
     return layer;
   }
 
-  // ── Patita de pollo ──
+  // ── Comida ──
   private drawFood({ state, previous, progress, time, foodAge }: Frame) {
-    // La patita que se acaba de comer se achica mientras la cabeza llega (el
+    // La comida que se acaba de comer se achica mientras la cabeza llega (el
     // motor ya la sacó, pero lo que se ve va un movimiento atrasado).
     if (state.ate && previous.food) {
-      this.drawDrumstick(previous.food, Math.max(0, 1 - progress * 1.25));
+      this.drawFoodSprite(previous.food.kind, previous.food, Math.max(0, 1 - progress * 1.25));
     }
     if (state.food) {
       const entering = this.reducedMotion ? 1 : easeOutBack(Math.min(1, foodAge / POP_IN_MS));
       const pulse = this.reducedMotion
         ? 1
-        : 1 + 0.07 * Math.sin((time / PULSE_PERIOD_MS) * Math.PI * 2);
-      this.drawDrumstick(state.food, entering * pulse);
+        : 1 + 0.06 * Math.sin((time / PULSE_PERIOD_MS) * Math.PI * 2);
+      this.drawFoodSprite(state.food.kind, state.food, entering * pulse);
     }
   }
 
-  private drawDrumstick(cellPoint: Point, scale: number) {
+  private drawFoodSprite(kind: FoodKind, cellPoint: Point, scale: number) {
     if (scale <= 0) return;
     const { ctx, cell } = this;
     const cx = (cellPoint.x + 0.5) * cell;
     const cy = (cellPoint.y + 0.5) * cell;
-    const size = cell * FOOD_SIZE_CELLS * scale;
+    const box = cell * FOOD_BOX_CELLS * scale;
 
-    const image = this.assets.food;
+    const image = this.assets.foods[kind];
     if (image && image.naturalWidth > 0) {
-      ctx.drawImage(image, cx - size / 2, cy - size / 2, size, size);
+      // Entra entera en la caja sin deformarse, centrada en su celda.
+      const fit = box / Math.max(image.naturalWidth, image.naturalHeight);
+      const width = image.naturalWidth * fit;
+      const height = image.naturalHeight * fit;
+      ctx.drawImage(image, cx - width / 2, cy - height / 2, width, height);
       return;
     }
+    this.drawFoodFallback(kind, cx, cy, box);
+  }
 
-    // Respaldo vectorial (si la imagen no cargó): una patita simple.
+  /** Respaldo vectorial (si la imagen no cargó): una forma simple de cada comida. */
+  private drawFoodFallback(kind: FoodKind, cx: number, cy: number, size: number) {
+    const { ctx } = this;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(-Math.PI / 4);
-    ctx.fillStyle = "#c8741f";
-    ctx.beginPath();
-    ctx.ellipse(0, -size * 0.12, size * 0.27, size * 0.33, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#f5ecd7";
-    ctx.fillRect(-size * 0.06, size * 0.1, size * 0.12, size * 0.3);
-    ctx.beginPath();
-    ctx.arc(-size * 0.09, size * 0.43, size * 0.09, 0, Math.PI * 2);
-    ctx.arc(size * 0.09, size * 0.43, size * 0.09, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.lineWidth = Math.max(1, size * 0.07);
+    ctx.strokeStyle = "#1a1208";
+    if (kind === "olive") {
+      ctx.fillStyle = "#7a9a12";
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#d62828";
+      ctx.beginPath();
+      ctx.ellipse(-size * 0.1, -size * 0.1, size * 0.14, size * 0.1, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind === "empanada") {
+      ctx.fillStyle = "#e8a22c";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, size * 0.46, size * 0.3, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.rotate(-Math.PI / 5);
+      ctx.fillStyle = "#e88a1a";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, size * 0.46, size * 0.24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
-  // ── Serpiente: cuerpo como un tubo redondeado + cabeza con la cara de Gusty ──
-  private drawSnake({ state, previous, progress }: Frame) {
+  // ── Queso: obstáculo mortal. Entra con rebote, late en rojo y titila al irse. ──
+  private drawCheese({ state, progress, time }: Frame) {
+    const cheese = state.cheese;
+    if (!cheese) return;
+    const { ctx, cell } = this;
+
+    // Tiempo de juego "ahora": el del motor más lo que va del paso actual. Una
+    // vez terminada la partida el queso se queda quieto, tal como estaba.
+    const playing = state.status === "running";
+    const interval = intervalForScore(state.score, this.config);
+    const gameNow = state.clockMs + (playing ? progress * interval : 0);
+    const age = gameNow - cheese.spawnedAtMs;
+    const remaining = playing ? cheese.expiresAtMs - gameNow : Number.POSITIVE_INFINITY;
+
+    const pop = this.reducedMotion ? 1 : easeOutBack(clamp01(age / CHEESE_POP_MS));
+    const fade = clamp01(remaining / CHEESE_FADE_MS);
+    const blinking = remaining < CHEESE_BLINK_MS && !this.reducedMotion;
+    const blink = blinking && Math.floor(time / 110) % 2 === 1 ? 0.4 : 1;
+    const alpha = blink * fade;
+    const scale = pop * (0.35 + 0.65 * fade);
+    if (alpha <= 0 || scale <= 0) return;
+
+    const cx = (cheese.x + 0.5) * cell;
+    const cy = (cheese.y + 0.5) * cell;
+    const beat = this.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(time / 170);
+
+    // Aura de peligro: un brillo rojo y un aro que late.
+    const glow = ctx.createRadialGradient(cx, cy, cell * 0.2, cx, cy, cell * 1.3 * scale);
+    glow.addColorStop(0, `rgba(239, 68, 68, ${0.42 * alpha})`);
+    glow.addColorStop(1, "rgba(239, 68, 68, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, cell * 1.3 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(248, 113, 113, ${(0.45 + 0.3 * beat) * alpha})`;
+    ctx.lineWidth = Math.max(1.5, cell * 0.08);
+    ctx.beginPath();
+    ctx.arc(cx, cy, cell * (0.8 + 0.1 * beat) * scale, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const image = this.assets.cheese;
+    ctx.globalAlpha = alpha;
+    if (image && image.naturalWidth > 0) {
+      const fit = (cell * CHEESE_BOX_CELLS * scale) / Math.max(image.naturalWidth, image.naturalHeight);
+      const width = image.naturalWidth * fit;
+      const height = image.naturalHeight * fit;
+      ctx.drawImage(image, cx - width / 2, cy - height / 2, width, height);
+    } else {
+      this.drawCheeseFallback(cx, cy, cell * CHEESE_BOX_CELLS * scale);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private drawCheeseFallback(cx: number, cy: number, size: number) {
+    const { ctx } = this;
+    ctx.fillStyle = "#f7c31f";
+    ctx.strokeStyle = "#1a1208";
+    ctx.lineWidth = Math.max(1, size * 0.07);
+    ctx.beginPath();
+    ctx.moveTo(cx - size * 0.45, cy + size * 0.3);
+    ctx.lineTo(cx + size * 0.45, cy + size * 0.3);
+    ctx.lineTo(cx + size * 0.45, cy - size * 0.05);
+    ctx.lineTo(cx - size * 0.45, cy - size * 0.35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // ── Serpiente: un cuerpo continuo y redondeado + la cabeza con la cara de Gusty ──
+  private drawSnake(frame: Frame) {
+    const points = bodyPoints(frame.previous, frame.state, frame.progress);
+    this.drawBody(points, frame);
+    this.drawHead(points[0], frame);
+  }
+
+  /**
+   * El cuerpo es UN solo trazado que pasa por el centro de las celdas, así que
+   * no tiene uniones entre segmentos y mantiene siempre el mismo grosor. Los
+   * giros de 90° salen redondeados (curvas cuadráticas con las celdas como
+   * puntos de control). Se pinta en capas, de afuera hacia adentro, con las
+   * claras corridas hacia arriba-izquierda para dar volumen.
+   */
+  private drawBody(points: Point[], frame: Frame) {
     const { ctx, cell, scenario } = this;
-    const head = lerp(previous.snake[0], state.snake[0], progress);
-    const tail = lerp(
-      previous.snake[previous.snake.length - 1],
-      state.snake[state.snake.length - 1],
-      progress,
-    );
-    // Cabeza interpolada → resto de las celdas del estado actual → cola
-    // interpolada. La cola que se va corriendo queda alineada con su celda.
-    const points = [head, ...state.snake.slice(1), tail];
+    const palette = scenario.snake;
+    const gulp =
+      this.reducedMotion || frame.expression !== "happy" ? 0 : Math.sin(Math.PI * frame.happyT);
+    const width = cell * BODY_WIDTH_CELLS * (1 + SWELL * gulp);
+    const path = this.buildBodyPath(points);
 
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.beginPath();
-    points.forEach((point, index) => {
-      const x = (point.x + 0.5) * cell;
-      const y = (point.y + 0.5) * cell;
-      if (index === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-
-    const bodyWidth = cell * 0.72;
-    ctx.strokeStyle = scenario.snake.bodyEdge;
-    ctx.lineWidth = bodyWidth + Math.max(2, cell * 0.12);
-    ctx.stroke();
-    ctx.strokeStyle = scenario.snake.body;
-    ctx.lineWidth = bodyWidth;
-    ctx.stroke();
-    ctx.strokeStyle = scenario.snake.bodyHighlight;
-    ctx.lineWidth = bodyWidth * 0.34;
-    ctx.stroke();
-
-    this.drawHead(head, state.direction);
+    ctx.strokeStyle = palette.outline;
+    ctx.lineWidth = width + Math.max(2, cell * 0.15);
+    ctx.stroke(path);
+    ctx.strokeStyle = palette.shade;
+    ctx.lineWidth = width;
+    ctx.stroke(path);
+    this.strokeShifted(path, palette.base, width * 0.8, -width * 0.06, -width * 0.08);
+    this.strokeShifted(path, palette.light, width * 0.5, -width * 0.11, -width * 0.15);
+    this.strokeShifted(path, palette.shine, width * 0.15, -width * 0.19, -width * 0.25);
   }
 
-  private drawHead(position: Point, direction: Direction) {
+  private strokeShifted(path: Path2D, color: string, lineWidth: number, dx: number, dy: number) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.translate(dx, dy);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke(path);
+    ctx.restore();
+  }
+
+  /** Trazado suavizado por puntos medios: pasa por los extremos y redondea las esquinas. */
+  private buildBodyPath(points: Point[]): Path2D {
+    const { cell } = this;
+    const px = (point: Point) => (point.x + 0.5) * cell;
+    const py = (point: Point) => (point.y + 0.5) * cell;
+    const path = new Path2D();
+
+    path.moveTo(px(points[0]), py(points[0]));
+    if (points.length === 1) {
+      path.lineTo(px(points[0]), py(points[0])); // un punto: se ve como un círculo
+      return path;
+    }
+    if (points.length > 2) {
+      path.lineTo((px(points[0]) + px(points[1])) / 2, (py(points[0]) + py(points[1])) / 2);
+      for (let i = 1; i < points.length - 1; i++) {
+        path.quadraticCurveTo(
+          px(points[i]),
+          py(points[i]),
+          (px(points[i]) + px(points[i + 1])) / 2,
+          (py(points[i]) + py(points[i + 1])) / 2,
+        );
+      }
+    }
+    const last = points[points.length - 1];
+    path.lineTo(px(last), py(last));
+    return path;
+  }
+
+  private drawHead(position: Point, frame: Frame) {
     const { ctx, cell } = this;
+    const { state, expression } = frame;
+    const direction = state.direction;
     const cx = (position.x + 0.5) * cell;
     const cy = (position.y + 0.5) * cell;
-    const size = cell * HEAD_SIZE_CELLS;
 
-    // Disco claro detrás: la cabeza tiene que destacar del cuerpo verde.
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.5, 0, Math.PI * 2);
-    ctx.fill();
+    if (direction === "right") this.facing = 1;
+    else if (direction === "left") this.facing = -1;
+
+    const byCheese = state.status === "over" && state.overReason === "cheese";
+    const toxic = byCheese ? frame.deathFlash : 0;
+
+    // Rebote al comer: la cabeza crece un poco y vuelve.
+    const bounce =
+      expression === "happy" && !this.reducedMotion
+        ? 1 + 0.2 * Math.sin(Math.PI * frame.happyT)
+        : 1;
+    const faceSize = cell * HEAD_FACE_CELLS * bounce;
+
+    if (toxic > 0) {
+      const glow = ctx.createRadialGradient(cx, cy, faceSize * 0.2, cx, cy, faceSize * 0.95);
+      glow.addColorStop(0, `rgba(163, 230, 53, ${0.55 * toxic})`);
+      glow.addColorStop(1, "rgba(163, 230, 53, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, faceSize * 0.95, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.save();
     ctx.translate(cx, cy);
     if (GUSTY_SNAKE_HEAD_ORIENTATION === "rotate") {
       ctx.rotate(ROTATION[direction]);
-    } else if (direction === "right") {
-      ctx.rotate(TILT_RADIANS);
-    } else if (direction === "left") {
-      ctx.scale(-1, 1);
-      ctx.rotate(TILT_RADIANS);
+    } else {
+      ctx.scale(this.facing, 1);
+      if (direction === "right" || direction === "left") ctx.rotate(TILT_RADIANS);
     }
 
-    const image = this.assets.head;
-    if (image && image.naturalWidth > 0) {
-      if (this.clipHeadToCircle) {
-        ctx.beginPath();
-        ctx.arc(0, 0, size * 0.5, 0, Math.PI * 2);
-        ctx.clip();
-      }
-      ctx.drawImage(image, -size / 2, -size / 2, size, size);
+    const sprite = this.assets.heads[expression] ?? this.assets.heads.normal;
+    if (sprite && sprite.image.naturalWidth > 0) {
+      // La cara (no todo el sprite) mide `faceSize`; la gota o las estrellas
+      // sobresalen. Se centra en la cara, así la cabeza no se corre al cambiar de gesto.
+      const { image, face } = sprite;
+      const width = faceSize / face.w;
+      const height = (width * image.naturalHeight) / image.naturalWidth;
+      const dx = -(face.x + face.w / 2) * width;
+      const dy = -(face.y + face.h / 2) * height;
+      if (toxic > 0) this.drawTinted(image, dx, dy, width, height, `rgba(132, 204, 22, ${0.45 * toxic})`);
+      else ctx.drawImage(image, dx, dy, width, height);
     } else {
-      this.drawFallbackFace(size);
+      this.drawFallbackFace(faceSize, expression);
     }
     ctx.restore();
+  }
 
-    // Aro para separar la cabeza del cuerpo.
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-    ctx.lineWidth = Math.max(1.5, cell * 0.07);
-    ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.5, 0, Math.PI * 2);
-    ctx.stroke();
+  /** Dibuja el sprite con un color encima, solo sobre sus píxeles opacos. */
+  private drawTinted(
+    image: HTMLImageElement,
+    dx: number,
+    dy: number,
+    width: number,
+    height: number,
+    color: string,
+  ) {
+    const pxW = Math.max(1, Math.ceil(width * this.dpr));
+    const pxH = Math.max(1, Math.ceil(height * this.dpr));
+    const layer = (this.tint ??= document.createElement("canvas"));
+    if (layer.width !== pxW || layer.height !== pxH) {
+      layer.width = pxW;
+      layer.height = pxH;
+    }
+    const g = layer.getContext("2d");
+    if (!g) {
+      this.ctx.drawImage(image, dx, dy, width, height);
+      return;
+    }
+    g.globalCompositeOperation = "source-over";
+    g.clearRect(0, 0, pxW, pxH);
+    g.drawImage(image, 0, 0, pxW, pxH);
+    g.globalCompositeOperation = "source-atop";
+    g.fillStyle = color;
+    g.fillRect(0, 0, pxW, pxH);
+    this.ctx.drawImage(layer, dx, dy, width, height);
   }
 
   /** Carita simple, para cuando la imagen de la cabeza todavía no cargó. */
-  private drawFallbackFace(size: number) {
+  private drawFallbackFace(size: number, expression: HeadExpression) {
     const { ctx } = this;
     ctx.fillStyle = "#f6c945";
+    ctx.strokeStyle = "#3a2a10";
+    ctx.lineWidth = size * 0.05;
     ctx.beginPath();
     ctx.arc(0, 0, size * 0.46, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = "#3a2a10";
-    ctx.beginPath();
-    ctx.arc(-size * 0.15, -size * 0.08, size * 0.06, 0, Math.PI * 2);
-    ctx.arc(size * 0.15, -size * 0.08, size * 0.06, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#3a2a10";
-    ctx.lineWidth = size * 0.05;
     ctx.lineCap = "round";
+    if (expression === "dead") {
+      for (const sx of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(sx * size * 0.15 - size * 0.06, -size * 0.14);
+        ctx.lineTo(sx * size * 0.15 + size * 0.06, -size * 0.02);
+        ctx.moveTo(sx * size * 0.15 + size * 0.06, -size * 0.14);
+        ctx.lineTo(sx * size * 0.15 - size * 0.06, -size * 0.02);
+        ctx.stroke();
+      }
+    } else {
+      ctx.beginPath();
+      ctx.arc(-size * 0.15, -size * 0.08, size * 0.06, 0, Math.PI * 2);
+      ctx.arc(size * 0.15, -size * 0.08, size * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.beginPath();
-    ctx.arc(0, size * 0.04, size * 0.2, 0.15 * Math.PI, 0.85 * Math.PI);
+    if (expression === "happy") ctx.arc(0, size * 0.04, size * 0.2, 0.05 * Math.PI, 0.95 * Math.PI);
+    else ctx.arc(0, size * 0.04, size * 0.2, 0.15 * Math.PI, 0.85 * Math.PI);
     ctx.stroke();
   }
 }

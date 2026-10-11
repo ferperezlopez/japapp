@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GUSTY_SNAKE_CONFIG as CONFIG } from "./config";
+import { GUSTY_SNAKE_CONFIG as CONFIG, type FoodKind, type GustySnakeConfig } from "./config";
 import {
   createInitialState,
   intervalForScore,
@@ -8,18 +8,25 @@ import {
   step,
   turn,
   type Direction,
+  type Food,
   type GameState,
   type Point,
 } from "./engine";
 import { playWithBot } from "./testing";
 
-/** Estado de prueba: por defecto sin patita, para que no se coma nada sin querer. */
+const KINDS: FoodKind[] = CONFIG.foods.map((food) => food.kind);
+
+/** Estado de prueba: por defecto sin comida, para que no se coma nada sin querer. */
 function stateWith(overrides: Partial<GameState>): GameState {
   return { ...createInitialState(CONFIG, 1), food: null, ...overrides };
 }
 
 function line(...points: [number, number][]): Point[] {
   return points.map(([x, y]) => ({ x, y }));
+}
+
+function food(x: number, y: number, kind: FoodKind = "empanada"): Food {
+  return { x, y, kind };
 }
 
 describe("createInitialState", () => {
@@ -34,19 +41,28 @@ describe("createInitialState", () => {
     expect(state.ate).toBe(false);
   });
 
-  it("la primera patita queda dentro del tablero y fuera de la serpiente", () => {
+  it("arranca sin queso, con el reloj de juego en cero y sin nada pendiente de crecer", () => {
+    const state = createInitialState(CONFIG, 1);
+    expect(state.cheese).toBeNull();
+    expect(state.nextCheeseAtMs).toBeNull();
+    expect(state.clockMs).toBe(0);
+    expect(state.grow).toBe(0);
+  });
+
+  it("la primera comida queda dentro del tablero, fuera de la serpiente y es de un tipo válido", () => {
     for (const seed of [0, 1, 2, 3, 12345, 999999, 4294967295]) {
       const state = createInitialState(CONFIG, seed);
-      const food = state.food!;
-      expect(food.x).toBeGreaterThanOrEqual(0);
-      expect(food.x).toBeLessThan(CONFIG.cols);
-      expect(food.y).toBeGreaterThanOrEqual(0);
-      expect(food.y).toBeLessThan(CONFIG.rows);
-      expect(state.snake.some((s) => s.x === food.x && s.y === food.y)).toBe(false);
+      const first = state.food!;
+      expect(first.x).toBeGreaterThanOrEqual(0);
+      expect(first.x).toBeLessThan(CONFIG.cols);
+      expect(first.y).toBeGreaterThanOrEqual(0);
+      expect(first.y).toBeLessThan(CONFIG.rows);
+      expect(state.snake.some((s) => s.x === first.x && s.y === first.y)).toBe(false);
+      expect(KINDS).toContain(first.kind);
     }
   });
 
-  it("es determinista: la misma semilla da la misma patita", () => {
+  it("es determinista: la misma semilla da la misma comida", () => {
     expect(createInitialState(CONFIG, 777).food).toEqual(createInitialState(CONFIG, 777).food);
   });
 
@@ -116,37 +132,84 @@ describe("step", () => {
     expect(after.snake).toEqual(line([0, 1], [1, 1], [1, 0], [0, 0]));
   });
 
-  it("al comer una patita crece, suma puntos y aparece otra en una celda libre", () => {
+  it("el reloj de juego suma el intervalo de cada movimiento, según el puntaje que ya se tenía", () => {
+    let state = stateWith({ snake: line([5, 5], [4, 5], [3, 5]), direction: "right" });
+    state = step(state, CONFIG);
+    expect(state.clockMs).toBe(180);
+    state = step(state, CONFIG);
+    expect(state.clockMs).toBe(360);
+
+    // Con 50 puntos cada movimiento es de 175 ms.
+    const fast = step(stateWith({ snake: line([5, 5]), direction: "right", score: 50 }), CONFIG);
+    expect(fast.clockMs).toBe(175);
+  });
+
+  describe.each(CONFIG.foods)("al comer $kind", ({ kind, points, growth }) => {
     const before = stateWith({
       snake: line([5, 5], [4, 5], [3, 5]),
       direction: "right",
-      food: { x: 6, y: 5 },
+      food: food(6, 5, kind),
     });
-    const after = step(before, CONFIG);
-    expect(after.snake).toEqual(line([6, 5], [5, 5], [4, 5], [3, 5]));
-    expect(after.score).toBe(CONFIG.pointsPerFood);
-    expect(after.ate).toBe(true);
-    expect(after.status).toBe("running");
-    const food = after.food!;
-    expect(after.snake.some((s) => s.x === food.x && s.y === food.y)).toBe(false);
-    expect(food.x).toBeGreaterThanOrEqual(0);
-    expect(food.x).toBeLessThan(CONFIG.cols);
-    expect(food.y).toBeGreaterThanOrEqual(0);
-    expect(food.y).toBeLessThan(CONFIG.rows);
+
+    it(`suma ${points} puntos y crece ${growth}`, () => {
+      const after = step(before, CONFIG);
+      expect(after.score).toBe(points);
+      expect(after.snake).toHaveLength(before.snake.length + growth);
+      expect(after.snake).toEqual(line([6, 5], [5, 5], [4, 5], [3, 5]));
+      expect(after.ate).toBe(true);
+      expect(after.status).toBe("running");
+    });
+
+    it("aparece otra comida en una celda libre, una sola a la vez", () => {
+      const after = step(before, CONFIG);
+      const next = after.food!;
+      expect(after.snake.some((s) => s.x === next.x && s.y === next.y)).toBe(false);
+      expect(next.x).toBeGreaterThanOrEqual(0);
+      expect(next.x).toBeLessThan(CONFIG.cols);
+      expect(next.y).toBeGreaterThanOrEqual(0);
+      expect(next.y).toBeLessThan(CONFIG.rows);
+      expect(KINDS).toContain(next.kind);
+    });
+  });
+
+  it("con crecimiento mayor a 1 la cola se queda quieta ese tiempo", () => {
+    const big: GustySnakeConfig = {
+      ...CONFIG,
+      foods: [{ kind: "olive", points: 5, growth: 3, weight: 1 }],
+    };
+    let state: GameState = {
+      ...createInitialState(big, 1),
+      snake: line([5, 5], [4, 5], [3, 5]),
+      direction: "right",
+      food: food(6, 5, "olive"),
+    };
+    const lengths: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      state = step(state, big);
+      state = { ...state, food: state.ate ? null : state.food };
+      lengths.push(state.snake.length);
+    }
+    // 3 → 4 al comer, y dos movimientos más sin avanzar la cola: 5 y 6.
+    expect(lengths).toEqual([4, 5, 6, 6, 6]);
+    expect(state.grow).toBe(0);
   });
 
   it("si come la última celda libre, llena el tablero y la partida termina", () => {
-    const tiny = { ...CONFIG, cols: 2, rows: 2, initialLength: 1 };
+    const tiny: GustySnakeConfig = {
+      ...CONFIG,
+      cols: 2,
+      rows: 2,
+      initialLength: 1,
+      foods: [{ kind: "empanada", points: 10, growth: 1, weight: 1 }],
+    };
     const before: GameState = {
+      ...createInitialState(tiny, 1),
       snake: line([1, 0], [0, 0], [0, 1]),
       direction: "down",
-      food: { x: 1, y: 1 },
+      food: food(1, 1),
       score: 20,
       ticks: 5,
-      status: "running",
-      overReason: null,
       rng: 7,
-      ate: false,
     };
     const after = step(before, tiny);
     expect(after.status).toBe("over");
@@ -169,7 +232,7 @@ describe("step", () => {
     const before = stateWith({
       snake: line([5, 5], [4, 5], [3, 5]),
       direction: "right",
-      food: { x: 6, y: 5 },
+      food: food(6, 5),
     });
     const copy = structuredClone(before);
     step(before, CONFIG);
@@ -245,7 +308,7 @@ describe("placeFood", () => {
   it("elige la única celda libre", () => {
     const small = { ...CONFIG, cols: 3, rows: 2 };
     const snake = line([0, 0], [1, 0], [2, 0], [0, 1], [1, 1]);
-    expect(placeFood(small, snake, 99).food).toEqual({ x: 2, y: 1 });
+    expect(placeFood(small, snake, 99).food).toMatchObject({ x: 2, y: 1 });
   });
 
   it("devuelve null si el tablero está lleno", () => {
@@ -266,13 +329,69 @@ describe("placeFood", () => {
       rng = placed.rng;
     }
   });
+
+  it("sortea los tres tipos con la misma probabilidad", () => {
+    const counts: Record<string, number> = {};
+    let rng = 2026;
+    for (let i = 0; i < 3000; i++) {
+      const placed = placeFood(CONFIG, line([9, 12]), rng);
+      counts[placed.food!.kind] = (counts[placed.food!.kind] ?? 0) + 1;
+      rng = placed.rng;
+    }
+    expect(Object.keys(counts).sort()).toEqual([...KINDS].sort());
+    for (const kind of KINDS) {
+      expect(counts[kind]).toBeGreaterThan(850);
+      expect(counts[kind]).toBeLessThan(1150);
+    }
+  });
+
+  it("respeta los pesos de la config: peso 0 no sale nunca", () => {
+    const weighted: GustySnakeConfig = {
+      ...CONFIG,
+      foods: [
+        { kind: "olive", points: 5, growth: 1, weight: 0 },
+        { kind: "empanada", points: 10, growth: 1, weight: 1 },
+        { kind: "drumstick", points: 15, growth: 1, weight: 3 },
+      ],
+    };
+    const counts: Record<string, number> = { olive: 0, empanada: 0, drumstick: 0 };
+    let rng = 7;
+    for (let i = 0; i < 2000; i++) {
+      const placed = placeFood(weighted, line([9, 12]), rng);
+      counts[placed.food!.kind]++;
+      rng = placed.rng;
+    }
+    expect(counts.olive).toBe(0);
+    // 3 de cada 4 son patitas.
+    expect(counts.drumstick / 2000).toBeGreaterThan(0.7);
+    expect(counts.drumstick / 2000).toBeLessThan(0.8);
+  });
+
+  it("con un queso en el tablero no cae sobre él ni donde el queso la deje inalcanzable", () => {
+    // Pasillo de una fila: la cabeza en x=0 y el queso en x=2 dejan x=3 y x=4
+    // fuera de su alcance; la única celda válida es x=1.
+    const corridor = { ...CONFIG, cols: 5, rows: 1 };
+    let rng = 1;
+    for (let i = 0; i < 50; i++) {
+      const placed = placeFood(corridor, line([0, 0]), rng, { x: 2, y: 0 });
+      expect(placed.food).toMatchObject({ x: 1, y: 0 });
+      rng = placed.rng;
+    }
+  });
+
+  it("si el queso la deja toda inalcanzable, igual pone la comida en una celda libre", () => {
+    const corridor = { ...CONFIG, cols: 4, rows: 1 };
+    // Cabeza en x=0, queso en x=1: nada alcanzable; libres: x=2 y x=3.
+    const placed = placeFood(corridor, line([0, 0]), 5, { x: 1, y: 0 });
+    expect([2, 3]).toContain(placed.food!.x);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────
 // VALORES DE ORO. Congelan el comportamiento exacto del motor (PRNG, colocación
-// de patitas, reglas de colisión y puntaje). Los replays que ya están guardados
-// en la base solo se pueden volver a validar si el motor da lo mismo. Si
-// alguno de estos tests falla porque cambiaste el motor o la configuración a
+// de comidas y queso, reglas de colisión y puntaje). Los replays que ya están
+// guardados en la base solo se pueden volver a validar si el motor da lo mismo.
+// Si alguno de estos tests falla porque cambiaste el motor o la configuración a
 // propósito: subí GUSTY_SNAKE_CONFIG.version y actualizá estos valores.
 // ─────────────────────────────────────────────────────────────────────────
 describe("valores de oro (si fallan: subir GUSTY_SNAKE_CONFIG.version)", () => {
@@ -287,22 +406,26 @@ describe("valores de oro (si fallan: subir GUSTY_SNAKE_CONFIG.version)", () => {
     expect(values).toEqual([0.6270739405881613, 0.002735721180215478, 0.5274470399599522]);
   });
 
-  it("primera patita según la semilla", () => {
-    expect(createInitialState(CONFIG, 0).food).toEqual({ x: 6, y: 6 });
-    expect(createInitialState(CONFIG, 1).food).toEqual({ x: 2, y: 15 });
-    expect(createInitialState(CONFIG, 12345).food).toEqual({ x: 9, y: 23 });
-    expect(createInitialState(CONFIG, 4294967295).food).toEqual({ x: 9, y: 21 });
+  it("primera comida (celda y tipo) según la semilla", () => {
+    expect(createInitialState(CONFIG, 0).food).toEqual({ x: 0, y: 0, kind: "olive" });
+    expect(createInitialState(CONFIG, 1).food).toEqual({ x: 1, y: 0, kind: "empanada" });
+    expect(createInitialState(CONFIG, 12345).food).toEqual({ x: 5, y: 7, kind: "drumstick" });
+    expect(createInitialState(CONFIG, 4294967295).food).toEqual({ x: 9, y: 4, kind: "drumstick" });
   });
 
   it.each([
-    [12345, 230, 319],
-    [777, 210, 315],
-    [2026, 250, 305],
-  ])("partida completa del bot con semilla %i: %i puntos en %i movimientos", (seed, score, ticks) => {
-    const session = playWithBot(CONFIG, seed, 20_000);
-    expect(session.state.score).toBe(score);
-    expect(session.state.ticks).toBe(ticks);
-    expect(session.state.status).toBe("over");
-    expect(session.state.overReason).toBe("self");
-  });
+    [12345, 440, 788, 124865],
+    [777, 245, 485, 82065],
+    [2026, 450, 824, 131270],
+  ])(
+    "partida completa del bot con semilla %i: %i puntos en %i movimientos (%i ms de juego)",
+    (seed, score, ticks, clockMs) => {
+      const session = playWithBot(CONFIG, seed, 20_000);
+      expect(session.state.score).toBe(score);
+      expect(session.state.ticks).toBe(ticks);
+      expect(session.state.clockMs).toBe(clockMs);
+      expect(session.state.status).toBe("over");
+      expect(session.state.overReason).toBe("self");
+    },
+  );
 });

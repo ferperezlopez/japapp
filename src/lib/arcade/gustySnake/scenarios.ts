@@ -1,9 +1,9 @@
-// Escenarios (aspecto del tablero) de Gusty Snake. Hoy hay uno solo: un campo
-// verde oscuro con una cuadrícula sutil. Está pensado para sumar después
-// escenarios temáticos de los lugares donde se junta el grupo: alcanza con
-// agregar una entrada acá (colores y, si se quiere, una imagen de fondo) y
-// elegirla en DEFAULT_SCENARIO o desde el juego; el motor y el ranking no
-// dependen del escenario.
+// Escenarios (aspecto del tablero) de Gusty Glotón. Hoy hay uno solo: un campo
+// verde oscuro con una cuadrícula sutil, que hace resaltar las comidas, el
+// queso y la cabeza. Está pensado para sumar después escenarios temáticos de
+// los lugares donde se junta el grupo: alcanza con agregar una entrada acá
+// (colores y, si se quiere, una imagen de fondo) y elegirla en DEFAULT_SCENARIO
+// o desde el juego; el motor y el ranking no dependen del escenario.
 
 export interface Scenario {
   id: string;
@@ -14,11 +14,17 @@ export interface Scenario {
   gridColor: string;
   /** Imagen de fondo opcional (ruta pública), dibujada debajo de la cuadrícula. */
   backgroundImage?: string;
+  /**
+   * El cuerpo se dibuja en capas, de afuera hacia adentro: contorno, sombra,
+   * base, luz y un reflejo fino. Las tres últimas van corridas hacia arriba y a
+   * la izquierda (la luz viene de ahí) para dar volumen de tubo.
+   */
   snake: {
-    /** Cuerpo de la serpiente, su contorno y el brillo del centro. */
-    body: string;
-    bodyEdge: string;
-    bodyHighlight: string;
+    outline: string;
+    shade: string;
+    base: string;
+    light: string;
+    shine: string;
   };
 }
 
@@ -29,9 +35,11 @@ export const SCENARIOS = {
     cellColors: ["#14452a", "#174f2f"],
     gridColor: "rgba(255, 255, 255, 0.06)",
     snake: {
-      body: "#43b254",
-      bodyEdge: "#1d6b2e",
-      bodyHighlight: "rgba(255, 255, 255, 0.24)",
+      outline: "#06130b",
+      shade: "#057331",
+      base: "#29ba45",
+      light: "#4ad149",
+      shine: "rgba(183, 247, 132, 0.85)",
     },
   },
 } as const satisfies Record<string, Scenario>;

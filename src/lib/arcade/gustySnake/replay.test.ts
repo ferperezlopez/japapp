@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { GUSTY_SNAKE_CONFIG as CONFIG } from "./config";
 import { MAX_REPLAY_TICKS, parseReplay, verifyReplay, type Replay } from "./replay";
 import { GustySession } from "./session";
-import { chooseBotDirection, playWithBot } from "./testing";
+import { chooseBotDirection, playUntilCheeseDeath, playWithBot } from "./testing";
 
 const SEED = 12345;
 
-/** Una partida real del bot (230 puntos, 319 movimientos, murió chocándose). */
+/** Una partida real del bot (440 puntos, 788 movimientos, murió chocándose). */
 function botGame() {
   const session = playWithBot(CONFIG, SEED, 20_000);
   return { session, replay: session.getReplay() };
 }
 
 describe("parseReplay", () => {
-  const valid: Replay = { v: 1, seed: 5, ticks: 10, turns: [[0, 0], [4, 3]] };
+  const valid: Replay = { v: CONFIG.version, seed: 5, ticks: 10, turns: [[0, 0], [4, 3]] };
 
   it("acepta un replay bien formado y lo devuelve normalizado", () => {
     const result = parseReplay({ ...valid, ruido: "se ignora" });
@@ -21,8 +21,8 @@ describe("parseReplay", () => {
   });
 
   it("acepta una partida sin giros y una de cero movimientos", () => {
-    expect(parseReplay({ v: 1, seed: 0, ticks: 0, turns: [] }).ok).toBe(true);
-    expect(parseReplay({ v: 1, seed: 4294967295, ticks: 9, turns: [] }).ok).toBe(true);
+    expect(parseReplay({ v: CONFIG.version, seed: 0, ticks: 0, turns: [] }).ok).toBe(true);
+    expect(parseReplay({ v: CONFIG.version, seed: 4294967295, ticks: 9, turns: [] }).ok).toBe(true);
   });
 
   it.each<[string, unknown]>([
@@ -59,7 +59,7 @@ describe("parseReplay", () => {
 describe("verifyReplay", () => {
   it("una partida real vuelve a dar el mismo resultado al simularla de nuevo", () => {
     const { session, replay } = botGame();
-    expect(session.state.score).toBe(230);
+    expect(session.state.score).toBe(440);
 
     // Pasa por JSON, como viaja al servidor.
     const parsed = parseReplay(JSON.parse(JSON.stringify(replay)));
@@ -89,9 +89,10 @@ describe("verifyReplay", () => {
     }
     const result = verifyReplay(CONFIG, session.getReplay());
     expect(result.ok && result.minDurationMs).toBe(expectedMs);
-    // Y es consistente con la curva: 319 movimientos, más rápidos al ir sumando.
-    expect(expectedMs).toBeGreaterThan(319 * CONFIG.minIntervalMs);
-    expect(expectedMs).toBeLessThan(319 * CONFIG.initialIntervalMs);
+    // Y es consistente con la curva: 788 movimientos, más rápidos al ir sumando.
+    const ticks = session.state.ticks;
+    expect(expectedMs).toBeGreaterThan(ticks * CONFIG.minIntervalMs);
+    expect(expectedMs).toBeLessThan(ticks * CONFIG.initialIntervalMs);
   });
 
   it("acepta una partida abandonada: un tramo de una partida válida", () => {
@@ -127,18 +128,18 @@ describe("verifyReplay", () => {
 
   it("rechaza un giro de 180°", () => {
     // Arranca a la derecha: girar a la izquierda (código 3) es invertir el sentido.
-    const result = verifyReplay(CONFIG, { v: 1, seed: SEED, ticks: 5, turns: [[0, 3]] });
+    const result = verifyReplay(CONFIG, { v: CONFIG.version, seed: SEED, ticks: 5, turns: [[0, 3]] });
     expect(result).toEqual({ ok: false, error: "Giro inválido en el movimiento 0." });
   });
 
   it("rechaza un giro hacia la dirección en la que ya va", () => {
-    const result = verifyReplay(CONFIG, { v: 1, seed: SEED, ticks: 5, turns: [[0, 1]] });
+    const result = verifyReplay(CONFIG, { v: CONFIG.version, seed: SEED, ticks: 5, turns: [[0, 1]] });
     expect(result.ok).toBe(false);
   });
 
   it("rechaza giros que nunca se pudieron aplicar", () => {
     // Sin parseReplay de por medio: el giro del movimiento 5 cae fuera de los 3 movimientos.
-    const result = verifyReplay(CONFIG, { v: 1, seed: SEED, ticks: 3, turns: [[5, 0]] });
+    const result = verifyReplay(CONFIG, { v: CONFIG.version, seed: SEED, ticks: 3, turns: [[5, 0]] });
     expect(result.ok).toBe(false);
   });
 
@@ -148,8 +149,42 @@ describe("verifyReplay", () => {
     expect(result).toEqual({ ok: false, error: "La versión del juego no coincide." });
   });
 
+  it("rechaza un replay de la versión 1 (Gusty Snake, antes del queso y las tres comidas)", () => {
+    const { replay } = botGame();
+    expect(CONFIG.version).toBeGreaterThan(1);
+    expect(verifyReplay(CONFIG, { ...replay, v: 1 })).toEqual({
+      ok: false,
+      error: "La versión del juego no coincide.",
+    });
+  });
+
+  it("una partida que terminó tocando el queso se vuelve a simular igual", () => {
+    let found: ReturnType<typeof playUntilCheeseDeath> = null;
+    for (let seed = 1; seed <= 200 && found === null; seed++) {
+      found = playUntilCheeseDeath(CONFIG, seed, 3000);
+    }
+    expect(found).not.toBeNull();
+    const session = found!;
+    expect(session.state.overReason).toBe("cheese");
+    expect(session.state.score).toBeGreaterThanOrEqual(CONFIG.cheese.startScore);
+
+    // Pasa por JSON, como viaja al servidor.
+    const parsed = parseReplay(JSON.parse(JSON.stringify(session.getReplay())));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(verifyReplay(CONFIG, parsed.replay)).toMatchObject({
+      ok: true,
+      score: session.state.score,
+      ticks: session.state.ticks,
+      over: true,
+      overReason: "cheese",
+    });
+    // Y seguir después de morir por queso también se rechaza.
+    expect(verifyReplay(CONFIG, { ...parsed.replay, ticks: parsed.replay.ticks + 1 }).ok).toBe(false);
+  });
+
   it("una partida sin movimientos es válida y vale 0 puntos", () => {
-    const result = verifyReplay(CONFIG, { v: 1, seed: SEED, ticks: 0, turns: [] });
+    const result = verifyReplay(CONFIG, { v: CONFIG.version, seed: SEED, ticks: 0, turns: [] });
     expect(result).toEqual({
       ok: true,
       score: 0,
@@ -168,7 +203,7 @@ describe("verifyReplay", () => {
     const loop = [2, 3, 0, 1]; // códigos: abajo, izquierda, arriba, derecha
     const turns: [number, number][] = [];
     for (let tick = 0; tick < MAX_REPLAY_TICKS; tick++) turns.push([tick, loop[tick % 4]]);
-    const replay: Replay = { v: 1, seed: SEED, ticks: MAX_REPLAY_TICKS, turns };
+    const replay: Replay = { v: CONFIG.version, seed: SEED, ticks: MAX_REPLAY_TICKS, turns };
 
     const parsed = parseReplay(JSON.parse(JSON.stringify(replay)));
     expect(parsed.ok).toBe(true);

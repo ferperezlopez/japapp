@@ -27,9 +27,9 @@ describe("registro de juegos", () => {
     }
   });
 
-  it("Gusty Snake es el primer juego y está habilitado", () => {
+  it("Gusty Glotón es el primer juego y está habilitado", () => {
     expect(ARCADE_GAMES[0].id).toBe("gusty-snake");
-    expect(getEnabledArcadeGame("gusty-snake")?.name).toBe("Gusty Snake");
+    expect(getEnabledArcadeGame("gusty-snake")?.name).toBe("Gusty Glotón");
   });
 
   it("un id que no existe no devuelve nada", () => {

@@ -22,8 +22,8 @@ export interface ArcadeGame {
 export const ARCADE_GAMES: readonly ArcadeGame[] = [
   {
     id: GUSTY_SNAKE_GAME_ID,
-    name: "Gusty Snake",
-    description: "Comé todas las patitas que puedas sin chocarte.",
+    name: "Gusty Glotón",
+    description: "Come de todo. Menos queso.",
     cover: GUSTY_SNAKE_ASSETS.cover.src,
     href: `/arcade/${GUSTY_SNAKE_GAME_ID}`,
     enabled: true,

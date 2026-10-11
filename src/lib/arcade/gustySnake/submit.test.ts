@@ -13,7 +13,7 @@ import {
 const SEED = 12345;
 const RUN_ID = "3f2b8c1e-6a4d-4e0b-9c57-1d2e3f4a5b6c";
 
-/** Una partida real: 230 puntos, 319 movimientos, murió chocándose. */
+/** Una partida real: 440 puntos, 788 movimientos, murió chocándose. */
 function botRun() {
   const session = playWithBot(CONFIG, SEED, 20_000);
   const replay = session.getReplay();
@@ -48,8 +48,8 @@ describe("validateSubmission", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const run: ValidatedRun = result.run;
-    expect(run.score).toBe(230);
-    expect(run.ticks).toBe(319);
+    expect(run.score).toBe(440);
+    expect(run.ticks).toBe(788);
     expect(run.over).toBe(true);
     expect(run.clientRunId).toBe(RUN_ID);
   });
@@ -67,17 +67,17 @@ describe("validateSubmission", () => {
   describe("puntaje", () => {
     it("rechaza un puntaje inflado (el caso de editar el número en DevTools)", () => {
       expectError(validateSubmission(input({ score: 99_999 }), CONFIG), /puntaje/i);
-      expectError(validateSubmission(input({ score: 240 }), CONFIG), /puntaje/i);
+      expectError(validateSubmission(input({ score: 450 }), CONFIG), /puntaje/i);
     });
 
     it("rechaza un puntaje menor al real", () => {
-      expectError(validateSubmission(input({ score: 220 }), CONFIG), /puntaje/i);
+      expectError(validateSubmission(input({ score: 430 }), CONFIG), /puntaje/i);
     });
 
     it.each([
       ["negativo", -10],
-      ["decimal", 230.5],
-      ["texto", "230"],
+      ["decimal", 440.5],
+      ["texto", "440"],
       ["NaN", Number.NaN],
       ["nulo", null],
     ])("rechaza un puntaje %s", (_name, score) => {
@@ -144,7 +144,7 @@ describe("validateSubmission", () => {
     });
 
     it("rechaza un replay con un giro de 180° agregado", () => {
-      const tampered = { v: 1, seed: SEED, ticks: 5, turns: [[0, 3]] };
+      const tampered = { v: CONFIG.version, seed: SEED, ticks: 5, turns: [[0, 3]] };
       expectError(validateSubmission(input({ replay: tampered, score: 0 }), CONFIG), /giro/i);
     });
 
@@ -158,7 +158,7 @@ describe("validateSubmission", () => {
     it("rechaza un replay mal formado", () => {
       expectError(validateSubmission(input({ replay: "no soy un replay" }), CONFIG));
       expectError(validateSubmission(input({ replay: null }), CONFIG));
-      expectError(validateSubmission(input({ replay: { v: 1 } }), CONFIG));
+      expectError(validateSubmission(input({ replay: { v: CONFIG.version } }), CONFIG));
     });
   });
 

@@ -1,4 +1,4 @@
-// Controles de Gusty Snake: deslizamientos en pantalla (celular) y flechas del
+// Controles de Gusty Glotón: deslizamientos en pantalla (celular) y flechas del
 // teclado (compu). Solo traducen eventos del navegador a direcciones; qué
 // hacer con ellas lo decide el runner. Cada función devuelve su "limpieza",
 // que saca TODOS los listeners que puso (no deben quedar colgados al salir).

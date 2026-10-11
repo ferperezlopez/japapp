@@ -9,7 +9,7 @@ import { findRank } from "@/lib/arcade/ranking";
 import { getLeaderboard, getPersonalBest, saveArcadeScore } from "@/lib/arcade/scores";
 import type { SubmitScoreResult } from "@/lib/arcade/types";
 
-// Guarda una partida de Gusty Snake. Es una puerta pública (cualquiera puede
+// Guarda una partida de Gusty Glotón. Es una puerta pública (cualquiera puede
 // mandarle un POST), así que no confía en nada de lo que llega: autentica al
 // usuario, vuelve a jugar la partida con el mismo motor y recién ahí inserta
 // el puntaje que ELLA recalculó (ver submit.ts y replay.ts).

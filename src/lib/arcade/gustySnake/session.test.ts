@@ -4,7 +4,7 @@ import { intervalForScore } from "./engine";
 import { GustySession, MAX_QUEUED_TURNS } from "./session";
 import { playWithBot } from "./testing";
 
-// Con esta semilla la primera patita queda en (9, 23): lejos de la fila donde
+// Con esta semilla la primera comida queda en (5, 7): fuera de la fila donde
 // arranca la serpiente (y = 12), así que avanzar derecho no come nada.
 const SEED = 12345;
 
