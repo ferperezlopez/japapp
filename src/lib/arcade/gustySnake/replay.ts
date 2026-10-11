@@ -1,7 +1,7 @@
 // Registro de una partida (replay) y su verificación en el servidor.
 //
 // El navegador NO manda "saqué 120 puntos" y listo: manda la semilla del
-// generador de patitas y los giros que hizo la serpiente. El servidor vuelve a
+// generador de comidas y queso y los giros que hizo la serpiente. El servidor vuelve a
 // jugar la partida con el MISMO motor (engine.ts) y recalcula el puntaje: si
 // no coincide con el declarado, o si el registro es imposible (giro de 180°,
 // movimientos después de morir, otra versión de las reglas), se rechaza.
@@ -24,7 +24,7 @@ import {
 export type Replay = {
   /** GustySnakeConfig.version con la que se jugó. */
   v: number;
-  /** Semilla del generador de patitas: entero de 32 bits sin signo. */
+  /** Semilla del generador de comidas y queso: entero de 32 bits sin signo. */
   seed: number;
   /** Movimientos hechos, incluido el fatal si la partida terminó chocando. */
   ticks: number;
@@ -104,7 +104,7 @@ export type VerifyReplayResult =
       /** Puntaje recalculado por el servidor. */
       score: number;
       ticks: number;
-      /** La serpiente chocó (o llenó el tablero) en el último movimiento. */
+      /** La serpiente chocó, tocó el queso (o llenó el tablero) en el último movimiento. */
       over: boolean;
       overReason: GameOverReason | null;
       /**

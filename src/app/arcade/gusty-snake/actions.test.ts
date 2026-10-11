@@ -48,7 +48,7 @@ const SEED = 12345;
 const RUN_ID = "3f2b8c1e-6a4d-4e0b-9c57-1d2e3f4a5b6c";
 const USER = { id: "user-1" };
 
-/** Una partida real del bot: 230 puntos, murió chocándose. */
+/** Una partida real del bot: 440 puntos, murió chocándose. */
 function validSubmission(overrides: Record<string, unknown> = {}) {
   const session = playWithBot(GUSTY_SNAKE_CONFIG, SEED, 20_000);
   const replay = session.getReplay();
@@ -81,8 +81,8 @@ beforeEach(() => {
   mocks.rpc.mockImplementation(async (_name: string, args: { p_period: string }) => ({
     data:
       args.p_period === "weekly"
-        ? [row(1, "otro", 300), row(2, USER.id, 230)]
-        : [row(1, "otro", 500), row(2, "tercero", 400), row(3, USER.id, 230)],
+        ? [row(1, "otro", 500), row(2, USER.id, 440)]
+        : [row(1, "otro", 900), row(2, "tercero", 700), row(3, USER.id, 440)],
     error: null,
   }));
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -105,9 +105,9 @@ describe("submitGustyScore", () => {
     expect(mocks.insert).toHaveBeenCalledWith({
       game_id: "gusty-snake",
       user_id: "user-1",
-      score: 230,
+      score: 440,
       duration_ms: submission.durationMs,
-      ticks: 319,
+      ticks: 788,
       config_version: GUSTY_SNAKE_CONFIG.version,
       client_run_id: RUN_ID,
       replay: submission.replay,
