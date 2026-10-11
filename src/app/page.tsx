@@ -66,6 +66,19 @@ const FEATURES = [
       </>
     ),
   },
+  {
+    href: "/arcade",
+    title: "JAPArcade",
+    description: "Minijuegos con ranking del grupo.",
+    colorClasses: "bg-brand-soft text-brand",
+    icon: (
+      <>
+        <rect x="2.75" y="7" width="18.5" height="10.5" rx="5.25" strokeLinejoin="round" />
+        <path strokeLinecap="round" d="M8 10.75v3.5M6.25 12.5h3.5" />
+        <path strokeLinecap="round" d="M15.75 11.5h.01M18 13.5h.01" />
+      </>
+    ),
+  },
 ] as const;
 
 export default async function Home() {

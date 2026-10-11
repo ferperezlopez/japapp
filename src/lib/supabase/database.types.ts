@@ -3,10 +3,30 @@
 // se pueden regenerar automáticamente con:
 //   npx supabase gen types typescript --project-id <id> > src/lib/supabase/database.types.ts
 
+// Para las columnas jsonb (hoy solo arcade_scores.replay).
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
 export interface Database {
   public: {
     Views: Record<string, never>;
     Functions: {
+      arcade_leaderboard: {
+        Args: { p_game: string; p_period?: string };
+        Returns: {
+          pos: number;
+          user_id: string;
+          name: string | null;
+          avatar_url: string | null;
+          score: number;
+          achieved_at: string;
+        }[];
+      };
       find_similar_profile_names: {
         Args: { candidate_name: string };
         Returns: { name: string }[];
@@ -937,6 +957,53 @@ export interface Database {
           {
             foreignKeyName: "event_media_uploaded_by_fkey";
             columns: ["uploaded_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      arcade_scores: {
+        Row: {
+          id: string;
+          game_id: string;
+          user_id: string;
+          score: number;
+          duration_ms: number;
+          ticks: number;
+          config_version: number;
+          client_run_id: string;
+          replay: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          game_id: string;
+          user_id: string;
+          score: number;
+          duration_ms: number;
+          ticks: number;
+          config_version: number;
+          client_run_id: string;
+          replay: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          game_id?: string;
+          user_id?: string;
+          score?: number;
+          duration_ms?: number;
+          ticks?: number;
+          config_version?: number;
+          client_run_id?: string;
+          replay?: Json;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "arcade_scores_user_id_fkey";
+            columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
