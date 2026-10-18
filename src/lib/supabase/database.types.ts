@@ -873,18 +873,21 @@ export interface Database {
           send_id: string;
           user_id: string;
           read_at: string | null;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
           send_id: string;
           user_id: string;
           read_at?: string | null;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
           send_id?: string;
           user_id?: string;
           read_at?: string | null;
+          deleted_at?: string | null;
         };
         Relationships: [
           {

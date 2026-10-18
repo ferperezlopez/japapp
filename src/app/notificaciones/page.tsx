@@ -30,7 +30,7 @@ export default async function NotificacionesPage() {
         Notificaciones
       </h1>
       <p className="mt-2 text-sm text-foreground/60">
-        Todo lo que te llegó, más reciente primero.
+        Tus avisos, el más reciente primero.
       </p>
       <div className="mt-6">
         <NotificationsPageClient initialNotifications={notifications} />
