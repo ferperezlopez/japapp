@@ -1,0 +1,21 @@
+-- Borrar notificaciones de la campanita (specs/018-log-comunicaciones-y-campanita.md).
+--
+-- Cada destinatario "borra" las suyas: se marca `deleted_at` en SU fila de
+-- notification_recipients, y la campanita y /notificaciones dejan de listarla
+-- y de contarla.
+--
+-- Es un borrado lógico (columna) y no un DELETE a propósito: el historial de
+-- /comunicaciones (solo admin) arma "Destinatarios (N)" leyendo esta misma
+-- tabla, y borrar la fila le sacaría el nombre a quien ya la borró. Ese
+-- historial NO filtra por deleted_at: registra a quién se le mandó, no qué
+-- sigue viendo cada uno.
+--
+-- No hace falta ninguna policy nueva: la de UPDATE de 0032 ("Cada uno marca
+-- como leídos sus propios avisos": user_id = auth.uid(), en using y en with
+-- check) filtra por fila y ya cubre esta columna. Tampoco se agrega policy de
+-- DELETE: nadie puede borrar filas de esta tabla desde la API, y así sigue.
+--
+-- Columna nullable y sin default: cambio de solo metadatos, no reescribe la
+-- tabla, y el código anterior (que no la nombra) sigue funcionando igual.
+alter table public.notification_recipients
+  add column deleted_at timestamptz;

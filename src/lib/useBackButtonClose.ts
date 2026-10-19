@@ -12,6 +12,12 @@ import { useEffect, useRef } from "react";
 // dejar una entrada fantasma). Con modales anidados cada instancia
 // empuja/consume la suya de forma normal (LIFO): atrás cierra primero el
 // que está más arriba.
+//
+// OJO al probarlo: en `next dev` React StrictMode monta, desmonta y vuelve a
+// montar el efecto, y el `history.back()` del cleanup se come la entrada recién
+// empujada — el modal queda abierto pero «atrás» ya no lo cierra, navega. En
+// un build de producción (`next build` + `next start`, o un deploy de Vercel)
+// funciona como se describe acá.
 export function useBackButtonClose(onClose: () => void) {
   const closingProgrammatically = useRef(false);
 
