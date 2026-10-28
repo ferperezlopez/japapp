@@ -753,6 +753,8 @@ export default async function EventoPage({
           />
           <FutbolTeamsSection
             eventId={eventId}
+            eventName={event.name}
+            eventDateLabel={dateFormatter.format(new Date(event.event_date))}
             candidates={futbolTeamCandidates}
             initialAssignment={futbolTeams}
             stats={futbolStats}
