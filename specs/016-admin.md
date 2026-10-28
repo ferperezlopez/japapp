@@ -4,8 +4,9 @@
 - **Rutas:** `/miembros` (extendida), `/perfil/[userId]` (extendida)
 - **Migraciones relacionadas:** `supabase/migrations/0023_admin_role.sql`,
   `supabase/migrations/0025_admin_delete_any_guest.sql`,
-  `supabase/migrations/0040_profiles_update_column_privileges.sql`
-- **Última actualización:** 2026-10-09
+  `supabase/migrations/0040_profiles_update_column_privileges.sql`,
+  `supabase/migrations/0043_admin_edit_any_event.sql`
+- **Última actualización:** 2026-10-28
 
 ## 1. Resumen
 
@@ -51,6 +52,12 @@ Un solo usuario tiene el rol hoy: **Fernando Pérez López**
   `/eventos/[eventId]` (policy nueva en `event_guests`, ver sección 3).
   Surgió porque un admin vio en la lista de confirmados a alguien que
   no reconocía y no podía sacarlo por no haberlo sumado él.
+- **Editar cualquier evento** (2026-10-28): además de quien lo creó, un
+  admin puede editar nombre, fecha y hora, lugar, notas y fútbol de un
+  evento ajeno (policy nueva en `events`, ver sección 3). Surgió de una
+  consulta («¿por qué no puedo editar un evento?»): el lápiz y la policy
+  de `update` eran solo del creador. Borrar un evento sigue siendo solo
+  del creador.
 - **Ver el email de registro en la ficha de otro**: `/perfil/[userId]`
   muestra "Email de registro: {email}" cuando el viewer es admin — para
   poder identificar de quién se trata una entrada rara en una lista de
@@ -114,6 +121,15 @@ completo. Puntos que el SQL no explica por sí solo:
   OR entre policies que el resto de esta spec. No se tocó `brought_by`
   (`0024_event_guests_brought_by.sql`): sigue siendo solo informativo,
   sin efecto en permisos.
+- `0043_admin_edit_any_event.sql` suma una policy de `update` sobre
+  `events` con `using` y `with check (public.is_admin(auth.uid()))`,
+  aditiva a la existente `"Quien creo el evento lo puede editar"`
+  (`created_by = auth.uid()`, `0002_events.sql`) — mismo criterio de OR
+  entre policies que el resto de esta spec. Solo `update`: no hay policy
+  de `delete` para admin sobre `events`, así que borrar sigue siendo del
+  creador. El `with check` del creador (el `using`, por omisión) sigue
+  impidiéndole reasignar `created_by`; el del admin no lo restringe, pero
+  `updateEvent` nunca escribe esa columna.
 - `0040_profiles_update_column_privileges.sql` (2026-10-09) cierra un
   hueco que existía desde `0023`: la policy "Un usuario puede actualizar
   su propio perfil" (`0001_init.sql`) filtra por fila, no por columna, y
@@ -183,6 +199,19 @@ completo. Puntos que el SQL no explica por sí solo:
    componente ya decía que debía ser "fija arriba de todo". El
    `Header` no cambia: sigue mostrando la identidad real del admin.
 
+### Editar cualquier evento
+
+1. `/eventos/[eventId]/page.tsx` ya consulta el `is_admin` del viewer real
+   (para `RsvpSection`, ver abajo); el formulario de edición
+   (`EditEventForm`) se muestra con `event.created_by === user.id ||
+   isAdmin`. Es el usuario real y no el de «actuar como»: coincide con
+   RLS, que ve `auth.uid()`.
+2. `updateEvent` no cambia de permisos (la barrera real es la policy), pero
+   ahora pide de vuelta el `id` de lo actualizado y responde un error si
+   no volvió ninguna fila: antes, un `UPDATE` que RLS dejaba en 0 filas
+   se contestaba como `ok` y el formulario se cerraba sin haber guardado.
+3. «Borrar evento» sigue mostrándose solo si `created_by === user.id`.
+
 ### Sacar cualquier invitado + email en la ficha
 
 1. `/eventos/[eventId]/page.tsx` consulta el `is_admin` del viewer real
@@ -219,6 +248,10 @@ completo. Puntos que el SQL no explica por sí solo:
       no-admin, sigue apareciendo solo en los propios.
 - [x] Como admin, `/perfil/[userId]` de otra persona muestra su email
       de registro; como no-admin, no se muestra.
+- [x] Como admin, el lápiz de «Editar evento» aparece en un evento que
+      creó otra persona y guardar lo modifica; como no-admin que no creó el
+      evento, no aparece.
+- [x] Como admin, «Borrar evento» no aparece en un evento ajeno.
 
 ## 6. Decisiones y tradeoffs
 
@@ -227,6 +260,7 @@ completo. Puntos que el SQL no explica por sí solo:
 | "Actuar como" con escritura atribuida al impersonado | (a) Solo ver como otro (lectura); (b) login real con service role key | El usuario eligió (a) y (b) explícitamente en contra: quería poder confirmar RSVP en nombre de alguien, no solo mirar; y (b) exigiría generar sesiones reales del lado del servidor, más riesgo y más infraestructura nueva (la app documentó desde el principio que evita `service_role`, ver `specs/004-eventos-gastos-y-fotos.md`). |
 | Cookie httpOnly de 8hs en vez de sesión/estado en base | Guardar la impersonación activa en una tabla | Una cookie de corta duración alcanza para el caso de uso (una sesión de uso de la app) y evita agregar una tabla nueva solo para un estado efímero; el límite de 8hs evita que quede "olvidada" activa por días. |
 | Editar perfiles de otros como mecanismo *separado* de "actuar como" | Unificar todo bajo impersonación (ej. "actuar como Bob" también habilitaría editar su perfil desde `/perfil`) | Son dos intenciones distintas: corregir el alias de alguien es una acción puntual y rápida, mientras que "actuar como" es un modo de uso más amplio (con su propio banner). Mezclarlas hubiera hecho más confuso cuándo se está o no impersonando. |
+| Un admin edita cualquier evento, pero no lo borra | Que cualquier miembro edite cualquier evento; o dejar la edición solo del creador | El usuario eligió «creador + admins» (2026-10-28): mismo patrón que invitados y fotos. Borrar arrastra RSVPs, invitados, tareas y fotos y no se pidió ampliarlo. |
 | Alcance de "actuar como" limitado a RSVP en esta entrega | Cablear las ~15 server actions de la app de una sola vez | Cada acción necesita su propia policy "espejo" con `public.is_admin(auth.uid())` — hacerlas todas de una sería un PR enorme y de alto riesgo de revisar. RSVP es el caso de uso insignia ("confirmar en nombre de alguien"); el resto queda documentado como extensión mecánica futura. |
 | Sin auditoría de qué se hizo impersonando | Sumar una columna `impersonated_by` a las tablas afectadas | Mismo criterio de confianza total que ya rige el resto de la app (nada se audita más allá de los `created_by`/`updated_by` que ya existían); agregar auditoría no fue pedido y hubiera sumado columnas a varias tablas para un caso de uso de un solo admin. |
 | Policies de storage `avatars` admin sin restringir por carpeta | Que el admin solo pueda subir dentro de su propia carpeta (como hoy) | `AdminUploadAvatarForm` sube al path del *target*, corriendo con la sesión real del admin (no impersonando) — sin esta policy la subida fallaría contra la carpeta ajena. |
@@ -247,11 +281,18 @@ completo. Puntos que el SQL no explica por sí solo:
   (`groups.created_by`/`group_members.user_id`), `addExpense`
   (`expenses.created_by`).
 - Más de un admin, y una UI para otorgar/revocar el rol (hoy es un
-  `update` manual en la base).
+  `update` manual en la base). Hoy el único admin es Fercho, así que quien
+  no sea él ni el creador de un evento no puede editarlo.
+- Que un admin también pueda borrar un evento ajeno.
 - Auditoría de acciones hechas mientras se impersonaba a alguien.
 
 ## 8. Changelog
 
+- 2026-10-28: un admin puede editar cualquier evento (migración `0043`,
+  policy de `update` sobre `events`; el lápiz de `/eventos/[eventId]` se
+  muestra con `created_by === user.id || isAdmin`). `updateEvent` ahora avisa
+  cuando RLS no deja editar en vez de responder `ok`. Ver
+  `specs/003-eventos.md`.
 - 2026-10-09: el nombre visible dejó de ser algo que solo edita un admin:
   cada persona puede editar el suyo desde `/perfil` (ver
   `specs/008-alias-de-pago.md`). El form de admin de esta spec sigue

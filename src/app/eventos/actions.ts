@@ -159,11 +159,16 @@ export async function updateEvent(eventId: string, formData: FormData) {
 
   const location = await resolveVenueLocation(supabase, formData, user.id);
 
-  // La policy RLS "Quien creo el evento lo puede editar" (using created_by
-  // = auth.uid()) es la barrera real acá — igual que en deleteEvent, no se
-  // re-valida la autoría en la action, solo se oculta el formulario en la
-  // UI a quien no es el creador.
-  const { error } = await supabase
+  // La barrera real es RLS: la policy "Quien creo el evento lo puede editar"
+  // (created_by = auth.uid()) y, desde 0043, "Un admin puede editar cualquier
+  // evento". Igual que en deleteEvent, no se re-valida la autoría acá; la UI
+  // solo oculta el lápiz a quien no puede editar.
+  //
+  // Pero una RLS que filtra no da error: el UPDATE "funciona" con 0 filas. Por
+  // eso se pide de vuelta el id de lo que se actualizó: si no vuelve ninguna,
+  // el evento no existe o no se puede editar, y hay que decirlo en vez de dejar
+  // que el formulario se cierre como si hubiera guardado.
+  const { data: updated, error } = await supabase
     .from("events")
     .update({
       name,
@@ -172,9 +177,13 @@ export async function updateEvent(eventId: string, formData: FormData) {
       description: description || null,
       has_futbol: hasFutbol,
     })
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .select("id");
 
   if (error) return { error: error.message };
+  if (!updated || updated.length === 0) {
+    return { error: "No se pudo guardar: el evento no existe o no tenés permiso para editarlo." };
+  }
 
   revalidatePath(`/eventos/${eventId}`);
   revalidatePath("/eventos");
