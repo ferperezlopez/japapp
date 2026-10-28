@@ -67,6 +67,20 @@ const FEATURES = [
     ),
   },
   {
+    href: "/analytics",
+    title: "Analytics",
+    description: "Asistencia, gastos y aportes de cada JAPA, con comparativas.",
+    colorClasses: "bg-brand-soft text-brand",
+    icon: (
+      <>
+        <path strokeLinecap="round" d="M4 20h16" />
+        <rect x="5.5" y="12" width="3" height="6" rx="0.75" strokeLinejoin="round" />
+        <rect x="10.5" y="7" width="3" height="11" rx="0.75" strokeLinejoin="round" />
+        <rect x="15.5" y="9.5" width="3" height="8.5" rx="0.75" strokeLinejoin="round" />
+      </>
+    ),
+  },
+  {
     href: "/arcade",
     title: "JAPArcade",
     description: "Minijuegos con ranking del grupo.",
