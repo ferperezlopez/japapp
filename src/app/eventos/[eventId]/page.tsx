@@ -604,7 +604,9 @@ export default async function EventoPage({
       </Link>
 
       <div className="animate-reveal bg-grain mt-3 rounded-2xl border border-surface-border bg-surface p-5">
-        {event.created_by === user?.id ? (
+        {/* Editar: quien creó el evento o un admin (0043_admin_edit_any_event.sql).
+            Borrar sigue siendo solo del creador (más abajo). */}
+        {event.created_by === user?.id || isAdmin ? (
           <EditEventForm
             eventId={eventId}
             venues={venues ?? []}

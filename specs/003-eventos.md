@@ -6,8 +6,10 @@
   `supabase/migrations/0004_event_groups_and_media.sql` (le da a
   `group_id` su primer uso real — ver `specs/004-eventos-gastos-y-fotos.md`),
   `supabase/migrations/0005_evento_futbol.sql` (agrega `has_futbol` y
-  `kind` — ver `specs/006-evento-futbol.md`)
-- **Última actualización:** 2026-09-17
+  `kind` — ver `specs/006-evento-futbol.md`),
+  `supabase/migrations/0043_admin_edit_any_event.sql` (un admin también
+  puede editar — ver `specs/016-admin.md`)
+- **Última actualización:** 2026-10-28
 
 ## 1. Resumen
 
@@ -26,8 +28,8 @@ para el asado/empanadas.
 - Ver la lista de quién confirmó qué, agrupada por estado, con contador
   (colapsada por defecto detrás de "Ver detalle de asistentes" — el
   resumen y los botones de RSVP quedan siempre visibles sin abrir nada).
-- Editar un evento ya creado (solo quien lo creó): nombre, fecha/hora,
-  lugar, notas y si tiene fútbol.
+- Editar un evento ya creado (quien lo creó o un admin): nombre,
+  fecha/hora, lugar, notas y si tiene fútbol.
 - Borrar un evento (solo quien lo creó).
 - Los eventos son visibles para **cualquier usuario logueado de la app**,
   no están scopeados a un "grupo de gastos" como en `002-gastos.md`.
@@ -72,17 +74,25 @@ Puntos que el SQL no explica por sí solo:
    `on delete cascade`); igual que en gastos, la autorización real es la
    policy RLS `"Quien creo el evento lo puede borrar"` — la action no
    revalida `created_by` antes del delete, solo la UI oculta el botón.
-5. `updateEvent(eventId, formData)` (mismo criterio de autorización: la
-   policy RLS `"Quien creo el evento lo puede editar"`, ya existía desde
-   `0002_events.sql` sin usarse hasta ahora) reescribe nombre, fecha,
-   lugar, notas y `has_futbol`. La UI (`EditEventForm`, en
-   `/eventos/[eventId]`) solo se muestra si `created_by === user.id`, y
+5. `updateEvent(eventId, formData)` (mismo criterio de autorización: RLS.
+   La policy `"Quien creo el evento lo puede editar"` ya existía desde
+   `0002_events.sql` sin usarse hasta ahora, y `0043` suma
+   `"Un admin puede editar cualquier evento"`; en Postgres las policies del
+   mismo comando se combinan con OR) reescribe nombre, fecha, lugar, notas
+   y `has_futbol`. La UI (`EditEventForm`, en `/eventos/[eventId]`) solo se
+   muestra si `created_by === user.id` o el usuario real es admin, y
    reusa los mismos campos que el alta (`EventFormFields`, factorizado de
    `CreateEventForm` para no duplicar el select de lugares ni el cálculo
    de día de la semana). El formulario de edición precarga la fecha
    tomando los primeros 16 caracteres del ISO guardado (`"YYYY-MM-
    DDTHH:mm"`), sin pasar por getters de `Date` — ver la nota de zona
-   horaria en la sección 6.
+   horaria en la sección 6. Una RLS que filtra no da error: el `UPDATE` de
+   quien no puede editar "funciona" con 0 filas. Por eso `updateEvent` pide
+   de vuelta el `id` de lo que actualizó (`.select("id")`) y, si no vuelve
+   ninguna fila, responde `No se pudo guardar: el evento no existe o no
+   tenés permiso para editarlo.` en vez de `ok` (el formulario se cerraba
+   como si hubiera guardado y no cambiaba nada). Borrar sigue siendo solo
+   de quien creó el evento.
 6. `RsvpSection` (componente compartido por la confirmación de juntada
    y de fútbol, ver `specs/006-evento-futbol.md`) muestra siempre el
    resumen (barra apilada) y los botones de RSVP; las 3 listas Van/Tal
@@ -166,9 +176,15 @@ Puntos que el SQL no explica por sí solo:
       hasta que el servidor lo confirma de verdad — mientras se guarda,
       muestra un spinner en vez de dar por hecho que va a salir bien.
 - [x] El botón de borrar evento solo aparece si `created_by === user.id`.
-- [x] El formulario de edición solo aparece si `created_by === user.id`,
-      viene precargado con los datos actuales del evento, y guardar
-      cambios los refleja sin duplicar el evento.
+- [x] El formulario de edición solo aparece si `created_by === user.id`
+      o el usuario es admin, viene precargado con los datos actuales del
+      evento, y guardar cambios los refleja sin duplicar el evento.
+- [x] Un admin puede editar un evento que creó otra persona; un miembro que
+      no es admin ni el creador no ve el lápiz y, si llegara a guardar, la
+      acción responde un error en vez de dar por guardado un `UPDATE` de 0
+      filas.
+- [x] Un admin que no creó el evento no ve «Borrar evento» (borrar sigue
+      siendo solo del creador).
 - [x] Todas las rutas de `/eventos` requieren login.
 - [x] El detalle de asistentes (listas Van/Tal vez/No van + Invitados)
       arranca colapsado; el resumen y los botones de RSVP siguen
@@ -195,6 +211,8 @@ Puntos que el SQL no explica por sí solo:
 | `group_id` nullable agregado ya en esta migración, sin UI que lo use | Agregar la columna recién cuando se construya estadísticas | Evita una migración de schema futura solo para agregar un FK; el costo de tenerla ociosa es mínimo (una columna nullable). |
 | RSVP como upsert sin historial de cambios | Tabla de historial de respuestas | Solo importa el estado actual para contar gente; historizar respuestas no tiene caso de uso pedido. |
 | Edición de evento agregada reusando la policy RLS de `update` que ya existía sin usarse desde `0002` | Requerir borrar y recrear el evento para corregir un dato | Pedido explícito del usuario; la policy de autorización ya estaba lista, solo faltaba la action y la UI. |
+| Un admin puede editar cualquier evento (policy aditiva `0043`), pero no borrarlo | Que cualquier miembro edite cualquier evento; o dejar la edición solo del creador | Pedido explícito del usuario, que eligió «creador + admins» entre esas opciones: sigue el patrón que ya usan los invitados y las fotos (el dueño más un admin). Hoy el único admin es Fercho; si hiciera falta que edite cualquiera, sería cambiar esa policy. Borrar arrastra RSVPs, invitados, tareas y fotos, y no se pidió ampliarlo. |
+| `updateEvent` pide de vuelta el `id` y trata 0 filas como error | Confiar en que la UI oculta el lápiz | Una RLS que filtra no da error: sin esto, un `UPDATE` que no cambió nada se mostraba como guardado. |
 | Fecha del formulario de edición precargada cortando el ISO string (`slice(0, 16)`) en vez de usar getters de `Date` | `new Date(event_date).getHours()`/`getMinutes()`/etc. | Esos getters devuelven la hora en la zona horaria del proceso que corre el código (el servidor), no la del navegador de quien creó el evento originalmente — como `createEvent` tampoco hace conversión real de zona horaria (guarda tal cual lo que tipeó el navegador), cortar el string a mano es lo único que reproduce exactamente el valor original sin depender de en qué zona horaria corra el servidor. |
 | Detalle de asistentes colapsado en un `<details>`, resumen y RSVP siempre visibles | Dejar todo siempre expandido (como estaba) | Feedback del usuario: con dos RSVP (juntada + fútbol) más tareas/gastos/fotos, la página quedaba muy larga para solo confirmar o mirar el resumen. |
 | Divisor liviano (línea + eyebrow de color) entre juntada y fútbol, sin tarjetas anidadas | Envolver cada bloque en una tarjeta con borde/fondo propio | No hay un patrón de "card dentro de card" en el resto de la app; un divisor da el mismo límite visual sin sumar un nivel de anidamiento nuevo. |
@@ -213,9 +231,20 @@ Puntos que el SQL no explica por sí solo:
   desde `004` todo evento nuevo consigue su `group_id` automáticamente vía
   trigger, no hace falta setearlo a mano.
 - ~~Edición de evento~~ — implementada, ver changelog.
+- Que cualquier miembro (no solo el creador y los admins) pueda editar un
+  evento, o que un admin pueda borrarlo: hoy no se hace a propósito, ver
+  la tabla de decisiones.
 
 ## 8. Changelog
 
+- 2026-10-28: un admin también puede editar eventos que creó otra persona
+  (consulta del usuario: «¿por qué no puedo editar un evento?» — el lápiz
+  era solo del creador y la policy de `update` de `0002` también). Migración
+  `0043_admin_edit_any_event.sql` (policy aditiva, ya aplicada a la base
+  viva), el lápiz de `/eventos/[eventId]` se muestra con
+  `created_by === user.id || isAdmin`, y `updateEvent` ahora avisa cuando
+  RLS no deja editar (0 filas) en vez de responder `ok`. Borrar sigue siendo
+  solo del creador. Tests nuevos en `src/app/eventos/actions.test.ts`.
 - 2026-09-30: se puede compartir por WhatsApp la lista de anotados
   ("Van", confirmados) de cada sección de RSVP (juntada y, si el evento
   tiene fútbol, también esa lista aparte) — pedido explícito del
