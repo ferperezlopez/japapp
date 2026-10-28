@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TeamBuilderModal } from "./TeamBuilderModal";
 import { TeamsPitchView } from "./TeamsPitchView";
+import { ShareTeamsImageButton } from "./ShareTeamsImageButton";
 import { useBackButtonClose } from "@/lib/useBackButtonClose";
-
-type Candidate = { id: string; name: string; avatarUrl: string | null; guestId?: string };
-type Position = "gk" | "def" | "fwd";
-type SavedAssignment = { id: string; team: 1 | 2; position: Position };
-type Stats = { mvpId: string | null; goleadorId: string | null } | null;
+import {
+  buildPitchTeams,
+  type PitchAssignment as SavedAssignment,
+  type PitchCandidate as Candidate,
+  type PitchStats as Stats,
+} from "@/lib/eventos/pitchLayout";
 
 // Mismo criterio visual que FutbolStatsForm (resumen de solo lectura +
 // botón para editar), pero el editor es un modal (ver TeamBuilderModal),
@@ -16,12 +18,16 @@ type Stats = { mvpId: string | null; goleadorId: string | null } | null;
 // más espacio e interacción que un <select>.
 export function FutbolTeamsSection({
   eventId,
+  eventName,
+  eventDateLabel,
   candidates,
   initialAssignment,
   stats,
   isAdmin,
 }: {
   eventId: string;
+  eventName: string;
+  eventDateLabel: string;
   candidates: Candidate[];
   initialAssignment: SavedAssignment[];
   stats: Stats;
@@ -67,6 +73,8 @@ export function FutbolTeamsSection({
       )}
       {viewOpen && (
         <ViewTeamsModal
+          eventName={eventName}
+          eventDateLabel={eventDateLabel}
           candidates={candidates}
           initialAssignment={initialAssignment}
           stats={stats}
@@ -92,8 +100,11 @@ export function FutbolTeamsSection({
 
 // Mismo shell que ImageZoomModal (overlay, cierre con Escape/click afuera,
 // bloqueo de scroll del body) — versión de solo lectura del detalle que
-// antes se mostraba siempre expandido en la página del evento.
+// antes se mostraba siempre expandido en la página del evento. Debajo de la
+// cancha, el botón para compartirla como imagen (ver ShareTeamsImageButton).
 function ViewTeamsModal({
+  eventName,
+  eventDateLabel,
   candidates,
   initialAssignment,
   stats,
@@ -101,6 +112,8 @@ function ViewTeamsModal({
   onEdit,
   onClose,
 }: {
+  eventName: string;
+  eventDateLabel: string;
   candidates: Candidate[];
   initialAssignment: SavedAssignment[];
   stats: Stats;
@@ -109,6 +122,12 @@ function ViewTeamsModal({
   onClose: () => void;
 }) {
   useBackButtonClose(onClose);
+
+  // La imagen para compartir sale del mismo modelo que la cancha en pantalla.
+  const teams = useMemo(
+    () => buildPitchTeams(candidates, initialAssignment, stats),
+    [candidates, initialAssignment, stats],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -156,10 +175,15 @@ function ViewTeamsModal({
             isAdmin={isAdmin}
           />
         </div>
+        <ShareTeamsImageButton
+          teams={teams}
+          eventName={eventName}
+          eventDateLabel={eventDateLabel}
+        />
         <button
           type="button"
           onClick={onEdit}
-          className="mt-4 text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
+          className="mt-4 block text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
         >
           Editar equipos
         </button>

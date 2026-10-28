@@ -5,7 +5,7 @@
 - **Migraciones relacionadas:** `supabase/migrations/0016_futbol_teams.sql`,
   `supabase/migrations/0017_futbol_teams_position.sql`,
   `supabase/migrations/0026_futbol_teams_guests.sql`
-- **Última actualización:** 2026-10-09
+- **Última actualización:** 2026-10-28
 
 ## 1. Resumen
 
@@ -52,8 +52,21 @@ hacerlo a mano por WhatsApp cada vez que se junta el grupo.
   candidatos elegibles: pueden entrar a un equipo/posición igual que
   un miembro confirmado, con camiseta y dorsal como cualquier jugador
   (sin avatar real ni link a perfil, porque no tienen cuenta).
+- **Compartir la cancha como imagen** (2026-10-28): en «Ver equipos», un
+  botón «Compartir en WhatsApp» manda a la hoja de compartir del sistema
+  una imagen de la cancha con los dos equipos (JPEG de 1080 × 1620, el
+  nombre de la juntada y la fecha como epígrafe). Donde el navegador no
+  puede compartir archivos, el mismo botón pasa a «Descargar imagen».
 
 ### No incluye (por ahora)
+
+- Compartir desde el armador («Armar equipos»): solo desde «Ver equipos».
+- Una cabecera con el nombre de la juntada o una leyenda de MVP/goleador
+  dentro de la imagen: es la cancha tal cual se ve (el nombre y la fecha
+  van en el epígrafe de la hoja de compartir).
+- Elegir WhatsApp directo: desde una web no se puede adjuntar una imagen a
+  un link `wa.me` (solo texto); la hoja del sistema lista varias apps y
+  WhatsApp es una de ellas.
 
 - Coordenadas libres por jugador (arrastrar a cualquier punto de la
   cancha) — las posiciones son 3 franjas fijas por equipo (arquero,
@@ -202,6 +215,38 @@ Puntos que el SQL no explica por sí solo:
    cada `id`, si empieza con `"u:"` va a `user_id`, si empieza con
    `"g:"` va a `event_guest_id` (el otro campo queda `null`). Al
    terminar, cierra el modal.
+8. **Un solo modelo de la cancha** (`src/lib/eventos/pitchLayout.ts`,
+   código puro con tests): `buildPitchTeams(candidates, assignment,
+   stats)` decide, por equipo, las filas (arquero, defensores,
+   delanteros) con su altura, y por jugador su posición horizontal, dorsal
+   (`assignJerseyNumbers`), camiseta (arquero/equipo) e insignia
+   (MVP/goleador/ambos). También viven ahí las rutas de las camisetas, las
+   coordenadas (`PITCH_POSITIONS`, `ROW_X_SPAN`, `rowXPositions`) y el nombre
+   y el epígrafe de la imagen. `Jersey.tsx` los re-exporta y
+   `TeamsPitchView` solo dibuja lo que dice el modelo (el HTML que genera
+   quedó byte a byte igual al de antes del cambio). El armador
+   (`TeamBuilderModal`) no se tocó.
+9. **La imagen** (`src/lib/eventos/teamsImage.ts`, solo navegador):
+   `renderTeamsImage` dibuja ese mismo modelo en un canvas de 1080 × 1620
+   (la proporción 2:3 de la cancha), con las medidas de la cancha en
+   pantalla de un celular (300 px de ancho, escaladas ×3,6): el fondo
+   `pitch.webp`, cada camiseta con su sombra, el dorsal, el nombre en su
+   píldora, la etiqueta «EQUIPO N (total)» y «Sin jugadores» en un equipo
+   vacío, apilados en el mismo orden que en pantalla; se exporta como JPEG
+   (calidad 0,92, ~300 KB: la cancha es una foto y WhatsApp igual la
+   recomprime). Las dos vistas comparten posiciones, dorsales y camisetas,
+   pero **no el estilo** (tamaños de la píldora, sombra, tipografía): si se
+   rediseñan las camisetas en el DOM hay que revisar el canvas.
+   `ShareTeamsImageButton` la prepara **al abrir** «Ver equipos» —no al
+   tocar el botón— porque `navigator.share()` tiene que llamarse enseguida
+   del toque (si pasó mucho, Safari y Chrome lo rechazan con
+   `NotAllowedError`); mientras tanto el botón queda deshabilitado
+   («Preparando imagen…»). Al tocarlo: con soporte de archivos
+   (`navigator.canShare({ files })`) llama a `navigator.share({ files, title,
+   text })`; cerrar la hoja (`AbortError`) no hace nada; cualquier otro
+   error descarga la imagen y avisa. Sin soporte, el botón es «Descargar
+   imagen». Si ni siquiera se pudo generar, en vez del botón se muestra un
+   aviso.
 
 ## 5. Criterios de aceptación
 
@@ -250,6 +295,26 @@ Puntos que el SQL no explica por sí solo:
       camiseta en "Ver equipos".
 - [x] (2026-10-09) Si la misma persona es MVP y goleador a la vez, su
       camiseta muestra trofeo y pelota juntos.
+- [x] (2026-10-28) «Ver equipos» muestra un botón verde «Compartir en
+      WhatsApp» debajo de la cancha; al tocarlo se abre la hoja de
+      compartir con **una** imagen JPEG de 1080 × 1620 llamada
+      `equipos-<juntada>.jpg`, con título y epígrafe (nombre de la juntada y
+      fecha), y el modal sigue abierto.
+- [x] La imagen es la cancha tal cual se ve en pantalla (mismas posiciones,
+      dorsales, camisetas, MVP/goleador, etiquetas y «Sin jugadores»):
+      comparada contra la captura de la pantalla a la misma escala, solo
+      difieren los bordes (diferencia media de 3,5 a 8,3 sobre 255, sin
+      corrimientos en los textos ni en los dorsales).
+- [x] Con un equipo vacío, equipos dispares, una fila de tres, invitados o
+      MVP y goleador a la vez, la imagen se genera igual.
+- [x] El botón queda deshabilitado con «Preparando imagen…» hasta que la
+      imagen está lista (probado con las imágenes de la cancha demoradas).
+- [x] Sin soporte para compartir archivos, el botón es «Descargar imagen» y
+      baja el mismo archivo; cerrar la hoja no muestra ningún error; si la
+      hoja falla, se descarga la imagen y se avisa.
+- [x] El HTML de la cancha de «Ver equipos» es idéntico antes y después de
+      extraer el modelo (5 escenarios, claro y oscuro: mismo HTML y misma
+      captura, píxel a píxel).
 
 ## 6. Decisiones y tradeoffs
 
@@ -269,6 +334,10 @@ Puntos que el SQL no explica por sí solo:
 | Franjas de posición en columnas lado a lado dentro de cada equipo, modal ensanchado a `max-w-xl` | Mantener las franjas apiladas y solo ensanchar el modal | Feedback del usuario con captura: solo ensanchar no reducía la altura (6 franjas apiladas seguían apiladas), y sobraba mucho espacio a los costados sin usar — pasar a columnas usa ese ancho para bajar la cantidad de franjas apiladas de 6 a 2 (una fila de 3 columnas por equipo). |
 | "Ver equipos" con cancha propia por equipo (arco + arquero + filas), reusando `Jersey`/`assignJerseyNumbers` del editor | Mejorar la lista de texto (`renderTeamSummary`) en vez de construir una vista gráfica nueva | Pedido explícito del usuario con una captura de referencia (el mismo estilo del editor, pero de solo lectura); `Jersey`/`JERSEY_COLORS`/`GoalNet` se extraen a `Jersey.tsx` para no duplicar el SVG entre el editor y la vista nueva. |
 | Badges de MVP (⭐) y goleador (⚽) superpuestos a la camiseta en "Ver equipos" | Mostrar el resultado del partido aparte, sin cruzarlo con la vista de equipos | Pedido explícito del usuario: "reflejalo en la imagen de equipos" — conecta visualmente quién ganó cada reconocimiento con el equipo en el que jugó, sin tener que ir a leer el texto de `FutbolStatsForm` aparte. `FutbolTeamsSection` recibe `stats` como prop nueva (antes solo la tenía `FutbolStatsForm`). |
+| La imagen para compartir se dibuja a mano en un canvas con el mismo modelo que la vista (`buildPitchTeams`) | Capturar el DOM con una librería (`html-to-image`, `html2canvas`) | No suma una dependencia y evita sus problemas conocidos en Safari/iOS (`foreignObject`, fuentes e imágenes que no llegan al primer intento, `filter: drop-shadow`). Todo lo que se dibuja es conocido y está en porcentajes de la cancha. El costo —dos renderizadores— se acota compartiendo el modelo y comprobando contra la pantalla. |
+| Preparar la imagen al abrir «Ver equipos», no al tocar el botón | Generarla en el momento del toque | La hoja de compartir exige una llamada inmediata al toque; generar ahí (cargar imágenes, dibujar, exportar) arriesga un `NotAllowedError`. |
+| Compartir por la hoja del sistema (Web Share con archivo), con descarga como alternativa | Un link `wa.me` | `wa.me` solo lleva texto: desde una web no se puede adjuntar una imagen a WhatsApp. |
+| JPEG de 1080 × 1620, calidad 0,92 | PNG | La cancha es una foto: el PNG pesa ~10 veces más y WhatsApp recomprime igual. |
 | Cuarta variante de camiseta (`both`, trofeo + pelota) para quien es MVP y goleador a la vez | Que gane MVP y se pierda la pelota (decisión del 2026-09-29, cuando no había asset para ese caso) | El usuario generó las 4 camisetas (una por tipo) y las mandó para ese caso puntual (2026-10-09). Mismo mecanismo que `mvp`/`goleador`: `Jersey` cambia la camiseta entera, no superpone nada. La leyenda de abajo no cambia: ya muestra "🏆 MVP" y "⚽ Goleador" por separado. |
 
 ## 7. Futuro / fuera de alcance
@@ -279,9 +348,25 @@ Puntos que el SQL no explica por sí solo:
   3 franjas fijas).
 - Resultado del partido separado por equipo (sigue siendo texto libre
   en `futbol_stats`).
+- Compartir la imagen también desde «Armar equipos», con cabecera (nombre
+  y fecha de la juntada) y leyenda de MVP/goleador dentro de la imagen.
 
 ## 8. Changelog
 
+- 2026-10-28: pedido explícito del usuario — que «Ver equipos» tenga una
+  opción para compartir la imagen por WhatsApp. La cancha era HTML, no una
+  imagen, así que se genera: la lógica de qué jugador va dónde (filas,
+  dorsales, camisetas, MVP/goleador) se extrajo de `TeamsPitchView` a
+  `src/lib/eventos/pitchLayout.ts` (`buildPitchTeams`, con tests) sin cambiar
+  el HTML de la vista, y `src/lib/eventos/teamsImage.ts` dibuja ese mismo
+  modelo en un canvas y lo exporta a JPEG. `ShareTeamsImageButton` prepara la
+  imagen al abrir el modal y la entrega a `navigator.share` (o la descarga
+  donde no se puede compartir archivos). `FutbolTeamsSection` recibe
+  `eventName` y `eventDateLabel` para el nombre del archivo y el epígrafe. El
+  ícono de WhatsApp se extrajo a `WhatsAppIcon` (`WhatsAppShareButton.tsx`).
+  Verificado en Chromium con touch contra un build de producción, con
+  `navigator.share` simulado: la hoja real de WhatsApp en el celular no se
+  pudo probar desde el entorno de desarrollo.
 - 2026-10-09: quien es MVP y goleador a la vez ya no pierde la pelota.
   Hasta ahora `renderPlayer` hacía `isMvp ? "mvp" : isGoleador ?
   "goleador" : undefined`, así que con la misma persona ganaba MVP (ver

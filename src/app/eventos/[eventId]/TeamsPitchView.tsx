@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { EditGuestNameModal } from "@/components/EditGuestNameModal";
 import { abbreviateName } from "@/lib/formatName";
-import { assignJerseyNumbers } from "@/lib/eventos/jerseyNumbers";
-import { Jersey, Pitch, PITCH_POSITIONS, ROW_X_SPAN, rowXPositions, type JerseyVariant } from "./Jersey";
-
-type Candidate = { id: string; name: string; avatarUrl: string | null; guestId?: string };
-type Position = "gk" | "def" | "fwd";
-type SavedAssignment = { id: string; team: 1 | 2; position: Position };
-type Stats = { mvpId: string | null; goleadorId: string | null } | null;
+import {
+  buildPitchTeams,
+  type PitchAssignment,
+  type PitchCandidate,
+  type PitchPlayer,
+  type PitchStats,
+  type PitchTeam,
+} from "@/lib/eventos/pitchLayout";
+import { Jersey, Pitch } from "./Jersey";
 
 // Etiqueta de nombre bajo la camiseta: texto plano, o (si es invitado y
 // isAdmin) un botón que abre el mismo editor que GuestNameButton — sin
@@ -60,85 +62,56 @@ function NamePill({
 // sola cancha entre los dos equipos porque no hay franjas para tocar.
 // El MVP y el goleador (si ya se cargó el resultado) se marcan con un
 // badge sobre la camiseta correspondiente.
+//
+// Qué jugador va dónde, con qué dorsal y camiseta, lo decide
+// buildPitchTeams (src/lib/eventos/pitchLayout.ts), que también usa la imagen
+// que se comparte por WhatsApp: acá solo se dibuja.
 export function TeamsPitchView({
   candidates,
   assignment,
   stats,
   isAdmin,
 }: {
-  candidates: Candidate[];
-  assignment: SavedAssignment[];
-  stats: Stats;
+  candidates: PitchCandidate[];
+  assignment: PitchAssignment[];
+  stats: PitchStats;
   isAdmin: boolean;
 }) {
-  const findCandidate = (id: string) => candidates.find((c) => c.id === id);
-
-  const byPosition = (team: 1 | 2, position: Position) =>
-    assignment
-      .filter((a) => a.team === team && a.position === position)
-      .map((a) => findCandidate(a.id))
-      .filter((c): c is Candidate => !!c);
-
-  const renderPlayer = (c: Candidate, variant: JerseyVariant, number: number) => {
-    const isMvp = stats?.mvpId === c.id;
-    const isGoleador = stats?.goleadorId === c.id;
-    const badge =
-      isMvp && isGoleador ? "both" : isMvp ? "mvp" : isGoleador ? "goleador" : undefined;
-    return (
-      <div key={c.id} className="flex flex-col items-center gap-0.5">
-        <Jersey number={number} variant={variant} badge={badge} />
-        <NamePill name={c.name} guestId={c.guestId} isAdmin={isAdmin} />
-      </div>
-    );
-  };
+  const renderPlayer = (player: PitchPlayer) => (
+    <div key={player.id} className="flex flex-col items-center gap-0.5">
+      <Jersey number={player.number} variant={player.variant} badge={player.badge} />
+      <NamePill name={player.name} guestId={player.guestId} isAdmin={isAdmin} />
+    </div>
+  );
 
   // Franja de posición: una banda horizontal absoluta a la altura exacta
-  // (`yPercent`, ver PITCH_POSITIONS en Jersey.tsx) medida sobre la
-  // imagen de formación que mandó el usuario. Cada jugador se ubica en
-  // su propio % horizontal (`rowXPositions`, mismos extremos que esa
-  // imagen) en vez de repartirse con flexbox.
-  const renderRow = (
-    position: Position,
-    players: Candidate[],
-    variant: JerseyVariant,
-    yPercent: number,
-    xSpan: [number, number],
-    numbers: Map<string, number>,
-  ) => {
-    const xs = rowXPositions(players.length, xSpan);
-    return (
-      <div
-        key={position}
-        className="pointer-events-auto absolute left-0 w-full"
-        style={{ top: `${yPercent}%`, transform: "translateY(-50%)" }}
-      >
-        {players.map((c, i) => (
-          <div
-            key={c.id}
-            className="absolute top-1/2"
-            style={{ left: `${xs[i]}%`, transform: "translate(-50%, -50%)" }}
-          >
-            {renderPlayer(c, variant, numbers.get(c.id) ?? 0)}
-          </div>
-        ))}
-      </div>
-    );
-  };
+  // (`y`, ver PITCH_POSITIONS en pitchLayout.ts) medida sobre la imagen de
+  // formación que mandó el usuario. Cada jugador se ubica en su propio %
+  // horizontal (`x`, mismos extremos que esa imagen) en vez de repartirse
+  // con flexbox.
+  const renderRow = (row: PitchTeam["rows"][number]) => (
+    <div
+      key={row.position}
+      className="pointer-events-auto absolute left-0 w-full"
+      style={{ top: `${row.y}%`, transform: "translateY(-50%)" }}
+    >
+      {row.players.map((player) => (
+        <div
+          key={player.id}
+          className="absolute top-1/2"
+          style={{ left: `${player.x}%`, transform: "translate(-50%, -50%)" }}
+        >
+          {renderPlayer(player)}
+        </div>
+      ))}
+    </div>
+  );
 
   // Bloque de un equipo: se superpone entero sobre la cancha compartida
   // (ver `Pitch`) — cada jugador se posiciona directo con sus coordenadas
   // exactas, no hace falta dividir la cancha en mitades. La etiqueta va
   // en la esquina pegada al arco propio.
-  const renderTeamBlock = (team: 1 | 2) => {
-    const gk = byPosition(team, "gk");
-    const def = byPosition(team, "def");
-    const fwd = byPosition(team, "fwd");
-    const numbers = assignJerseyNumbers([gk, def, fwd]);
-    const total = gk.length + def.length + fwd.length;
-    const variant: JerseyVariant = team === 2 ? "team2" : "team1";
-    const gkVariant: JerseyVariant = team === 1 ? "gk1" : "gk2";
-    const pos = PITCH_POSITIONS[team];
-
+  const renderTeamBlock = ({ team, total, rows }: PitchTeam) => {
     const label = (
       <span
         className={`absolute left-2 ${team === 1 ? "top-2" : "bottom-2"} inline-block rounded-md bg-black/50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white`}
@@ -166,19 +139,18 @@ export function TeamsPitchView({
     return (
       <div key={team} className="pointer-events-none absolute inset-0">
         {label}
-        {gk.length > 0 && renderRow("gk", gk, gkVariant, pos.gkY, [50, 50], numbers)}
-        {def.length > 0 &&
-          renderRow("def", def, variant, def.length === 1 ? pos.defYSingle : pos.defY, ROW_X_SPAN.def, numbers)}
-        {fwd.length > 0 && renderRow("fwd", fwd, variant, pos.fwdY, ROW_X_SPAN.fwd, numbers)}
+        {rows.map(renderRow)}
       </div>
     );
   };
 
+  const [team1, team2] = buildPitchTeams(candidates, assignment, stats);
+
   return (
     <div>
       <Pitch>
-        {renderTeamBlock(1)}
-        {renderTeamBlock(2)}
+        {renderTeamBlock(team1)}
+        {renderTeamBlock(team2)}
       </Pitch>
       {(stats?.mvpId || stats?.goleadorId) && (
         <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-foreground/50">
