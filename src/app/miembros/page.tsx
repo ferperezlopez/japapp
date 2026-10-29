@@ -6,6 +6,7 @@ import { AttendanceStatsLines } from "@/components/eventos/AttendanceStatsCard";
 import {
   calcularAsistencia,
   contarEventosElegibles,
+  filtrarRsvpsDeEventosPasados,
   type RsvpForAttendance,
 } from "@/lib/eventos/attendance";
 import { startImpersonation } from "@/app/actions/impersonation";
@@ -32,11 +33,13 @@ export default async function MiembrosPage() {
       .from("profiles")
       .select("id, name, email, avatar_url, created_at")
       .order("name"),
-    supabase.from("event_rsvps").select("user_id, kind, status"),
-    supabase.from("events").select("event_date, has_futbol"),
+    supabase.from("event_rsvps").select("user_id, event_id, kind, status"),
+    supabase.from("events").select("id, event_date, has_futbol"),
   ]);
   const isAdmin = me?.is_admin ?? false;
+  const now = new Date();
   const eventDates = (events ?? []).map((e) => ({
+    id: e.id,
     eventDate: e.event_date,
     hasFutbol: e.has_futbol,
   }));
@@ -44,8 +47,14 @@ export default async function MiembrosPage() {
   // Cada persona linkea a /perfil/[userId] — esa ruta ya redirige a /perfil
   // cuando el id es el propio, así que acá no hace falta distinguir "uno
   // mismo" del resto (mismo criterio ya usado en /gastos/[groupId]).
+  // Solo cuentan las respuestas a eventos que ya pasaron (ver la función).
   const rsvpsByUser = new Map<string, RsvpForAttendance[]>();
-  for (const r of rsvps ?? []) {
+  const pastRsvps = filtrarRsvpsDeEventosPasados(
+    (rsvps ?? []).map((r) => ({ ...r, eventId: r.event_id })),
+    eventDates,
+    now,
+  );
+  for (const r of pastRsvps) {
     const list = rsvpsByUser.get(r.user_id) ?? [];
     list.push({ kind: r.kind, status: r.status });
     rsvpsByUser.set(r.user_id, list);
@@ -65,7 +74,7 @@ export default async function MiembrosPage() {
 
       <div className="mt-6 space-y-2">
         {(members ?? []).map((m, index) => {
-          const eligible = contarEventosElegibles(eventDates, m.created_at);
+          const eligible = contarEventosElegibles(eventDates, m.created_at, now);
           const attendance = calcularAsistencia(rsvpsByUser.get(m.id) ?? [], eligible);
           return (
             <Card

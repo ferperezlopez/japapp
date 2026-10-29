@@ -4,7 +4,11 @@ import { EditNameForm } from "./EditNameForm";
 import { UploadAvatarForm } from "./UploadAvatarForm";
 import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
-import { calcularAsistencia, contarEventosElegibles } from "@/lib/eventos/attendance";
+import {
+  calcularAsistencia,
+  contarEventosElegibles,
+  filtrarRsvpsDeEventosPasados,
+} from "@/lib/eventos/attendance";
 
 export default async function PerfilPage() {
   const supabase = await createClient();
@@ -28,16 +32,26 @@ export default async function PerfilPage() {
       .select("name, email, alias, avatar_url, created_at")
       .eq("id", user.id)
       .maybeSingle(),
-    supabase.from("event_rsvps").select("kind, status").eq("user_id", user.id),
-    supabase.from("events").select("event_date, has_futbol"),
+    supabase.from("event_rsvps").select("event_id, kind, status").eq("user_id", user.id),
+    supabase.from("events").select("id, event_date, has_futbol"),
   ]);
+  const now = new Date();
+  const eventDates = (events ?? []).map((e) => ({
+    id: e.id,
+    eventDate: e.event_date,
+    hasFutbol: e.has_futbol,
+  }));
   const eligible = profile
-    ? contarEventosElegibles(
-        (events ?? []).map((e) => ({ eventDate: e.event_date, hasFutbol: e.has_futbol })),
-        profile.created_at,
-      )
+    ? contarEventosElegibles(eventDates, profile.created_at, now)
     : undefined;
-  const attendance = calcularAsistencia(rsvps ?? [], eligible);
+  const attendance = calcularAsistencia(
+    filtrarRsvpsDeEventosPasados(
+      (rsvps ?? []).map((r) => ({ eventId: r.event_id, kind: r.kind, status: r.status })),
+      eventDates,
+      now,
+    ),
+    eligible,
+  );
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
