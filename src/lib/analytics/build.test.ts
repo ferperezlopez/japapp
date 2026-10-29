@@ -1,56 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildAnalytics, MIN_EVENTS_FOR_TRENDS } from "./build";
-import { NOW, event, expense, futbol, guest, member, payment, rsvp } from "./fixtures";
-import type { AnalyticsInput } from "./types";
-
-// Un escenario chico y calculable a mano:
-//  · 4 miembros (d se une el 10/10, después de los dos primeros eventos).
-//  · e1 (18/9, con fútbol), e2 (2/10, con fútbol) y e3 (16/10) ya pasaron; e4 (30/10) es el próximo.
-//  · Cada evento pasado tiene su grupo de gastos.
-const base = (): AnalyticsInput => ({
-  now: NOW,
-  members: [member("a"), member("b"), member("c"), member("d", "2026-10-10T00:00:00Z")],
-  events: [
-    event("e1", "2026-09-18T19:30:00Z", { hasFutbol: true, groupId: "g1" }),
-    event("e2", "2026-10-02T20:00:00Z", { hasFutbol: true, groupId: "g2" }),
-    event("e3", "2026-10-16T19:20:00Z", { groupId: "g3" }),
-    event("e4", "2026-10-30T20:00:00Z", { hasFutbol: true, groupId: "g4" }),
-  ],
-  rsvps: [
-    // e1: a y b van, c dice que no → 2 de 3 elegibles (d todavía no era miembro)
-    rsvp("e1", "a", "yes"),
-    rsvp("e1", "b", "yes"),
-    rsvp("e1", "c", "no"),
-    rsvp("e1", "a", "yes", "futbol"),
-    // e2: solo a va → 1 de 3
-    rsvp("e2", "a", "yes"),
-    rsvp("e2", "b", "maybe"),
-    // e3: a, b y d van → 3 de 4
-    rsvp("e3", "a", "yes"),
-    rsvp("e3", "b", "yes"),
-    rsvp("e3", "d", "yes"),
-    // e4 (próximo): a y c confirmaron
-    rsvp("e4", "a", "yes"),
-    rsvp("e4", "c", "yes"),
-  ],
-  guests: [guest("e1", "g-1", "a"), guest("e3", "g-2", "b"), guest("e3", "g-3", "b")],
-  expenses: [
-    // e1: $300 en total, la mayor la pone a
-    expense("x1", "g1", "a", 200, ["a", "b", "c"]),
-    expense("x2", "g1", "b", 100, ["a", "b", "c"]),
-    // e2: $120
-    expense("x3", "g2", "a", 120, ["a", "b", "c"]),
-    // e3: sin gastos cargados (g3 vacío)
-    // e4: ya hay una compra para el próximo
-    expense("x4", "g4", "c", 999, ["a", "c"]),
-  ],
-  payments: [payment("g1", "c", "a", 40)],
-  futbol: [
-    futbol("e1", { resultado: "4-9", mvpUserId: "a", goleadorUserId: "b" }),
-    futbol("e2", { mvpUserId: "a" }),
-    futbol("e4", { mvpUserId: "c" }),
-  ],
-});
+import { NOW, baseInput as base, event, expense, guest, member, rsvp } from "./fixtures";
 
 describe("buildAnalytics · eventos", () => {
   const result = buildAnalytics(base());
@@ -156,65 +106,25 @@ describe("buildAnalytics · general", () => {
     expect(general.attendance.distinctAttendees).toBe(3);
   });
 
-  it("gasto: total, por evento, costo por persona y gasto por ítem (solo pasados)", () => {
+  it("gasto: total, por evento y costo por persona (solo pasados)", () => {
     expect(general.spending.eventsWithExpenses).toBe(2);
     expect(general.spending.total).toBe(420);
     expect(general.spending.perEvent).toMatchObject({ n: 2, mean: 210, median: 210, latest: 120 });
     expect(general.spending.costPerPerson).toMatchObject({ n: 2, mean: 70, latest: 40 });
-    expect(general.spending.items).toEqual({ count: 3, mean: 140, median: 120, max: 200 });
     // el pendiente es el de los eventos pasados: e1 60 + e2 80
     expect(general.spending.pending).toBe(140);
   });
 
-  it("aportes: cuántos pusieron y qué parte puso el que más puso", () => {
-    // a puso 200 + 120 = 320 de 420; b puso 100
-    expect(general.spending.payers).toBe(2);
-    expect(general.spending.topPayerShare).toBeCloseTo(320 / 420, 9);
-  });
-
-  it("la serie del gráfico va en orden, con el próximo marcado al final", () => {
+  it("la serie del gráfico va en orden, con el próximo marcado al final y el tipo de cada evento", () => {
     expect(general.series.map((p) => [p.eventId, p.isNext])).toEqual([
       ["e1", false],
       ["e2", false],
       ["e3", false],
       ["e4", true],
     ]);
+    expect(general.series.map((p) => p.hasFutbol)).toEqual([true, true, false, true]);
     expect(general.series[2]).toMatchObject({ confirmed: 3, total: null, costPerPerson: null });
     expect(general.series[3]).toMatchObject({ confirmed: 2, total: 999 });
-  });
-
-  it("rankings: quienes más ponen, los más fieles y los premios", () => {
-    expect(general.rankings.contributors).toEqual([
-      { userId: "a", value: 320 },
-      { userId: "b", value: 100 },
-    ]);
-    expect(general.rankings.mvps).toEqual([{ userId: "a", value: 2 }]);
-    expect(general.rankings.goleadores).toEqual([{ userId: "b", value: 1 }]);
-  });
-
-  it("los más fieles: por ratio, con al menos 2 eventos elegibles", () => {
-    // a y b tienen 100 % (el «tal vez» de b no suma ni resta), pero a fue a más
-    // eventos; c tiene 0 %. d solo es elegible a 1 evento: no entra.
-    expect(general.rankings.faithful).toEqual([
-      { userId: "a", value: 1 },
-      { userId: "b", value: 1 },
-      { userId: "c", value: 0 },
-    ]);
-  });
-});
-
-describe("buildAnalytics · los más fieles (bordes)", () => {
-  it("entra quien tiene exactamente 2 eventos elegibles; con 1 no", () => {
-    const input = base();
-    const { general } = buildAnalytics({
-      ...input,
-      // e se une entre e1 y e2: es elegible a e2 y e3 (2 eventos)
-      members: [...input.members, member("e", "2026-10-01T00:00:00Z")],
-      rsvps: [...input.rsvps, rsvp("e2", "e", "yes"), rsvp("e3", "e", "yes")],
-    });
-    const ids = general.rankings.faithful.map((r) => r.userId);
-    expect(ids).toContain("e");
-    expect(ids).not.toContain("d");
   });
 });
 
@@ -247,12 +157,11 @@ describe("buildAnalytics · miembros", () => {
     expect(m.a.futbol).toEqual({ attended: 1, absent: 1, ratio: 0.5 });
   });
 
-  it("aportes, consumo y neto de los eventos pasados (no cuentan los del próximo)", () => {
-    // a: puso 200 + 120 = 320; consumió 100 + 40 = 140; (en e4 consumiría, pero no entra)
-    expect(m.a.money).toMatchObject({ paid: 320, consumed: 140, net: 180, eventsPaid: 2, eventsConsumed: 2, avgConsumed: 70 });
-    // c: puso 0 en los pasados (los 999 son del próximo)
-    expect(m.c.money).toMatchObject({ paid: 0, consumed: 140, net: -140, eventsPaid: 0, eventsConsumed: 2 });
-    expect(m.d.money).toMatchObject({ paid: 0, consumed: 0, avgConsumed: null, eventsConsumed: 0 });
+  it("lo que le tocó de los eventos pasados (no cuentan los del próximo)", () => {
+    // a: consumió 100 + 40 = 140 (en e4 consumiría, pero no entra)
+    expect(m.a.money).toMatchObject({ consumed: 140, eventsConsumed: 2, avgConsumed: 70 });
+    expect(m.c.money).toMatchObject({ consumed: 140, eventsConsumed: 2 });
+    expect(m.d.money).toMatchObject({ consumed: 0, avgConsumed: null, eventsConsumed: 0 });
   });
 
   it("saldo: lo que le deben (positivo) o debe (negativo), con los pagos de deuda", () => {
@@ -276,7 +185,7 @@ describe("buildAnalytics · miembros", () => {
     expect(after.find((x) => x.id === "a")?.guestsBrought).toBe(1);
   });
 
-  it("quien puso plata para los demás sin consumir nada: paga, pero no «consumió» en ese evento", () => {
+  it("quien puso plata para los demás sin consumir nada: no «consumió», pero su saldo cuenta", () => {
     const input = base();
     const { members: after } = buildAnalytics({
       ...input,
@@ -284,7 +193,7 @@ describe("buildAnalytics · miembros", () => {
       expenses: [...input.expenses, expense("xz", "g2", "z", 90, ["a", "b", "c"])],
     });
     const z = after.find((x) => x.id === "z");
-    expect(z?.money).toMatchObject({ paid: 90, consumed: 0, net: 90, eventsPaid: 1, eventsConsumed: 0, avgConsumed: null });
+    expect(z?.money).toMatchObject({ consumed: 0, eventsConsumed: 0, avgConsumed: null, balance: 90 });
   });
 
   it("MVP y goleador solo de eventos pasados", () => {
@@ -295,22 +204,158 @@ describe("buildAnalytics · miembros", () => {
 
   it("detalle por evento: del más reciente al más viejo, solo donde participó", () => {
     expect(m.a.byEvent.map((r) => r.eventId)).toEqual(["e3", "e2", "e1"]);
-    expect(m.a.byEvent[2]).toMatchObject({ eventId: "e1", juntada: "yes", futbol: "yes", paid: 200, consumed: 100 });
+    expect(m.a.byEvent[2]).toMatchObject({ eventId: "e1", juntada: "yes", futbol: "yes", consumed: 100 });
     expect(m.d.byEvent.map((r) => r.eventId)).toEqual(["e3"]);
+  });
+});
+
+describe("buildAnalytics · tareas y racha", () => {
+  const { members, events } = buildAnalytics(base());
+  const m = Object.fromEntries(members.map((x) => [x.id, x]));
+
+  it("cuenta en cuántos eventos pasados se anotó cada persona, una vez por evento y tipo", () => {
+    // a: compra de insumos en e1 (dos veces, cuenta una) y e2; convocó e1 y e3
+    expect(m.a.tasks.byType).toEqual({
+      compra_insumos: 2,
+      lavado_platos: 0,
+      orden_sede: 0,
+      reserva_cancha: 0,
+      convocatoria: 2,
+    });
+    expect(m.a.tasks.total).toBe(4);
+    // b: platos (e1), sede (e2) y convocó e2
+    expect(m.b.tasks.byType).toMatchObject({ lavado_platos: 1, orden_sede: 1, convocatoria: 1 });
+    expect(m.b.tasks.total).toBe(3);
+  });
+
+  it("lo asignado o convocado para el evento próximo no cuenta", () => {
+    // c creó e4 (el próximo) y a se anotó en sus insumos: ninguno suma
+    expect(m.c.tasks.byType.convocatoria).toBe(0);
+    expect(m.c.tasks.total).toBe(1); // solo la reserva de cancha de e1
+    expect(m.a.tasks.byType.compra_insumos).toBe(2);
+  });
+
+  it("quien no hizo nada tiene todo en cero", () => {
+    expect(m.d.tasks).toEqual({
+      total: 0,
+      byType: { compra_insumos: 0, lavado_platos: 0, orden_sede: 0, reserva_cancha: 0, convocatoria: 0 },
+    });
+  });
+
+  it("mejor racha y racha actual", () => {
+    expect(m.a.bestStreak).toBe(3);
+    // b: e1 sí, e2 tal vez (corta), e3 sí → la mejor es 1 y la actual también
+    expect(m.b.bestStreak).toBe(1);
+    expect(m.c.bestStreak).toBe(0);
+    expect(m.d.bestStreak).toBe(1);
+  });
+
+  it("la mejor racha puede ser mayor que la actual", () => {
+    const input = base();
+    // f: sí, sí, no → la mejor fue 2 y la actual 0
+    const result = buildAnalytics({
+      ...input,
+      members: [...input.members, member("f")],
+      rsvps: [...input.rsvps, rsvp("e1", "f", "yes"), rsvp("e2", "f", "yes"), rsvp("e3", "f", "no")],
+    });
+    const f = result.members.find((x) => x.id === "f");
+    expect(f?.bestStreak).toBe(2);
+    expect(f?.streak).toBe(0);
+  });
+
+  it("invitados en total del evento (sin repetir a quien vino a la juntada y al fútbol)", () => {
+    expect(events.find((e) => e.id === "e3")?.attendance.guestsTotal).toBe(2);
+    const input = base();
+    const both = buildAnalytics({
+      ...input,
+      guests: [guest("e1", "g-1", "a", "juntada"), guest("e1", "g-1", "a", "futbol"), guest("e1", "g-7", "a", "futbol")],
+    });
+    expect(both.events.find((e) => e.id === "e1")?.attendance.guestsTotal).toBe(2);
+  });
+});
+
+describe("buildAnalytics · puestos de cada evento", () => {
+  const { events } = buildAnalytics(base());
+  const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+  const pos = (id: string, key: string) => {
+    const p = byId[id].positions?.[key as keyof NonNullable<(typeof byId)[string]["positions"]>];
+    return p ? { rank: p.rank, of: p.of } : null;
+  };
+
+  it("rankea cada evento pasado entre los pasados (1 = el más alto)", () => {
+    // confirmados 2, 1, 3
+    expect([pos("e1", "confirmed"), pos("e2", "confirmed"), pos("e3", "confirmed")]).toEqual([
+      { rank: 2, of: 3 },
+      { rank: 3, of: 3 },
+      { rank: 1, of: 3 },
+    ]);
+    // asistencia 2/3, 1/3, 3/4
+    expect([pos("e1", "ratio"), pos("e2", "ratio"), pos("e3", "ratio")]).toEqual([
+      { rank: 2, of: 3 },
+      { rank: 3, of: 3 },
+      { rank: 1, of: 3 },
+    ]);
+    // invitados 1, 0, 2
+    expect([pos("e1", "guests"), pos("e2", "guests"), pos("e3", "guests")]).toEqual([
+      { rank: 2, of: 3 },
+      { rank: 3, of: 3 },
+      { rank: 1, of: 3 },
+    ]);
+  });
+
+  it("el evento sin gastos no rankea en gastos y no cuenta entre los que sí", () => {
+    expect(pos("e3", "total")).toEqual({ rank: null, of: 2 });
+    expect(pos("e1", "total")).toEqual({ rank: 1, of: 2 });
+    expect(pos("e2", "total")).toEqual({ rank: 2, of: 2 });
+    expect(pos("e1", "costPerPerson")).toEqual({ rank: 1, of: 2 });
+    expect(pos("e1", "medianItem")).toEqual({ rank: 1, of: 2 });
+    expect(pos("e1", "items")).toEqual({ rank: 1, of: 2 });
+  });
+
+  it("jugadores de fútbol: solo compiten los eventos con fútbol", () => {
+    expect(pos("e1", "futbolConfirmed")).toEqual({ rank: 1, of: 2 });
+    expect(pos("e2", "futbolConfirmed")).toEqual({ rank: 2, of: 2 });
+    expect(pos("e3", "futbolConfirmed")).toEqual({ rank: null, of: 2 });
+  });
+
+  it("guarda los valores de todos para ubicar al evento entre los demás", () => {
+    expect(byId.e1.positions?.confirmed.peers).toEqual([3, 2, 1]);
+    expect(byId.e1.positions?.confirmed.value).toBe(2);
+  });
+
+  it("los invitados del puesto incluyen a los del fútbol (sin repetir al que vino a las dos)", () => {
+    const input = base();
+    const result = buildAnalytics({
+      ...input,
+      guests: [
+        guest("e1", "g-1", "a", "futbol"),
+        guest("e1", "g-2", "a", "futbol"),
+        guest("e1", "g-1", "a", "juntada"),
+        guest("e3", "g-3", "b", "futbol"),
+      ],
+    });
+    const guests = (id: string) => result.events.find((e) => e.id === id)?.positions?.guests;
+    expect(guests("e1")).toMatchObject({ value: 2, rank: 1, of: 3 });
+    expect(guests("e3")).toMatchObject({ value: 1, rank: 2, of: 3 });
+    expect(guests("e2")).toMatchObject({ value: 0, rank: 3, of: 3 });
+  });
+
+  it("el próximo evento no se rankea ni entra en los puestos de los demás", () => {
+    expect(byId.e4.positions).toBeNull();
+    expect(byId.e1.positions?.total.peers).toEqual([300, 120]);
+    expect(byId.e3.positions?.confirmed.of).toBe(3);
   });
 });
 
 describe("buildAnalytics · bordes", () => {
   it("sin ningún evento: todo vacío y sin romper", () => {
-    const result = buildAnalytics({ ...base(), events: [], rsvps: [], expenses: [], payments: [], guests: [], futbol: [] });
+    const result = buildAnalytics({ ...base(), events: [], rsvps: [], expenses: [], payments: [], guests: [], futbol: [], tasks: [] });
     expect(result.events).toEqual([]);
     expect(result.general.sample).toBe("none");
     expect(result.general.pastEvents).toBe(0);
     expect(result.general.attendance.confirmed.n).toBe(0);
     expect(result.general.attendance.confirmed.mean).toBeNull();
     expect(result.general.spending.total).toBe(0);
-    expect(result.general.spending.items.median).toBeNull();
-    expect(result.general.spending.topPayerShare).toBeNull();
     expect(result.general.series).toEqual([]);
     expect(result.members.every((x) => x.juntada.ratio === null && x.byEvent.length === 0)).toBe(true);
   });

@@ -1,9 +1,11 @@
-// Gastos y aportes de un evento para Analytics (spec 021), sobre los gastos del
-// grupo del evento. Los saldos pendientes salen de `calcularBalances` (el mismo
-// cálculo de /gastos/[groupId]), así que acá y allá los números coinciden.
+// Gastos de un evento para Analytics (spec 021), sobre los gastos del grupo del
+// evento. Los saldos pendientes salen de `calcularBalances` (el mismo cálculo de
+// /gastos/[groupId]), así que acá y allá los números coinciden. Quién puso la
+// plata no se analiza: al final todo se reparte, lo que importa es lo que le tocó
+// a cada uno y lo que falta saldar.
 
 import { calcularBalances } from "@/lib/gastos/balances";
-import { fraction, mean, median, roundTo, sum } from "./stats";
+import { mean, median, roundTo, sum } from "./stats";
 import type { EventSpending, ExpenseRow, MemberMoney, PaymentRow } from "./types";
 
 // Por debajo de esto el evento se considera saldado: los montos se muestran en
@@ -50,15 +52,15 @@ export function buildEventSpending(
   const total = roundTo(sum(amounts));
   const items = itemStats(amounts);
 
-  const paid = new Map<string, number>();
+  const payers = new Set<string>();
   const consumed = new Map<string, number>();
   for (const e of expenses) {
-    add(paid, e.paidBy, e.amount);
+    payers.add(e.paidBy);
     for (const s of e.shares) add(consumed, s.userId, s.amount);
   }
 
   // Saldos: como en /gastos, entran también quienes solo aparecen en un pago.
-  const involved = new Set<string>([...paid.keys(), ...consumed.keys()]);
+  const involved = new Set<string>([...payers, ...consumed.keys()]);
   for (const p of payments) {
     involved.add(p.from);
     involved.add(p.to);
@@ -67,22 +69,16 @@ export function buildEventSpending(
     calcularBalances([...involved], [...expenses], [...payments]).map((b) => [b.userId, b.balance]),
   );
 
-  const byMember: MemberMoney[] = [...new Set([...paid.keys(), ...consumed.keys()])]
-    .map((userId) => {
-      const put = paid.get(userId) ?? 0;
-      const took = consumed.get(userId) ?? 0;
-      return {
-        userId,
-        paid: roundTo(put),
-        consumed: roundTo(took),
-        net: roundTo(put - took),
-        balance: balances.get(userId) ?? 0,
-      };
-    })
-    .sort((a, b) => b.paid - a.paid || b.consumed - a.consumed || a.userId.localeCompare(b.userId));
+  // Quien pagó sin consumir nada también figura (con consumo 0): su saldo cuenta.
+  const byMember: MemberMoney[] = [...new Set([...payers, ...consumed.keys()])]
+    .map((userId) => ({
+      userId,
+      consumed: roundTo(consumed.get(userId) ?? 0),
+      balance: balances.get(userId) ?? 0,
+    }))
+    .sort((a, b) => b.consumed - a.consumed || a.userId.localeCompare(b.userId));
 
   const people = consumed.size;
-  const top = byMember.find((m) => m.paid > 0) ?? null;
   const pending = roundTo(
     sum([...balances.values()].filter((balance) => balance > BALANCE_EPSILON)),
   );
@@ -96,10 +92,6 @@ export function buildEventSpending(
     max: items.max ?? 0,
     people,
     costPerPerson: people > 0 ? roundTo(total / people) : null,
-    medianPerPerson: roundOrNull(median([...consumed.values()])),
-    payers: paid.size,
-    topPayerId: top?.userId ?? null,
-    topPayerShare: top ? fraction(top.paid, total) : null,
     pending,
     settled: pending < SETTLED_BELOW,
     byMember,

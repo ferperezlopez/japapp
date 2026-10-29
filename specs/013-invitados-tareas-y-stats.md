@@ -357,6 +357,16 @@ Puntos que el SQL no explica por sí solo:
    en `/miembros` se trae una sola vez para todos los miembros (se llama
    una vez por miembro dentro del `.map` ya existente), no una query por
    persona.
+
+   `filtrarRsvpsDeEventosPasados(rsvps, events, now?)` (2026-10-29): las
+   respuestas a un evento que **todavía no ocurrió** (`event_date >= now`)
+   no son asistencias ni ausencias — un «Voy» para el viernes que viene no
+   es haber ido. Los 3 call sites las descartan antes de llamar a
+   `calcularAsistencia` (para eso piden también `event_rsvps.event_id` y
+   `events.id`). Sin esto, esa respuesta sumaba como asistencia y además
+   restaba del «sin respuesta» de un evento pasado. Es el mismo criterio de
+   Analytics (`specs/021-analytics.md`), así los números del perfil y los de
+   Analytics coinciden.
 3. `src/components/eventos/AttendanceStatsCard.tsx` exporta dos
    componentes sobre el mismo cálculo: `<AttendanceStatsLines>` (solo
    las líneas de texto, sin tarjeta propia) y `<AttendanceStatsCard>`
@@ -413,6 +423,9 @@ Puntos que el SQL no explica por sí solo:
       mostrado en `/perfil` y `/perfil/[userId]`.
 - [x] El bloque de fútbol no aparece si la persona nunca respondió un
       RSVP de fútbol.
+- [x] Un «Voy» (o un «No») a un evento que todavía no pasó no cambia el
+      porcentaje de asistencia en `/perfil`, `/perfil/[userId]` ni
+      `/miembros`.
 - [x] Tipear en el selector de insumo filtra la lista de insumos ya
       cargados por substring, con su ícono si aplica.
 - [x] Si lo tipeado no matchea ningún insumo existente, aparece la
@@ -486,6 +499,10 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-10-29: la asistencia de `/perfil`, `/perfil/[userId]` y `/miembros`
+  cuenta solo respuestas a eventos que ya pasaron
+  (`filtrarRsvpsDeEventosPasados`), igual que Analytics; antes una
+  confirmación al evento próximo ya sumaba como asistencia.
 - 2026-09-19: invitados editables (solo admin) desde "Van", el resumen
   de equipos guardados y MVP/goleador (`0033`, `renameGuest`,
   `GuestNameButton`, `EditGuestNameModal`); MVP/goleador ahora también

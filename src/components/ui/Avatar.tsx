@@ -1,17 +1,10 @@
+import { initialsFrom } from "@/lib/formatName";
+
 const SIZE_CLASSES = {
   sm: "h-6 w-6 text-[10px]",
   md: "h-9 w-9 text-xs",
   lg: "h-16 w-16 text-lg",
 } as const;
-
-function initialsFrom(name?: string | null) {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  const first = parts[0][0] ?? "";
-  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
-  return (first + last).toUpperCase();
-}
 
 export function Avatar({
   src,

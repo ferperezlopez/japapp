@@ -62,10 +62,12 @@ function breakdown(
   return { confirmed, declined, maybe, noResponse: eligible.size - responded };
 }
 
-function countGuests(guests: readonly GuestRow[], eventId: string, kind: RsvpKind): number {
+// Sin `kind`, cuenta a cada invitado una sola vez aunque haya venido a la juntada
+// y al fútbol (son dos filas).
+function countGuests(guests: readonly GuestRow[], eventId: string, kind?: RsvpKind): number {
   const ids = new Set<string>();
   for (const g of guests) {
-    if (g.eventId === eventId && g.kind === kind) ids.add(g.guestId);
+    if (g.eventId === eventId && (kind === undefined || g.kind === kind)) ids.add(g.guestId);
   }
   return ids.size;
 }
@@ -91,6 +93,7 @@ export function buildEventAttendance(
     ratio: fraction(juntada.confirmed, eligible.size),
     guests: guestCount,
     guestsPerConfirmed: fraction(guestCount, juntada.confirmed),
+    guestsTotal: countGuests(guests, event.id),
     futbol: event.hasFutbol
       ? (() => {
           const futbol = breakdown(eligible, statuses.futbol);
@@ -109,6 +112,7 @@ export interface MemberAttendance {
   futbol: AttendanceCount;
   eligibleEvents: { juntada: number; futbol: number };
   streak: number;
+  bestStreak: number;
   /** Eventos pasados desde que es miembro, del más reciente al más viejo. */
   byEvent: { eventId: string; juntada: MemberEventStatus; futbol: MemberEventStatus | null }[];
 }
@@ -163,11 +167,21 @@ export function buildMemberAttendance(
     streak++;
   }
 
+  // Mejor racha: la tanda más larga de «Voy» seguidos en cualquier momento
+  // (los eventos de antes de que se uniera no cortan nada: no son elegibles).
+  let bestStreak = 0;
+  let run = 0;
+  for (const e of [...eligible].reverse()) {
+    run = mine.get(e.id)?.juntada === "yes" ? run + 1 : 0;
+    bestStreak = Math.max(bestStreak, run);
+  }
+
   return {
     juntada: toCount(attendance.juntada),
     futbol: toCount(attendance.futbol),
     eligibleEvents,
     streak,
+    bestStreak,
     byEvent: eligible.map((e) => {
       const entry = mine.get(e.id);
       return {

@@ -7,3 +7,15 @@ export function abbreviateName(name: string): string {
   if (parts.length <= 1) return parts[0] ?? "";
   return `${parts[0][0]}. ${parts[1]}`;
 }
+
+// «FP» a partir de «Fernando Pérez López»: la inicial del nombre y la del último
+// apellido; «?» sin nombre. Es lo que se dibuja cuando no hay foto (el avatar y
+// las infografías compartidas).
+export function initialsFrom(name?: string | null): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0][0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
+  return (first + last).toUpperCase();
+}

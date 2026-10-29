@@ -18,7 +18,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/analyt
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">Grupo</p>
       <h1 className="mt-1 font-heading text-3xl font-semibold text-foreground">Analytics</h1>
       <p className="mt-2 text-sm text-foreground/60">
-        Cómo viene la JAPA: asistencia, gastos y aportes, con comparativas y medianas.
+        Cómo viene la JAPA: asistencia, gastos y tareas, con rankings, comparativas y medianas.
       </p>
 
       <AnalyticsTabs active={view} />

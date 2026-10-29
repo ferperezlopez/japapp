@@ -58,7 +58,7 @@ describe("loadAnalyticsInput", () => {
       { id: "u2", name: null, email: "beto@x.com", avatar_url: null, created_at: "2026-02-01T00:00:00Z" },
     ],
     events: [
-      { id: "e1", name: "JAPA", event_date: "2026-09-18T19:30:00Z", location: "Casa", has_futbol: true, group_id: "g1" },
+      { id: "e1", name: "JAPA", event_date: "2026-09-18T19:30:00Z", location: "Casa", has_futbol: true, group_id: "g1", created_by: "u2" },
     ],
     event_rsvps: [{ event_id: "e1", user_id: "u1", kind: "juntada", status: "yes" }],
     event_guests: [{ event_id: "e1", guest_id: "gu1", kind: "futbol", brought_by: "u1" }],
@@ -76,6 +76,7 @@ describe("loadAnalyticsInput", () => {
     ],
     debt_payments: [{ group_id: "g1", from_user_id: "u2", to_user_id: "u1", amount: "10" }],
     futbol_stats: [{ event_id: "e1", resultado: "4-9", mvp_user_id: "u1", goleador_user_id: null }],
+    event_tasks: [{ event_id: "e1", task_type: "compra_insumos", assigned_to: "u2" }],
   };
 
   it("traduce las filas de la base a la entrada de buildAnalytics", async () => {
@@ -89,11 +90,20 @@ describe("loadAnalyticsInput", () => {
       { id: "u2", name: "beto@x.com", avatarUrl: null, joinedAt: "2026-02-01T00:00:00Z" },
     ]);
     expect(input.events).toEqual([
-      { id: "e1", name: "JAPA", eventDate: "2026-09-18T19:30:00Z", location: "Casa", hasFutbol: true, groupId: "g1" },
+      {
+        id: "e1",
+        name: "JAPA",
+        eventDate: "2026-09-18T19:30:00Z",
+        location: "Casa",
+        hasFutbol: true,
+        groupId: "g1",
+        createdBy: "u2",
+      },
     ]);
     expect(input.rsvps).toEqual([{ eventId: "e1", userId: "u1", kind: "juntada", status: "yes" }]);
     expect(input.guests).toEqual([{ eventId: "e1", guestId: "gu1", kind: "futbol", broughtBy: "u1" }]);
     expect(input.futbol).toEqual([{ eventId: "e1", resultado: "4-9", mvpUserId: "u1", goleadorUserId: null }]);
+    expect(input.tasks).toEqual([{ eventId: "e1", taskType: "compra_insumos", userId: "u2" }]);
   });
 
   it("los montos llegan como números aunque la base los devuelva como texto", async () => {
@@ -129,6 +139,7 @@ describe("loadAnalyticsInput", () => {
       "debt_payments",
       "event_guests",
       "event_rsvps",
+      "event_tasks",
       "events",
       "expenses",
       "futbol_stats",

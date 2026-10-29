@@ -43,6 +43,20 @@ export function contarEventosElegibles(
   return { juntada, futbol };
 }
 
+// Las respuestas a un evento que TODAVÍA NO ocurrió no son asistencias ni
+// ausencias: un «Voy» para el viernes que viene no es haber ido. Se descartan
+// antes de `calcularAsistencia`, que si no las cuenta como asistencias (o, peor,
+// las resta del «sin respuesta» de un evento pasado). Mismo criterio que
+// Analytics (spec 021), así el perfil y Analytics muestran los mismos números.
+export function filtrarRsvpsDeEventosPasados<T extends { eventId: string }>(
+  rsvps: readonly T[],
+  events: readonly { id: string; eventDate: string }[],
+  now: Date = new Date(),
+): T[] {
+  const past = new Set(events.filter((e) => new Date(e.eventDate) < now).map((e) => e.id));
+  return rsvps.filter((r) => past.has(r.eventId));
+}
+
 // "maybe" no suma a ninguno de los dos lados: no hay señal clara de si
 // la persona fue o no. Un evento ya ocurrido sin NINGUNA respuesta (ni
 // sí/no/tal vez) sí cuenta como ausencia — el evento pasó y la persona

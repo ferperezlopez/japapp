@@ -1,53 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BarChart, type BarPoint } from "@/components/analytics/BarChart";
-import { ComparisonLines } from "@/components/analytics/DeltaBadge";
+import { EventComparison } from "@/components/analytics/EventComparison";
 import { MetricRow } from "@/components/analytics/MetricRow";
+import { PositionsCard } from "@/components/analytics/PositionsCard";
 import { SampleNotice } from "@/components/analytics/SampleNotice";
+import { ShareInfographicButton } from "@/components/analytics/ShareInfographicButton";
 import { StackedBar } from "@/components/analytics/StackedBar";
-import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
+import { MIN_EVENTS_FOR_TRENDS } from "@/lib/analytics/build";
+import { buildComparisonPoints, buildEventComparison } from "@/lib/analytics/eventComparison";
+import { buildEventInfographic } from "@/lib/analytics/infographic";
 import {
   formatDayLong,
-  formatDayShort,
   formatMoney,
-  formatMoneyCompact,
-  formatMoneyCompactSigned,
   formatNumber,
   formatPercent,
   orDash,
   plural,
 } from "@/lib/analytics/format";
-import type { MemberMoney } from "@/lib/analytics/types";
 import { getAnalytics, memberLookup } from "../../data";
-
-
-function AmountBar({
-  label,
-  value,
-  max,
-  className,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  className: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 text-[11px]">
-      <span className="w-12 shrink-0 text-foreground/50">{label}</span>
-      <div aria-hidden="true" className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
-        <div
-          className={`h-full rounded-full ${className}`}
-          style={{ width: `${max > 0 ? (value / max) * 100 : 0}%` }}
-        />
-      </div>
-      <span className="w-[4.5rem] shrink-0 text-right tabular-nums text-foreground/70">
-        {formatMoney(value)}
-      </span>
-    </div>
-  );
-}
 
 export default async function AnalyticsEventPage({
   params,
@@ -58,44 +29,38 @@ export default async function AnalyticsEventPage({
   if (!event) notFound();
 
   const people = memberLookup(analytics.members);
-  const { attendance, spending, comparisons, futbol } = event;
+  const { attendance, spending, futbol } = event;
   const isNext = event.status === "next";
   const { pastEvents, sample } = analytics.general;
-  // Los eventos pasados en orden cronológico, para los gráficos de comparación.
-  const past = analytics.events.filter((e) => e.status === "past").reverse();
-  const maxAmount = spending
-    ? Math.max(0, ...spending.byMember.flatMap((m: MemberMoney) => [m.paid, m.consumed]))
-    : 0;
 
-  const comparePoints = (
-    value: (e: (typeof past)[number]) => number | null,
-    label: (n: number) => string,
-  ): BarPoint[] =>
-    past.map((e) => {
-      const v = value(e);
-      return {
-        id: e.id,
-        label: formatDayShort(e.eventDate),
-        value: v,
-        valueLabel: v === null ? "—" : label(v),
-        current: e.id === event.id,
-        href: `/analytics/eventos/${e.id}`,
-      };
-    });
+  const comparison =
+    !isNext && sample === "enough" ? buildEventComparison(buildComparisonPoints(analytics.events), event.id) : null;
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
       <Link href="/analytics?vista=eventos" className="text-sm text-foreground/50 hover:underline">
-        ← Analytics
+        ← Eventos
       </Link>
       <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-eventos">
         {isNext ? "Evento en curso" : "Evento"}
       </p>
-      <h1 className="mt-1 font-heading text-3xl font-semibold text-foreground">{event.name}</h1>
+      <h1 className="mt-1 font-heading text-3xl font-semibold text-foreground">
+        {event.name}
+        {event.hasFutbol && (
+          <span role="img" aria-label="Con fútbol" className="ml-2 text-2xl">
+            ⚽
+          </span>
+        )}
+      </h1>
       <p className="mt-2 text-sm text-foreground/60">
         {formatDayLong(event.eventDate)}
         {event.location ? ` · ${event.location}` : ""}
       </p>
+      <ShareInfographicButton
+        spec={buildEventInfographic(analytics, event.id)}
+        label="Compartir en WhatsApp"
+        className="mt-4"
+      />
       {isNext ? (
         <p className="mt-3 text-xs text-foreground/50">
           Todavía no pasó: no entra en los promedios y no se compara con los otros eventos.
@@ -152,16 +117,6 @@ export default async function AnalyticsEventPage({
               )}
             </p>
           )}
-          {!isNext && (
-            <div className="mt-4 divide-y divide-surface-border border-t border-surface-border pt-3">
-              <MetricRow label="Confirmados" value={String(attendance.confirmed)}>
-                <ComparisonLines comparison={comparisons.confirmed} kind="count" />
-              </MetricRow>
-              <MetricRow label="Asistencia" value={orDash(attendance.ratio, formatPercent)}>
-                <ComparisonLines comparison={comparisons.ratio} kind="ratio" />
-              </MetricRow>
-            </div>
-          )}
         </Card>
 
         <Card className="p-4">
@@ -172,36 +127,16 @@ export default async function AnalyticsEventPage({
                 label="Gasto total"
                 value={formatMoney(spending.total)}
                 hint={plural(spending.expenseCount, "ítem", "ítems")}
-              >
-                {!isNext && <ComparisonLines comparison={comparisons.total} kind="money" />}
-              </MetricRow>
+              />
               <MetricRow
                 label="Costo por persona"
                 value={orDash(spending.costPerPerson, formatMoney)}
                 hint={`entre ${plural(spending.people, "persona", "personas")} con parte en los gastos`}
-              >
-                {!isNext && <ComparisonLines comparison={comparisons.costPerPerson} kind="money" />}
-              </MetricRow>
+              />
               <MetricRow
                 label="Gasto por ítem (mediana)"
                 value={formatMoney(spending.median)}
                 hint={`promedio ${formatMoney(spending.mean)} · máx. ${formatMoney(spending.max)}`}
-              >
-                {!isNext && <ComparisonLines comparison={comparisons.medianItem} kind="money" />}
-              </MetricRow>
-              <MetricRow
-                label="Mediana por persona"
-                value={orDash(spending.medianPerPerson, formatMoney)}
-                hint="lo que le tocó a cada una; no se mueve por un gasto muy grande"
-              />
-              <MetricRow
-                label="Pusieron plata"
-                value={String(spending.payers)}
-                hint={
-                  spending.topPayerShare === null
-                    ? undefined
-                    : `quien más puso aportó el ${formatPercent(spending.topPayerShare)} del total`
-                }
               />
               <MetricRow
                 label="Pendiente de saldar"
@@ -220,56 +155,19 @@ export default async function AnalyticsEventPage({
           )}
         </Card>
 
-        {spending && (
-          <Card className="p-4">
-            <h2 className="font-heading text-lg font-semibold text-foreground">Aportes por persona</h2>
-            <ul className="mt-2 divide-y divide-surface-border">
-              {spending.byMember.map((row) => (
-                <li key={row.userId} className="py-2.5 first:pt-0 last:pb-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <Link
-                      href={`/analytics/miembros/${row.userId}`}
-                      className="flex min-w-0 items-center gap-2 hover:underline"
-                    >
-                      <Avatar src={people.avatarUrl(row.userId)} name={people.name(row.userId)} size="sm" />
-                      <span className="truncate text-sm font-medium">{people.name(row.userId)}</span>
-                    </Link>
-                    <span className="shrink-0 text-xs text-foreground/50">
-                      Neto{" "}
-                      <span className="font-medium tabular-nums text-foreground/80">
-                        {formatMoneyCompactSigned(row.net)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="mt-1.5 space-y-1">
-                    <AmountBar label="Puso" value={row.paid} max={maxAmount} className="bg-gastos" />
-                    <AmountBar label="Le tocó" value={row.consumed} max={maxAmount} className="bg-foreground/30" />
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-xs text-foreground/50">
-              Neto = lo que puso menos lo que le tocó; positivo, puso de más.
-            </p>
-          </Card>
-        )}
+        {!isNext && <PositionsCard event={event} />}
 
-        {!isNext && sample === "enough" && (
-          <section aria-labelledby="comparado" className="space-y-3">
-            <h2 id="comparado" className="font-heading text-lg font-semibold text-foreground">
+        {comparison && <EventComparison model={comparison} />}
+        {!isNext && !comparison && (
+          <Card className="p-4">
+            <h2 className="font-heading text-lg font-semibold text-foreground">
               Comparado con los otros eventos
             </h2>
-            <BarChart
-              title="Confirmados"
-              tone="eventos"
-              points={comparePoints((e) => e.attendance.confirmed, String)}
-            />
-            <BarChart
-              title="Costo por persona"
-              tone="gastos"
-              points={comparePoints((e) => e.spending?.costPerPerson ?? null, formatMoneyCompact)}
-            />
-          </section>
+            <p className="mt-2 text-sm text-foreground/50">
+              Con al menos {MIN_EVENTS_FOR_TRENDS} eventos pasados vas a ver acá cómo se compara con los de
+              alrededor y con la mediana de los demás.
+            </p>
+          </Card>
         )}
 
         {futbol && (

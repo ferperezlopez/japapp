@@ -16,7 +16,7 @@ export default function AnalyticsLoading() {
       <Skeleton className="mt-5 h-11 w-full rounded-xl" />
 
       <div className="mt-6 grid grid-cols-2 gap-3">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
+        {[0, 1, 2, 3].map((i) => (
           <Card key={i} className="p-4">
             <Skeleton className="h-3 w-20" />
             <Skeleton className="mt-2 h-7 w-24" />

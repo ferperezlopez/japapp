@@ -30,7 +30,7 @@ export async function loadAnalyticsInput(
   supabase: SupabaseClient<Database>,
   now: Date = new Date(),
 ): Promise<AnalyticsInput> {
-  const [profiles, events, rsvps, guests, expenses, payments, futbol] = await Promise.all([
+  const [profiles, events, rsvps, guests, expenses, payments, futbol, tasks] = await Promise.all([
     fetchAll("los miembros", (from, to) =>
       supabase
         .from("profiles")
@@ -42,7 +42,7 @@ export async function loadAnalyticsInput(
     fetchAll("los eventos", (from, to) =>
       supabase
         .from("events")
-        .select("id, name, event_date, location, has_futbol, group_id")
+        .select("id, name, event_date, location, has_futbol, group_id, created_by")
         .order("event_date")
         .order("id")
         .range(from, to),
@@ -84,6 +84,13 @@ export async function loadAnalyticsInput(
         .order("event_id")
         .range(from, to),
     ),
+    fetchAll("las tareas", (from, to) =>
+      supabase
+        .from("event_tasks")
+        .select("event_id, task_type, assigned_to")
+        .order("id")
+        .range(from, to),
+    ),
   ]);
 
   return {
@@ -102,6 +109,7 @@ export async function loadAnalyticsInput(
       location: e.location,
       hasFutbol: e.has_futbol,
       groupId: e.group_id,
+      createdBy: e.created_by,
     })),
     rsvps: rsvps.map((r) => ({ eventId: r.event_id, userId: r.user_id, kind: r.kind, status: r.status })),
     guests: guests.map((g) => ({
@@ -129,5 +137,6 @@ export async function loadAnalyticsInput(
       mvpUserId: f.mvp_user_id,
       goleadorUserId: f.goleador_user_id,
     })),
+    tasks: tasks.map((t) => ({ eventId: t.event_id, taskType: t.task_type, userId: t.assigned_to })),
   };
 }

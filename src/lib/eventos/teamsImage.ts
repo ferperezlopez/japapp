@@ -11,6 +11,7 @@
 // px de una cancha de 300 de ancho — la del celular — y escaladas a 1080. Si
 // se rediseñan las camisetas o las etiquetas en el DOM, hay que revisar acá.
 
+import { baselineAt, loadImage, roundedRect, setLetterSpacing } from "@/lib/canvas";
 import { abbreviateName } from "@/lib/formatName";
 import {
   JERSEY_NUMBER_COLOR,
@@ -40,60 +41,6 @@ const PILL = { size: 9, weight: 500, lineHeight: 12.857, padX: 6, padY: 2, gap: 
 const LABEL = { size: 12, weight: 700, lineHeight: 16, padX: 8, padY: 4, inset: 8, radius: 6, spacing: 0.3, background: "rgba(0,0,0,0.5)", countColor: "#cbd5e1" };
 // «Sin jugadores»: `text-xs text-white/70`, centrado en toda la cancha.
 const EMPTY = { size: 12, color: "rgba(255,255,255,0.7)" };
-
-const images = new Map<string, Promise<HTMLImageElement>>();
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  let image = images.get(src);
-  if (!image) {
-    image = new Promise((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
-      element.src = src;
-    });
-    // Un fallo no se queda en la caché: el próximo intento vuelve a pedirla.
-    image.catch(() => images.delete(src));
-    images.set(src, image);
-  }
-  return image;
-}
-
-function roundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + width, y, x + width, y + height, r);
-  ctx.arcTo(x + width, y + height, x, y + height, r);
-  ctx.arcTo(x, y + height, x, y, r);
-  ctx.arcTo(x, y, x + width, y, r);
-  ctx.closePath();
-}
-
-/**
- * Línea base para que el texto quede centrado en `centerY` como en CSS: el
- * "content area" de la fuente (ascent + descent) va centrado en la caja de la
- * línea, así que la base cae a (ascent − descent) / 2 por debajo del centro.
- */
-function baselineAt(ctx: CanvasRenderingContext2D, centerY: number, fontSize: number): number {
-  const metrics = ctx.measureText("Hg");
-  const ascent = metrics.fontBoundingBoxAscent ?? fontSize * 0.9;
-  const descent = metrics.fontBoundingBoxDescent ?? fontSize * 0.25;
-  return centerY + (ascent - descent) / 2;
-}
-
-function setLetterSpacing(ctx: CanvasRenderingContext2D, px: number) {
-  // Canvas.letterSpacing todavía no está en todos los navegadores: sin él el
-  // texto queda apenas más angosto, nada más.
-  if ("letterSpacing" in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${px}px`;
-}
 
 function drawTeamLabel(
   ctx: CanvasRenderingContext2D,
