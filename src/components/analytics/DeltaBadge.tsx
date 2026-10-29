@@ -1,84 +1,64 @@
-import {
-  formatMoneySigned,
-  formatPercentSigned,
-  formatPoints,
-  formatSignedNumber,
-  plural,
-} from "@/lib/analytics/format";
+import { deltaView, type DeltaKind, type Polarity, type Tone } from "@/lib/analytics/delta";
 import type { Comparison } from "@/lib/analytics/stats";
-import type { MetricComparison } from "@/lib/analytics/types";
 
-// `money` y `count` muestran la variación relativa y la diferencia; `ratio`
-// (un porcentaje contra otro) muestra la diferencia en puntos.
-export type DeltaKind = "money" | "count" | "ratio";
+export const TONE_CLASSES: Record<Tone, string> = {
+  good: "text-emerald-700 dark:text-emerald-400",
+  bad: "text-red-700 dark:text-red-400",
+  equal: "text-foreground/50",
+};
 
-// Por debajo de esto el formato lo redondea a 0: se dice «igual» en vez de «+0».
-const EQUAL_BELOW: Record<DeltaKind, number> = { money: 0.5, count: 0.05, ratio: 0.005 };
+const TONE_WORDS: Record<Tone, string> = { good: "mejor", bad: "peor", equal: "igual" };
 
-function describe(c: Comparison, kind: DeltaKind): string {
-  if (kind === "ratio") return formatPoints(c.diff);
-  if (kind === "money") {
-    return c.pct === null
-      ? formatMoneySigned(c.diff)
-      : `${formatPercentSigned(c.pct)} (${formatMoneySigned(c.diff)})`;
-  }
-  return c.pct === null
-    ? formatSignedNumber(c.diff)
-    : `${formatSignedNumber(c.diff)} (${formatPercentSigned(c.pct)})`;
-}
-
-// Flecha neutra a propósito: más gasto no es «malo» ni más asistencia «buena»
-// para todos, y pintar plata de rojo/verde pondría a alguien en falta. El signo
-// del número ya dice para qué lado fue (también para quien usa lector de pantalla).
+// Verde = mejor, rojo = peor, gris = igual (ver `delta.ts`). El color nunca va
+// solo: la flecha y el signo del número dicen para qué lado fue, y un texto oculto
+// dice «mejor» o «peor» para quien usa lector de pantalla.
 export function DeltaBadge({
   comparison,
   kind,
+  polarity,
   label,
 }: {
   comparison: Comparison | null;
   kind: DeltaKind;
-  label: string;
+  polarity: Polarity;
+  /** Para decir contra qué se compara cuando no lo aclara la pantalla. */
+  label?: string;
 }) {
   if (!comparison) {
     return (
       <p className="flex flex-wrap items-baseline gap-x-1 text-xs text-foreground/40">
-        <span aria-hidden="true">·</span>
-        <span>— {label}</span>
+        <span>—</span>
+        {label && <span>{label}</span>}
       </p>
     );
   }
-  const equal = Math.abs(comparison.diff) < EQUAL_BELOW[kind];
-  const arrow = equal ? "=" : comparison.diff > 0 ? "▲" : "▼";
+  const { tone, direction, text } = deltaView(comparison, kind, polarity);
+  const arrow = direction === "flat" ? "=" : direction === "up" ? "▲" : "▼";
   return (
-    <p className="flex flex-wrap items-baseline gap-x-1 text-xs text-foreground/60">
+    <p className={`flex flex-wrap items-baseline gap-x-1 text-xs font-medium ${TONE_CLASSES[tone]}`}>
       <span aria-hidden="true" className="text-[10px]">
         {arrow}
       </span>
-      <span className="font-medium tabular-nums text-foreground/80">
-        {equal ? "igual" : describe(comparison, kind)}
-      </span>
-      <span>{label}</span>
+      <span className="tabular-nums">{text}</span>
+      <span className="sr-only">, {TONE_WORDS[tone]}</span>
+      {label && <span className="font-normal text-foreground/60">{label}</span>}
     </p>
   );
 }
 
-// Las dos comparativas de un evento: contra el anterior y contra el promedio de
-// los otros (diciendo cuántos son: con 1 o 2 eventos el promedio dice poco).
-export function ComparisonLines({
-  comparison,
-  kind,
+// La leyenda va una sola vez por pantalla, no en cada tarjeta. `what` dice qué se
+// compara con qué (por defecto, el último evento contra el anterior).
+export function DeltaLegend({
+  what = "Variación del último evento contra el anterior.",
 }: {
-  comparison: MetricComparison;
-  kind: DeltaKind;
+  what?: string;
 }) {
   return (
-    <>
-      <DeltaBadge comparison={comparison.vsPrevious} kind={kind} label="vs. evento anterior" />
-      <DeltaBadge
-        comparison={comparison.vsAverage}
-        kind={kind}
-        label={`vs. promedio de ${plural(comparison.others, "evento", "eventos")}`}
-      />
-    </>
+    <p className="text-xs text-foreground/50">
+      <span aria-hidden="true">▲▼ </span>
+      {what} <span className="font-medium text-emerald-700 dark:text-emerald-400">Verde</span> es
+      mejor y <span className="font-medium text-red-700 dark:text-red-400">rojo</span> peor: más
+      asistencia y menos gasto.
+    </p>
   );
 }

@@ -3,6 +3,7 @@ import { EditAliasForm } from "./EditAliasForm";
 import { EditNameForm } from "./EditNameForm";
 import { UploadAvatarForm } from "./UploadAvatarForm";
 import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
+import { MetricsLink } from "@/components/analytics/MetricsLink";
 import { PushNotificationToggle } from "@/components/PushNotificationToggle";
 import {
   calcularAsistencia,
@@ -84,6 +85,7 @@ export default async function PerfilPage() {
       </div>
 
       <AttendanceStatsCard attendance={attendance} />
+      <MetricsLink userId={user.id} label="Ver mis métricas" />
     </div>
   );
 }

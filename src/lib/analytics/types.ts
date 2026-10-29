@@ -7,6 +7,11 @@ import type { Comparison, SeriesSummary } from "./stats";
 export type RsvpKind = "juntada" | "futbol";
 export type RsvpStatus = "yes" | "no" | "maybe";
 
+/** Las tareas de organización que existen como fila de `event_tasks`. */
+export type TaskType = "compra_insumos" | "lavado_platos" | "orden_sede" | "reserva_cancha";
+/** «convocatoria» no es una fila de `event_tasks`: es quien creó el evento. */
+export type TaskKey = TaskType | "convocatoria";
+
 // ───────────────────────────── Entrada ─────────────────────────────
 
 export interface MemberRow {
@@ -25,6 +30,8 @@ export interface EventRow {
   hasFutbol: boolean;
   /** Grupo de gastos del evento, si lo tiene. */
   groupId: string | null;
+  /** Quien creó el evento: la «convocatoria». */
+  createdBy: string | null;
 }
 
 export interface RsvpRow {
@@ -63,6 +70,12 @@ export interface FutbolRow {
   goleadorUserId: string | null;
 }
 
+export interface TaskRow {
+  eventId: string;
+  taskType: TaskType;
+  userId: string;
+}
+
 export interface AnalyticsInput {
   now: Date;
   members: MemberRow[];
@@ -72,6 +85,7 @@ export interface AnalyticsInput {
   expenses: ExpenseRow[];
   payments: PaymentRow[];
   futbol: FutbolRow[];
+  tasks: TaskRow[];
 }
 
 // ───────────────────────────── Por evento ─────────────────────────────
@@ -89,20 +103,19 @@ export interface EventAttendance extends RsvpBreakdown {
   eligible: number;
   /** `confirmed / eligible`, de 0 a 1. */
   ratio: number | null;
+  /** Invitados a la juntada. */
   guests: number;
   guestsPerConfirmed: number | null;
+  /** Invitados en total (juntada y/o fútbol), sin repetir a quien vino a las dos. */
+  guestsTotal: number;
   /** Solo si el evento tiene fútbol. */
   futbol: (RsvpBreakdown & { ratio: number | null; guests: number }) | null;
 }
 
 export interface MemberMoney {
   userId: string;
-  /** Lo que puso: Σ `amount` de los gastos que pagó. */
-  paid: number;
   /** Lo que le tocó: Σ de sus partes. */
   consumed: number;
-  /** `paid - consumed`: positivo, puso de más. */
-  net: number;
   /** Saldo después de los pagos de deuda reportados: positivo, le deben. */
   balance: number;
 }
@@ -117,16 +130,10 @@ export interface EventSpending {
   /** Personas con alguna parte en algún gasto. */
   people: number;
   costPerPerson: number | null;
-  medianPerPerson: number | null;
-  /** Cuántas personas pagaron algo. */
-  payers: number;
-  topPayerId: string | null;
-  /** Qué parte del total puso quien más puso, de 0 a 1. */
-  topPayerShare: number | null;
   /** Σ de saldos positivos: lo que falta saldar entre personas. */
   pending: number;
   settled: boolean;
-  /** Quien puso o consumió algo, del que más puso al que menos. */
+  /** Quien puso o consumió algo, del que más consumió al que menos. */
   byMember: MemberMoney[];
 }
 
@@ -148,6 +155,27 @@ export interface MetricComparison {
   others: number;
 }
 
+/** Las categorías en las que se rankea un evento contra los demás. */
+export type PositionKey =
+  | "confirmed"
+  | "ratio"
+  | "total"
+  | "costPerPerson"
+  | "medianItem"
+  | "items"
+  | "guests"
+  | "futbolConfirmed";
+
+export interface Position {
+  value: number | null;
+  /** 1 = el más alto de los eventos pasados con dato. Los empates comparten puesto (1, 1, 3). */
+  rank: number | null;
+  /** Cuántos eventos pasados tienen dato en esta categoría. */
+  of: number;
+  /** Los valores de todos ellos (este incluido), de mayor a menor: dónde cae este entre los demás. */
+  peers: number[];
+}
+
 export interface EventAnalytics {
   id: string;
   name: string;
@@ -161,6 +189,8 @@ export interface EventAnalytics {
   futbol: EventFutbol | null;
   /** Comparativas contra los otros eventos pasados. Vacías para el próximo. */
   comparisons: Record<EventMetricKey, MetricComparison>;
+  /** Puesto en cada categoría entre los eventos pasados; null para el próximo. */
+  positions: Record<PositionKey, Position> | null;
 }
 
 // ───────────────────────────── Por miembro ─────────────────────────────
@@ -181,8 +211,14 @@ export interface MemberEventRow {
   juntada: MemberEventStatus;
   /** null si el evento no tiene fútbol. */
   futbol: MemberEventStatus | null;
-  paid: number;
   consumed: number;
+}
+
+/** En cuántos eventos pasados se anotó (o convocó) cada persona, por tipo de tarea. */
+export interface TaskCounts {
+  /** Suma de todos los tipos. */
+  total: number;
+  byType: Record<TaskKey, number>;
 }
 
 export interface MemberAnalytics {
@@ -196,12 +232,12 @@ export interface MemberAnalytics {
   eligibleEvents: { juntada: number; futbol: number };
   /** Eventos pasados seguidos, hasta el más reciente, con «Voy». */
   streak: number;
+  /** La racha más larga que tuvo, en cualquier momento. */
+  bestStreak: number;
   guestsBrought: number;
+  tasks: TaskCounts;
   money: {
-    paid: number;
     consumed: number;
-    net: number;
-    eventsPaid: number;
     eventsConsumed: number;
     /** `consumed / eventsConsumed`. */
     avgConsumed: number | null;
@@ -216,17 +252,11 @@ export interface MemberAnalytics {
 
 // ───────────────────────────── General ─────────────────────────────
 
-// Las pantallas buscan a la persona en `Analytics.members` (nombre, foto y el
-// resto de sus números): el ranking solo dice quién y cuánto.
-export interface RankingRow {
-  userId: string;
-  value: number;
-}
-
 export interface SeriesPoint {
   eventId: string;
   name: string;
   eventDate: string;
+  hasFutbol: boolean;
   /** El próximo evento va marcado: se dibuja distinto y no cuenta. */
   isNext: boolean;
   confirmed: number;
@@ -254,22 +284,10 @@ export interface GeneralAnalytics {
     total: number;
     perEvent: SeriesSummary;
     costPerPerson: SeriesSummary;
-    /** Sobre todos los gastos de todos los eventos pasados. */
-    items: { count: number; mean: number | null; median: number | null; max: number | null };
-    /** Personas que pusieron plata alguna vez. */
-    payers: number;
-    /** Qué parte del total puso quien más puso en total, de 0 a 1. */
-    topPayerShare: number | null;
     pending: number;
   };
   /** Eventos pasados en orden cronológico y, al final, el próximo (si hay). */
   series: SeriesPoint[];
-  rankings: {
-    contributors: RankingRow[];
-    faithful: RankingRow[];
-    mvps: RankingRow[];
-    goleadores: RankingRow[];
-  };
 }
 
 export interface Analytics {

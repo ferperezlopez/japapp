@@ -1,22 +1,28 @@
 import Link from "next/link";
 import { BarChart, type BarPoint } from "@/components/analytics/BarChart";
-import { DeltaBadge } from "@/components/analytics/DeltaBadge";
+import { DeltaBadge, DeltaLegend } from "@/components/analytics/DeltaBadge";
 import { EmptyState } from "@/components/analytics/EmptyState";
 import { KpiCard } from "@/components/analytics/KpiCard";
-import { RankingCard, type RankingItem } from "@/components/analytics/RankingCard";
+import { RankingBoard, type BoardTab } from "@/components/analytics/RankingBoard";
 import { Card } from "@/components/ui/Card";
+import {
+  buildMemberBoards,
+  MIN_EVENTS_FOR_RANKING,
+  TASK_BOARD_KEYS,
+  TASK_BOARD_LABELS,
+  type Board,
+} from "@/lib/analytics/boards";
+import { METRIC_KIND, METRIC_POLARITY } from "@/lib/analytics/delta";
 import {
   formatDayLong,
   formatDayShort,
   formatMoneyCompact,
   formatNumber,
-  formatPercent,
   orDash,
-  plural,
 } from "@/lib/analytics/format";
-import { MIN_EVENTS_FOR_FAITHFUL } from "@/lib/analytics/build";
-import type { Analytics, EventAnalytics, RankingRow } from "@/lib/analytics/types";
-import { memberLookup } from "./data";
+import { buildGeneralKpis } from "@/lib/analytics/kpis";
+import type { Analytics, EventAnalytics } from "@/lib/analytics/types";
+import { peopleMap } from "./data";
 
 const TOP = 5;
 
@@ -40,13 +46,13 @@ function NextEventCard({ event }: { event: EventAnalytics }) {
 export function GeneralView({ analytics }: { analytics: Analytics }) {
   const { general: g } = analytics;
   const next = analytics.events.find((e) => e.status === "next") ?? null;
-  const people = memberLookup(analytics.members);
 
   if (g.pastEvents === 0) {
     return (
       <>
         <EmptyState title="Todavía no hay eventos pasados">
-          Cuando termine la primera JAPA vas a ver acá cómo viene: asistencia, gastos y aportes.
+          Cuando termine la primera JAPA vas a ver acá cómo viene: asistencia, gastos y quiénes
+          organizan.
         </EmptyState>
         {next && (
           <div className="mt-4">
@@ -59,8 +65,8 @@ export function GeneralView({ analytics }: { analytics: Analytics }) {
 
   // Con pocas muestras no se dibujan tendencias ni medianas entre eventos.
   const enough = g.sample === "enough";
-  const { confirmed, ratio } = g.attendance;
-  const { perEvent, costPerPerson, items } = g.spending;
+  const { confirmed } = g.attendance;
+  const { costPerPerson } = g.spending;
 
   const confirmedPoints: BarPoint[] = g.series.map((p) => ({
     id: p.eventId,
@@ -77,89 +83,40 @@ export function GeneralView({ analytics }: { analytics: Analytics }) {
     striped: p.isNext,
   }));
 
-  const rankingItems = (
-    rows: RankingRow[],
-    value: (row: RankingRow) => string,
-    sub: (row: RankingRow) => string | undefined,
-  ): RankingItem[] =>
-    rows.slice(0, TOP).map((row) => ({
-      userId: row.userId,
-      name: people.name(row.userId),
-      avatarUrl: people.avatarUrl(row.userId),
-      value: value(row),
-      sub: sub(row),
-    }));
+  // Rankings: los mismos tableros que en Miembros, acá solo los primeros puestos.
+  const people = peopleMap(analytics.members);
+  const { main, tasks } = buildMemberBoards(analytics.members);
+  // En «Los más fieles» no figuran los nuevos (sin historia suficiente todavía).
+  const faithful: Board = {
+    ...main.asistencia,
+    rows: main.asistencia.rows.filter((row) => row.rank !== null),
+    empty: `Hacen falta al menos ${MIN_EVENTS_FOR_RANKING} eventos desde que alguien se unió.`,
+  };
+  const taskTabs: BoardTab[] = TASK_BOARD_KEYS.map((key) => ({
+    key,
+    label: TASK_BOARD_LABELS[key],
+    board: tasks[key],
+  }));
+  const one = (board: Board): BoardTab[] => [{ key: board.key, label: board.title, board }];
 
   return (
     <div className="mt-6 space-y-6">
-      <section aria-labelledby="kpis">
+      <section aria-labelledby="kpis" className="space-y-2">
         <h2 id="kpis" className="sr-only">
           Indicadores
         </h2>
+        {/* La referencia de las variaciones va una sola vez, no en cada tarjeta. */}
+        {g.pastEvents >= 2 && <DeltaLegend />}
         <div className="grid grid-cols-2 gap-3">
-          <KpiCard
-            label="Confirmados por evento"
-            value={orDash(confirmed.mean, formatNumber)}
-            hint={
-              enough && confirmed.median !== null
-                ? `promedio · mediana ${formatNumber(confirmed.median)}`
-                : "promedio"
-            }
-          >
-            <DeltaBadge comparison={confirmed.vsPrevious} kind="count" label="último vs. anterior" />
-          </KpiCard>
-
-          <KpiCard
-            label="Asistencia"
-            value={orDash(ratio.mean, formatPercent)}
-            hint="de los miembros, en promedio"
-          >
-            <DeltaBadge comparison={ratio.vsPrevious} kind="ratio" label="último vs. anterior" />
-          </KpiCard>
-
-          <KpiCard
-            label="Gasto total"
-            value={formatMoneyCompact(g.spending.total)}
-            hint={
-              perEvent.mean === null
-                ? "sin gastos cargados"
-                : `promedio por evento ${formatMoneyCompact(perEvent.mean)}`
-            }
-          >
-            <DeltaBadge comparison={perEvent.vsPrevious} kind="money" label="último vs. anterior" />
-          </KpiCard>
-
-          <KpiCard
-            label="Costo por persona"
-            value={orDash(costPerPerson.mean, formatMoneyCompact)}
-            hint={
-              enough && costPerPerson.median !== null
-                ? `promedio · mediana ${formatMoneyCompact(costPerPerson.median)}`
-                : "promedio por evento"
-            }
-          >
-            <DeltaBadge comparison={costPerPerson.vsPrevious} kind="money" label="último vs. anterior" />
-          </KpiCard>
-
-          <KpiCard
-            label="Gasto por ítem"
-            value={orDash(items.median, formatMoneyCompact)}
-            hint={
-              items.count === 0
-                ? "sin gastos cargados"
-                : `mediana de ${items.count} ítems · promedio ${orDash(items.mean, formatMoneyCompact)} · máx. ${orDash(items.max, formatMoneyCompact)}`
-            }
-          />
-
-          <KpiCard
-            label="Pusieron plata"
-            value={`${g.spending.payers} de ${g.members}`}
-            hint={
-              g.spending.topPayerShare === null
-                ? "miembros"
-                : `quien más puso aportó el ${formatPercent(g.spending.topPayerShare)} del total`
-            }
-          />
+          {buildGeneralKpis(g).map((kpi) => (
+            <KpiCard key={kpi.metric} label={kpi.label} value={kpi.value} hint={kpi.hint}>
+              <DeltaBadge
+                comparison={kpi.comparison}
+                kind={METRIC_KIND[kpi.metric]}
+                polarity={METRIC_POLARITY[kpi.metric]}
+              />
+            </KpiCard>
+          ))}
         </div>
       </section>
 
@@ -172,15 +129,15 @@ export function GeneralView({ analytics }: { analytics: Analytics }) {
             title="Confirmados por evento"
             points={confirmedPoints}
             tone="eventos"
-            average={confirmed.mean}
-            averageLabel={`promedio ${orDash(confirmed.mean, formatNumber)}`}
+            reference={confirmed.mean}
+            referenceLabel={`promedio ${orDash(confirmed.mean, formatNumber)}`}
           />
           <BarChart
             title="Costo por persona"
             points={costPoints}
             tone="gastos"
-            average={costPerPerson.mean}
-            averageLabel={`promedio ${orDash(costPerPerson.mean, formatMoneyCompact)}`}
+            reference={costPerPerson.mean}
+            referenceLabel={`promedio ${orDash(costPerPerson.mean, formatMoneyCompact)}`}
           />
           {next && (
             <p className="text-xs text-foreground/50">
@@ -196,41 +153,16 @@ export function GeneralView({ analytics }: { analytics: Analytics }) {
         <h2 id="rankings" className="font-heading text-lg font-semibold text-foreground">
           Quiénes
         </h2>
-        <RankingCard
-          title="Los que más ponen"
-          empty="Todavía no hay gastos cargados."
-          note="Lo que pagó cada uno, sumando los eventos pasados."
-          items={rankingItems(
-            g.rankings.contributors,
-            (row) => formatMoneyCompact(row.value),
-            (row) => {
-              const eventsPaid = people.get(row.userId)?.money.eventsPaid ?? 0;
-              return `en ${eventsPaid} de ${plural(g.pastEvents, "evento", "eventos")}`;
-            },
-          )}
-        />
-        <RankingCard
-          title="Los más fieles"
-          empty="Hacen falta al menos 2 eventos desde que alguien se unió."
-          note={`Con al menos ${MIN_EVENTS_FOR_FAITHFUL} eventos desde que se unieron; sin respuesta cuenta como ausencia.`}
-          items={rankingItems(
-            g.rankings.faithful,
-            (row) => formatPercent(row.value),
-            (row) => {
-              const m = people.get(row.userId);
-              return m ? `${m.juntada.attended} de ${m.juntada.attended + m.juntada.absent}` : undefined;
-            },
-          )}
-        />
-        <RankingCard
-          title="MVP del grupo"
-          empty="Todavía no se cargó ningún MVP."
-          items={rankingItems(
-            g.rankings.mvps,
-            (row) => `${row.value} ${row.value === 1 ? "vez" : "veces"}`,
-            () => undefined,
-          )}
-        />
+        <RankingBoard title="Los más fieles" tabs={one(faithful)} people={people} limit={TOP} />
+        <RankingBoard title="MVP del grupo" tabs={one(main.mvp)} people={people} limit={TOP} />
+        <RankingBoard title="Ranking por tarea" tabs={taskTabs} people={people} limit={TOP} />
+        <p className="text-xs text-foreground/50">
+          Todos los rankings y la grilla de asistencia están en{" "}
+          <Link href="/analytics?vista=miembros" className="font-medium text-foreground/70 underline">
+            Miembros
+          </Link>
+          .
+        </p>
       </section>
     </div>
   );

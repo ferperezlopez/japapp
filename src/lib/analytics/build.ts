@@ -8,8 +8,10 @@
 
 import { buildEventAttendance, buildMemberAttendance, isPast } from "./attendance";
 import { buildEventFutbol, countAwards } from "./football";
-import { buildEventSpending, itemStats } from "./spending";
-import { compareAt, fraction, roundTo, sum, summarizeSeries, type PointComparison } from "./stats";
+import { buildPositions, type PositionSource } from "./positions";
+import { buildEventSpending } from "./spending";
+import { compareAt, roundTo, sum, summarizeSeries, type PointComparison } from "./stats";
+import { countTasks, emptyTaskCounts } from "./tasks";
 import type {
   Analytics,
   AnalyticsInput,
@@ -23,17 +25,12 @@ import type {
   MemberEventRow,
   MetricComparison,
   PaymentRow,
-  RankingRow,
   SeriesPoint,
 } from "./types";
 
 // Con menos eventos pasados que esto no se dibujan tendencias ni medianas entre
 // eventos: dos puntos no son una tendencia.
 export const MIN_EVENTS_FOR_TRENDS = 3;
-// Para figurar entre «los más fieles» hacen falta al menos estos eventos
-// elegibles: 1 de 1 no dice nada.
-export const MIN_EVENTS_FOR_FAITHFUL = 2;
-
 const METRIC_KEYS: EventMetricKey[] = ["confirmed", "ratio", "total", "costPerPerson", "medianItem"];
 
 function time(event: EventRow): number {
@@ -58,13 +55,6 @@ function toMetricComparison(c: PointComparison, past: readonly EventRow[]): Metr
     previousEventId: c.previousIndex === null ? null : past[c.previousIndex].id,
     others: c.others,
   };
-}
-
-function byNameThen(
-  a: { name: string },
-  b: { name: string },
-): number {
-  return a.name.localeCompare(b.name, "es");
 }
 
 export function buildAnalytics(input: AnalyticsInput): Analytics {
@@ -104,6 +94,26 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
     METRIC_KEYS.map((key) => [key, pastCore.map(valueOf[key])]),
   ) as Record<EventMetricKey, (number | null)[]>;
 
+  // ─── Puestos de cada evento pasado entre los demás ───
+  const positions = buildPositions(
+    past.map((event, i): PositionSource => {
+      const { attendance, spending } = pastCore[i];
+      return {
+        id: event.id,
+        values: {
+          confirmed: attendance.confirmed,
+          ratio: attendance.ratio,
+          total: spending?.total ?? null,
+          costPerPerson: spending?.costPerPerson ?? null,
+          medianItem: spending?.median ?? null,
+          items: spending?.expenseCount ?? null,
+          guests: attendance.guestsTotal,
+          futbolConfirmed: attendance.futbol?.confirmed ?? null,
+        },
+      };
+    }),
+  );
+
   // ─── Eventos ───
   const pastEvents: EventAnalytics[] = past.map((event, i) => ({
     id: event.id,
@@ -116,6 +126,7 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
     comparisons: Object.fromEntries(
       METRIC_KEYS.map((key) => [key, toMetricComparison(compareAt(series[key], i), past)]),
     ) as Record<EventMetricKey, MetricComparison>,
+    positions: positions.get(event.id) ?? null,
   }));
 
   const nextCore = next ? core(next) : null;
@@ -136,11 +147,14 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
               { value: valueOf[key](nextCore), vsPrevious: null, vsAverage: null, previousEventId: null, others: 0 },
             ]),
           ) as Record<EventMetricKey, MetricComparison>,
+          // Tampoco se rankea: le faltan datos que los pasados ya tienen completos.
+          positions: null,
         }
       : null;
 
   // ─── Miembros ───
   const awards = countAwards(input.futbol, pastIds);
+  const taskCounts = countTasks(past, input.tasks);
   const guestsByMember = groupBy(
     guests.filter((g) => pastIds.has(g.eventId)),
     (g) => g.broughtBy,
@@ -150,26 +164,22 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
   const memberAnalytics: MemberAnalytics[] = members.map((m) => {
     const attendance = buildMemberAttendance(m, past, rsvps);
 
-    let paid = 0;
     let consumed = 0;
     let balance = 0;
-    let eventsPaid = 0;
     let eventsConsumed = 0;
-    const moneyByEvent = new Map<string, { paid: number; consumed: number }>();
+    const moneyByEvent = new Map<string, { consumed: number }>();
     for (const { event, spending } of pastSpending) {
       const row = spending?.byMember.find((r) => r.userId === m.id);
       if (!row) continue;
-      paid += row.paid;
       consumed += row.consumed;
       balance += row.balance;
-      if (row.paid > 0) eventsPaid++;
       if (row.consumed > 0) eventsConsumed++;
       moneyByEvent.set(event.id, row);
     }
 
     const attendanceByEvent = new Map(attendance.byEvent.map((r) => [r.eventId, r]));
     // Los eventos donde participó: los de su asistencia más cualquiera donde
-    // puso o consumió algo, para que la lista siempre cierre con sus totales.
+    // tuvo una parte de los gastos, para que la lista siempre cierre con sus totales.
     const byEvent: MemberEventRow[] = [...past]
       .reverse()
       .filter((e) => attendanceByEvent.has(e.id) || moneyByEvent.has(e.id))
@@ -182,7 +192,6 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
           eventDate: e.eventDate,
           juntada: att?.juntada ?? "none",
           futbol: e.hasFutbol ? (att?.futbol ?? "none") : null,
-          paid: money?.paid ?? 0,
           consumed: money?.consumed ?? 0,
         };
       });
@@ -196,12 +205,11 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
       futbol: attendance.futbol,
       eligibleEvents: attendance.eligibleEvents,
       streak: attendance.streak,
+      bestStreak: attendance.bestStreak,
+      tasks: taskCounts.get(m.id) ?? emptyTaskCounts(),
       guestsBrought: new Set((guestsByMember.get(m.id) ?? []).map((g) => `${g.eventId}:${g.guestId}`)).size,
       money: {
-        paid: roundTo(paid),
         consumed: roundTo(consumed),
-        net: roundTo(paid - consumed),
-        eventsPaid,
         eventsConsumed,
         avgConsumed: eventsConsumed > 0 ? roundTo(consumed / eventsConsumed) : null,
         balance: roundTo(balance),
@@ -214,15 +222,7 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
 
   // ─── General ───
   const spendings = pastCore.flatMap((c) => (c.spending ? [c.spending] : []));
-  // Solo quienes pusieron plata: `byMember` también trae a quien solo consumió.
-  const paidByPerson = new Map<string, number>();
-  for (const s of spendings) {
-    for (const row of s.byMember) {
-      if (row.paid > 0) paidByPerson.set(row.userId, (paidByPerson.get(row.userId) ?? 0) + row.paid);
-    }
-  }
   const totalSpent = roundTo(sum(spendings.map((s) => s.total)));
-  const topPaid = Math.max(0, ...paidByPerson.values());
 
   const seriesPoints: SeriesPoint[] = [
     ...pastEvents.map((e) => ({ event: e, isNext: false })),
@@ -231,6 +231,7 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
     eventId: event.id,
     name: event.name,
     eventDate: event.eventDate,
+    hasFutbol: event.hasFutbol,
     isNext,
     confirmed: event.attendance.confirmed,
     ratio: event.attendance.ratio,
@@ -243,27 +244,6 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
       .filter((r) => pastIds.has(r.eventId) && r.kind === "juntada" && r.status === "yes")
       .map((r) => r.userId),
   );
-
-  const contributors: RankingRow[] = memberAnalytics
-    .filter((m) => m.money.paid > 0)
-    .sort((a, b) => b.money.paid - a.money.paid || byNameThen(a, b))
-    .map((m) => ({ userId: m.id, value: m.money.paid }));
-
-  const faithful: RankingRow[] = memberAnalytics
-    .filter((m) => m.eligibleEvents.juntada >= MIN_EVENTS_FOR_FAITHFUL && m.juntada.ratio !== null)
-    .sort(
-      (a, b) =>
-        (b.juntada.ratio as number) - (a.juntada.ratio as number) ||
-        b.juntada.attended - a.juntada.attended ||
-        byNameThen(a, b),
-    )
-    .map((m) => ({ userId: m.id, value: m.juntada.ratio as number }));
-
-  const awardRanking = (key: "mvp" | "goleador"): RankingRow[] =>
-    memberAnalytics
-      .filter((m) => m[key] > 0)
-      .sort((a, b) => b[key] - a[key] || byNameThen(a, b))
-      .map((m) => ({ userId: m.id, value: m[key] }));
 
   const general: GeneralAnalytics = {
     pastEvents: past.length,
@@ -281,20 +261,9 @@ export function buildAnalytics(input: AnalyticsInput): Analytics {
       total: totalSpent,
       perEvent: summarizeSeries(series.total),
       costPerPerson: summarizeSeries(series.costPerPerson),
-      items: itemStats(
-        past.flatMap((e) => (e.groupId ? (expensesByGroup.get(e.groupId) ?? []) : [])).map((x) => x.amount),
-      ),
-      payers: paidByPerson.size,
-      topPayerShare: fraction(topPaid, totalSpent),
       pending: roundTo(sum(spendings.map((s) => s.pending))),
     },
     series: seriesPoints,
-    rankings: {
-      contributors,
-      faithful,
-      mvps: awardRanking("mvp"),
-      goleadores: awardRanking("goleador"),
-    },
   };
 
   return {

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { buildAnalytics } from "@/lib/analytics/build";
 import { loadAnalyticsInput } from "@/lib/analytics/load";
+import { buildPeopleMap, type PeopleMap } from "@/lib/analytics/boards";
 import type { Analytics, MemberAnalytics } from "@/lib/analytics/types";
 
 // Las tres páginas de Analytics (y sus detalles) leen y arman lo mismo: una carga
@@ -25,4 +26,10 @@ export function memberLookup(members: MemberAnalytics[]) {
     avatarUrl: (id: string) => byId.get(id)?.avatarUrl ?? null,
     get: (id: string) => byId.get(id) ?? null,
   };
+}
+
+// Nombre y foto de cada persona, en una forma que viaja a los componentes de
+// cliente (los rankings solo dicen quién y cuánto).
+export function peopleMap(members: MemberAnalytics[]): PeopleMap {
+  return buildPeopleMap(members);
 }

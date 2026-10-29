@@ -95,6 +95,22 @@ describe("buildEventAttendance", () => {
     expect(result.guestsPerConfirmed).toBe(1);
   });
 
+  it("invitados en total: cada uno una sola vez aunque haya venido a la juntada y al fútbol", () => {
+    const result = buildEventAttendance(
+      EV,
+      members,
+      [],
+      [
+        guest("e1", "g1", "a", "juntada"),
+        guest("e1", "g1", "a", "futbol"),
+        guest("e1", "g2", "a", "futbol"),
+        guest("otro", "g3"),
+      ],
+    );
+    expect(result.guestsTotal).toBe(2);
+    expect(result.guests).toBe(1);
+  });
+
   it("invitados por confirmado es null si no confirmó nadie", () => {
     const result = buildEventAttendance(EV, members, [], [guest("e1", "g1")]);
     expect(result.guests).toBe(1);
@@ -246,6 +262,27 @@ describe("buildMemberAttendance", () => {
     expect(buildMemberAttendance(a, past, [yes("e1"), yes("e3")]).streak).toBe(1);
     expect(buildMemberAttendance(a, past, [yes("e1"), yes("e2")]).streak).toBe(0);
     expect(buildMemberAttendance(a, past, [yes("e2"), yes("e3"), rsvp("e1", "a", "no")]).streak).toBe(2);
+  });
+
+  it("mejor racha: la tanda más larga de «Voy» seguidos, en cualquier momento", () => {
+    const yes = (id: string) => rsvp(id, "a", "yes");
+    // e1 sí, e2 sí, e3 no → la actual es 0 pero la mejor es 2
+    const result = buildMemberAttendance(a, past, [yes("e1"), yes("e2"), rsvp("e3", "a", "no")]);
+    expect(result.streak).toBe(0);
+    expect(result.bestStreak).toBe(2);
+    expect(buildMemberAttendance(a, past, [yes("e1"), yes("e2"), yes("e3")]).bestStreak).toBe(3);
+    // sí, no, sí → mejor 1 (y la actual 1)
+    expect(buildMemberAttendance(a, past, [yes("e1"), rsvp("e2", "a", "no"), yes("e3")]).bestStreak).toBe(1);
+    // sin ningún «Voy», ninguna racha
+    expect(buildMemberAttendance(a, past, []).bestStreak).toBe(0);
+  });
+
+  it("la mejor racha no se corta por eventos anteriores al alta, y un «tal vez» sí la corta", () => {
+    const joined = member("a", "2026-10-01T00:00:00Z");
+    expect(buildMemberAttendance(joined, past, [rsvp("e2", "a", "yes"), rsvp("e3", "a", "yes")]).bestStreak).toBe(2);
+    expect(
+      buildMemberAttendance(a, past, [rsvp("e1", "a", "yes"), rsvp("e2", "a", "maybe"), rsvp("e3", "a", "yes")]).bestStreak,
+    ).toBe(1);
   });
 
   it("«tal vez» rompe la racha", () => {

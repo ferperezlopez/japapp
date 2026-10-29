@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ZoomableAvatar } from "@/components/ui/ZoomableAvatar";
 import { CopyableText } from "@/components/ui/CopyableText";
+import { MetricsLink } from "@/components/analytics/MetricsLink";
 import { AttendanceStatsCard } from "@/components/eventos/AttendanceStatsCard";
 import {
   calcularAsistencia,
@@ -106,6 +107,7 @@ export default async function UserProfilePage({
       )}
 
       <AttendanceStatsCard attendance={attendance} />
+      <MetricsLink userId={userId} label="Ver sus métricas" />
     </div>
   );
 }

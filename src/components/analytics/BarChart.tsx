@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 const TONES = {
@@ -31,22 +32,26 @@ export function BarChart({
   title,
   points,
   tone,
-  average = null,
-  averageLabel = "promedio",
+  reference = null,
+  referenceLabel = "promedio",
   height = 112,
   maxBars = 8,
+  children,
 }: {
   title: string;
   points: BarPoint[];
   tone: keyof typeof TONES;
-  average?: number | null;
-  averageLabel?: string;
+  /** Línea punteada de referencia (el promedio, la mediana de los demás…). */
+  reference?: number | null;
+  referenceLabel?: string;
   height?: number;
   maxBars?: number;
+  /** Debajo del gráfico: cómo viene el evento contra la referencia, de dónde sale, etc. */
+  children?: ReactNode;
 }) {
   const shown = points.slice(-maxBars);
   const hasCurrent = shown.some((p) => p.current);
-  const max = Math.max(0, average ?? 0, ...shown.map((p) => p.value ?? 0));
+  const max = Math.max(0, reference ?? 0, ...shown.map((p) => p.value ?? 0));
   const scale = (value: number) => (max > 0 ? (value / max) * 100 : 0);
   const palette = TONES[tone];
 
@@ -54,10 +59,10 @@ export function BarChart({
     <figure className="rounded-xl border border-surface-border bg-surface p-4">
       <figcaption className="flex items-center justify-between gap-3 text-xs font-medium text-foreground/50">
         <span>{title}</span>
-        {average !== null && max > 0 && (
+        {reference !== null && max > 0 && (
           <span className="flex shrink-0 items-center gap-1.5 font-normal">
             <span aria-hidden="true" className="inline-block w-4 border-t border-dashed border-foreground/50" />
-            {averageLabel}
+            {referenceLabel}
           </span>
         )}
       </figcaption>
@@ -93,10 +98,10 @@ export function BarChart({
               )}
             </div>
           ))}
-          {average !== null && max > 0 && (
+          {reference !== null && max > 0 && (
             <div
               className="pointer-events-none absolute inset-x-0 border-t border-dashed border-foreground/50"
-              style={{ bottom: `${scale(average)}%` }}
+              style={{ bottom: `${scale(reference)}%` }}
             />
           )}
         </div>
@@ -114,6 +119,8 @@ export function BarChart({
           ))}
         </div>
       </div>
+
+      {children && <div className="mt-3 space-y-0.5">{children}</div>}
 
       {/* Lo mismo, como lista, para lector de pantalla (y con links si hay). */}
       <ul className="sr-only">

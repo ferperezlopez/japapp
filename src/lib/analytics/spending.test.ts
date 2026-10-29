@@ -47,31 +47,13 @@ describe("buildEventSpending", () => {
     expect(s.costPerPerson).toBe(53.33);
   });
 
-  it("mediana por persona: sobre lo que consumió cada una, no sobre lo que puso", () => {
-    // consumos: a 50 + 20 = 70, b 50 + 20 = 70, c 20 → mediana 70
-    expect(buildEventSpending(expenses, [])!.medianPerPerson).toBe(70);
-  });
-
-  it("aportes, consumo y neto por persona, del que más puso al que menos", () => {
+  it("lo que le tocó y el saldo de cada persona, de la que más consumió a la que menos", () => {
     const s = buildEventSpending(expenses, [])!;
     expect(s.byMember).toEqual([
-      { userId: "a", paid: 100, consumed: 70, net: 30, balance: 30 },
-      { userId: "b", paid: 60, consumed: 70, net: -10, balance: -10 },
-      { userId: "c", paid: 0, consumed: 20, net: -20, balance: -20 },
+      { userId: "a", consumed: 70, balance: 30 },
+      { userId: "b", consumed: 70, balance: -10 },
+      { userId: "c", consumed: 20, balance: -20 },
     ]);
-  });
-
-  it("concentración: cuántas personas pagaron y qué parte puso la que más puso", () => {
-    const s = buildEventSpending(expenses, [])!;
-    expect(s.payers).toBe(2);
-    expect(s.topPayerId).toBe("a");
-    expect(s.topPayerShare).toBe(0.625);
-  });
-
-  it("si una sola persona puso todo, su parte es 100 %", () => {
-    const s = buildEventSpending([expense("x", "g1", "a", 90, ["a", "b", "c"])], [])!;
-    expect(s.payers).toBe(1);
-    expect(s.topPayerShare).toBe(1);
   });
 
   it("pendiente = lo que falta saldar (suma de saldos positivos)", () => {
@@ -85,8 +67,8 @@ describe("buildEventSpending", () => {
     expect(s.pending).toBe(10);
     expect(s.byMember.find((m) => m.userId === "a")?.balance).toBe(10);
     expect(s.byMember.find((m) => m.userId === "c")?.balance).toBe(0);
-    // el neto es lo que puso menos lo que consumió: un pago de deuda no lo toca
-    expect(s.byMember.find((m) => m.userId === "c")?.net).toBe(-20);
+    // lo que le tocó no cambia: un pago de deuda no es consumo
+    expect(s.byMember.find((m) => m.userId === "c")?.consumed).toBe(20);
   });
 
   it("con todo pagado el evento está saldado", () => {
@@ -107,7 +89,7 @@ describe("buildEventSpending", () => {
     expect(s.settled).toBe(true);
   });
 
-  it("quien solo aparece en un pago no figura en los aportes", () => {
+  it("quien solo aparece en un pago no figura entre las personas del evento", () => {
     const s = buildEventSpending(expenses, [payment("g1", "zz", "a", 5)])!;
     expect(s.byMember.map((m) => m.userId)).toEqual(["a", "b", "c"]);
   });
@@ -115,16 +97,15 @@ describe("buildEventSpending", () => {
   it("partes desparejas: usa lo que le tocó a cada uno tal cual", () => {
     const s = buildEventSpending([expense("x", "g1", "a", 100, [["a", 70], ["b", 30]])], [])!;
     expect(s.costPerPerson).toBe(50);
-    expect(s.medianPerPerson).toBe(50);
     expect(s.byMember).toEqual([
-      { userId: "a", paid: 100, consumed: 70, net: 30, balance: 30 },
-      { userId: "b", paid: 0, consumed: 30, net: -30, balance: -30 },
+      { userId: "a", consumed: 70, balance: 30 },
+      { userId: "b", consumed: 30, balance: -30 },
     ]);
   });
 
-  it("quien pagó sin consumir nada (puso para los demás) aparece con consumo 0", () => {
+  it("quien pagó sin consumir nada (puso para los demás) aparece con consumo 0 y su saldo", () => {
     const s = buildEventSpending([expense("x", "g1", "z", 60, ["a", "b"])], [])!;
-    expect(s.byMember[0]).toEqual({ userId: "z", paid: 60, consumed: 0, net: 60, balance: 60 });
+    expect(s.byMember.find((m) => m.userId === "z")).toEqual({ userId: "z", consumed: 0, balance: 60 });
     expect(s.people).toBe(2);
   });
 
@@ -132,10 +113,10 @@ describe("buildEventSpending", () => {
     const s = buildEventSpending([expense("x", "g1", "a", 100, [["a", 33.34], ["b", 33.33], ["c", 33.33]])], [])!;
     expect(s.total).toBe(100);
     expect(s.costPerPerson).toBe(33.33);
-    expect(s.byMember[0].net).toBe(66.66);
+    expect(s.byMember[0].consumed).toBe(33.34);
   });
 
-  it("desempata a igual aporte por consumo y después por id (orden estable)", () => {
+  it("desempata a igual consumo por id (orden estable)", () => {
     const s = buildEventSpending(
       [
         expense("x1", "g1", "b", 10, ["a", "b"]),
@@ -165,6 +146,5 @@ describe("buildEventSpending", () => {
     expect(s.total).toBe(50);
     expect(s.people).toBe(0);
     expect(s.costPerPerson).toBeNull();
-    expect(s.medianPerPerson).toBeNull();
   });
 });
