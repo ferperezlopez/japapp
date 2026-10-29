@@ -49,7 +49,7 @@ export function MembersView({ analytics }: { analytics: Analytics }) {
         <h2 id="ranking" className="font-heading text-lg font-semibold text-foreground">
           Rankings
         </h2>
-        <RankingBoard tabs={tabs} people={people} />
+        <RankingBoard tabs={tabs} people={people} shareable />
       </section>
 
       <section aria-labelledby="comparativa" className="space-y-3">

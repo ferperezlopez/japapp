@@ -3,6 +3,7 @@ import { BarChart, type BarPoint } from "@/components/analytics/BarChart";
 import { DeltaBadge, DeltaLegend } from "@/components/analytics/DeltaBadge";
 import { EmptyState } from "@/components/analytics/EmptyState";
 import { KpiCard } from "@/components/analytics/KpiCard";
+import { ShareInfographicButton } from "@/components/analytics/ShareInfographicButton";
 import { RankingBoard, type BoardTab } from "@/components/analytics/RankingBoard";
 import { Card } from "@/components/ui/Card";
 import {
@@ -20,6 +21,7 @@ import {
   formatNumber,
   orDash,
 } from "@/lib/analytics/format";
+import { buildGeneralInfographic } from "@/lib/analytics/infographic";
 import { buildGeneralKpis } from "@/lib/analytics/kpis";
 import type { Analytics, EventAnalytics } from "@/lib/analytics/types";
 import { peopleMap } from "./data";
@@ -101,6 +103,8 @@ export function GeneralView({ analytics }: { analytics: Analytics }) {
 
   return (
     <div className="mt-6 space-y-6">
+      <ShareInfographicButton spec={buildGeneralInfographic(analytics)} label="Compartir en WhatsApp" />
+
       <section aria-labelledby="kpis" className="space-y-2">
         <h2 id="kpis" className="sr-only">
           Indicadores

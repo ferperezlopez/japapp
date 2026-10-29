@@ -4,10 +4,12 @@ import { EventComparison } from "@/components/analytics/EventComparison";
 import { MetricRow } from "@/components/analytics/MetricRow";
 import { PositionsCard } from "@/components/analytics/PositionsCard";
 import { SampleNotice } from "@/components/analytics/SampleNotice";
+import { ShareInfographicButton } from "@/components/analytics/ShareInfographicButton";
 import { StackedBar } from "@/components/analytics/StackedBar";
 import { Card } from "@/components/ui/Card";
 import { MIN_EVENTS_FOR_TRENDS } from "@/lib/analytics/build";
 import { buildComparisonPoints, buildEventComparison } from "@/lib/analytics/eventComparison";
+import { buildEventInfographic } from "@/lib/analytics/infographic";
 import {
   formatDayLong,
   formatMoney,
@@ -54,6 +56,11 @@ export default async function AnalyticsEventPage({
         {formatDayLong(event.eventDate)}
         {event.location ? ` · ${event.location}` : ""}
       </p>
+      <ShareInfographicButton
+        spec={buildEventInfographic(analytics, event.id)}
+        label="Compartir en WhatsApp"
+        className="mt-4"
+      />
       {isNext ? (
         <p className="mt-3 text-xs text-foreground/50">
           Todavía no pasó: no entra en los promedios y no se compara con los otros eventos.

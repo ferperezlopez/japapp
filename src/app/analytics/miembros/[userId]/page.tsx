@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { MetricRow } from "@/components/analytics/MetricRow";
 import { RankPill } from "@/components/analytics/RankPill";
 import { SampleNotice } from "@/components/analytics/SampleNotice";
+import { ShareInfographicButton } from "@/components/analytics/ShareInfographicButton";
 import { StatusChip } from "@/components/analytics/StatusChip";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
@@ -14,6 +15,7 @@ import {
   formatPercent,
   plural,
 } from "@/lib/analytics/format";
+import { buildMemberInfographic } from "@/lib/analytics/infographic";
 import { TASK_KEYS, TASK_LABELS } from "@/lib/analytics/tasks";
 import type { AttendanceCount } from "@/lib/analytics/types";
 import { getAnalytics } from "../../data";
@@ -72,6 +74,11 @@ export default async function AnalyticsMemberPage({
           <p className="text-xs text-foreground/50">Desde {formatMonthYear(member.joinedAt)}</p>
         </div>
       </div>
+      <ShareInfographicButton
+        spec={buildMemberInfographic(analytics, member.id)}
+        label="Compartir en WhatsApp"
+        className="mt-4"
+      />
       <SampleNotice pastEvents={analytics.general.pastEvents} />
 
       <div className="mt-6 space-y-4">

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import type { Board, PeopleMap } from "@/lib/analytics/boards";
+import { buildRankingInfographic } from "@/lib/analytics/infographic";
 import { RankingList } from "./RankingList";
+import { ShareInfographicButton } from "./ShareInfographicButton";
 
 export interface BoardOption {
   key: string;
@@ -61,12 +63,15 @@ export function RankingBoard({
   tabs,
   people,
   limit,
+  shareable = false,
 }: {
   title?: string;
   tabs: BoardTab[];
   people: PeopleMap;
   /** Cuántas filas mostrar antes de «Ver todos». Sin límite, todas. */
   limit?: number;
+  /** Ofrece compartir como infografía el ranking elegido (cada una se prepara al cargar). */
+  shareable?: boolean;
 }) {
   const [tabKey, setTabKey] = useState(tabs[0]?.key ?? "");
   const [childKeys, setChildKeys] = useState<Record<string, string>>({});
@@ -75,6 +80,11 @@ export function RankingBoard({
   const tab = tabs.find((t) => t.key === tabKey) ?? tabs[0];
   const child = tab?.children?.find((c) => c.key === childKeys[tab.key]) ?? tab?.children?.[0];
   const board = child?.board ?? tab?.board;
+  // La infografía del ranking que se está viendo (se rehace al cambiar de categoría).
+  const infographic = useMemo(
+    () => (shareable && board ? buildRankingInfographic(board, people) : null),
+    [shareable, board, people],
+  );
   if (!tab || !board) return null;
   const canExpand = limit !== undefined && board.rows.length > limit;
   // Con selector, el nombre del ranking elegido se dice arriba de la lista; sin
@@ -132,6 +142,7 @@ export function RankingBoard({
       {board.note && board.rows.length > 0 && (
         <p className="mt-2 text-[11px] text-foreground/40">{board.note}</p>
       )}
+      {infographic && <ShareInfographicButton spec={infographic} label="Compartir este ranking" className="mt-3" />}
     </Card>
   );
 }
