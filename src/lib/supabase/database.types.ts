@@ -48,6 +48,18 @@ export interface Database {
         Args: { p_event_id: string };
         Returns: { state: string; is_admin: boolean }[];
       };
+      update_expense: {
+        Args: {
+          p_expense_id: string;
+          p_description: string;
+          p_item_id: string | null;
+          p_amount: number;
+          p_paid_by: string;
+          p_expense_date: string | null;
+          p_shares: { user_id: string; share_amount: number }[];
+        };
+        Returns: undefined;
+      };
     };
     Tables: {
       push_subscriptions: {

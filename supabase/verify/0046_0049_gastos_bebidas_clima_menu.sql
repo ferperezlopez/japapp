@@ -1,0 +1,273 @@
+-- Verificación de las migraciones 0046 a 0049 (editar un gasto, bebidas del evento, clima del
+-- evento y menú del evento) contra una base que YA las tiene aplicadas. Pegar entero en el SQL
+-- editor de Supabase y ejecutar.
+--
+-- No deja nada: es un solo bloque DO que arma eventos, gastos y pagos de prueba, simula a cada
+-- persona (`set local role authenticated` + el JWT de cada una) y termina SIEMPRE con un
+-- `raise exception` cuyo mensaje es el informe. El error «=== N verificaciones, 0 con FALLA ===»
+-- que muestra el editor es lo esperado, y justamente por ese error se deshace todo.
+--
+-- Cada línea del informe empieza con OK o FALLA.
+--   F: editar un gasto (0046): quién puede, el candado de saldado, el reemplazo atómico de las
+--      partes y que los permisos de siempre (borrar, el emoji del admin) no cambiaron.
+--
+-- Los ids de personas son de ESTA base (Fercho es el admin; Mati L, Javi y Bozzo son miembros
+-- comunes). El editor puede pedir confirmación por los DELETE que tiene el script: es normal.
+do $verify$
+declare
+  v_rep text[] := '{}';
+  v_fail int;
+  c_admin constant uuid := '9840e373-0124-40ea-8a5d-89e5ba5b9d73';
+  c_matil constant uuid := 'c12485a6-48df-4b32-8ab2-437e173fb309';
+  c_javi  constant uuid := '704d9d64-defd-499e-b769-1c2fa0c0d720';
+  c_bozzo constant uuid := 'f1db3ce1-16fd-411e-9ead-32b93764f520';
+  c_nadie constant uuid := '00000000-0000-4000-8000-0000000000aa';
+  e_open uuid; g_open uuid; e_pend uuid; g_pend uuid; e_sett uuid; g_sett uuid; e_trap uuid; g_trap uuid;
+  x1 uuid; x2 uuid; x3 uuid; x4a uuid; x4b uuid; x5 uuid; x6 uuid;
+  v_before text;
+  v_state text;
+begin
+  -- ===================== ayudantes (viven en pg_temp: se van con el rollback) =====================
+  create function pg_temp.line(p_name text, p_got text, p_exp text) returns text language sql as $f$
+    select case when p_got like p_exp then 'OK    ' else 'FALLA ' end || p_name || ' -> ' || coalesce(p_got, 'null')
+      || case when p_got like p_exp then '' else '   (esperaba ' || p_exp || ')' end;
+  $f$;
+
+  -- Ejecuta las sentencias como `authenticated` con el JWT de p_uid, en un sub-bloque que SIEMPRE se deshace.
+  -- Devuelve 'ok:<filas de la última>' o 'err:<sqlstate>:<mensaje>'.
+  create function pg_temp.attempt(p_uid uuid, p_sqls text[]) returns text language plpgsql as $f$
+  declare v_sql text; v_n bigint := 0;
+  begin
+    begin
+      perform set_config('request.jwt.claims', json_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
+      perform set_config('request.jwt.claim.sub', p_uid::text, true);
+      set local role authenticated;
+      foreach v_sql in array p_sqls loop
+        execute v_sql;
+        get diagnostics v_n = row_count;
+      end loop;
+      raise exception using errcode = 'P0001', message = 'ATTEMPT_DONE';
+    exception
+      when sqlstate 'P0001' then
+        if sqlerrm = 'ATTEMPT_DONE' then return 'ok:' || v_n; end if;
+        return 'err:P0001:' || left(sqlerrm, 90);
+      when others then
+        return 'err:' || sqlstate || ':' || left(sqlerrm, 90);
+    end;
+  end $f$;
+
+  -- Igual, pero para una consulta de un solo valor, con el rol que se pida (authenticated / anon).
+  create function pg_temp.ask(p_uid uuid, p_role text, p_sql text) returns text language plpgsql as $f$
+  declare v_out text;
+  begin
+    begin
+      perform set_config('request.jwt.claims', json_build_object('sub', p_uid, 'role', p_role)::text, true);
+      perform set_config('request.jwt.claim.sub', coalesce(p_uid::text, ''), true);
+      execute format('set local role %I', p_role);
+      execute p_sql into v_out;
+      raise exception using errcode = 'P0001', message = 'ASK_DONE';
+    exception
+      when sqlstate 'P0001' then
+        if sqlerrm = 'ASK_DONE' then return 'val:' || coalesce(v_out, 'null'); end if;
+        return 'err:P0001:' || left(sqlerrm, 90);
+      when others then
+        return 'err:' || sqlstate || ':' || left(sqlerrm, 90);
+    end;
+  end $f$;
+
+  create function pg_temp.mk_event(p_name text, p_date timestamptz, p_creator uuid) returns uuid language plpgsql as $f$
+  declare v_id uuid;
+  begin
+    insert into public.events (name, event_date, created_by, has_futbol) values (p_name, p_date, p_creator, true) returning id into v_id;
+    return v_id;
+  end $f$;
+
+  create function pg_temp.grp(p_event uuid) returns uuid language sql as $f$
+    select group_id from public.events where id = p_event;
+  $f$;
+
+  -- Un gasto de p_amount pagado por p_payer, repartido en partes iguales entre p_a y p_b.
+  create function pg_temp.mk_expense(p_group uuid, p_payer uuid, p_creator uuid, p_amount numeric, p_a uuid, p_b uuid) returns uuid language plpgsql as $f$
+  declare v_id uuid;
+  begin
+    insert into public.expenses (group_id, description, amount, paid_by, created_by)
+      values (p_group, 'T gasto', p_amount, p_payer, p_creator) returning id into v_id;
+    insert into public.expense_shares (expense_id, user_id, share_amount)
+      values (v_id, p_a, p_amount / 2), (v_id, p_b, p_amount / 2);
+    return v_id;
+  end $f$;
+
+  create function pg_temp.mk_payment(p_group uuid, p_from uuid, p_to uuid, p_amount numeric, p_reporter uuid) returns uuid language plpgsql as $f$
+  declare v_id uuid;
+  begin
+    insert into public.debt_payments (group_id, from_user_id, to_user_id, amount, reported_by)
+      values (p_group, p_from, p_to, p_amount, p_reporter) returning id into v_id;
+    return v_id;
+  end $f$;
+
+  -- Llama a update_expense como p_uid (sin cambiar de rol, para poder mirar el resultado después) y
+  -- devuelve 'ok' o 'err:<sqlstate>:<mensaje>'. El sub-bloque deshace lo que la función alcanzó a hacer si falla.
+  create function pg_temp.edit(p_uid uuid, p_expense uuid, p_desc text, p_item uuid, p_amount numeric, p_payer uuid, p_date date, p_shares jsonb) returns text language plpgsql as $f$
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_uid::text, ''), true);
+    begin
+      perform public.update_expense(p_expense, p_desc, p_item, p_amount, p_payer, p_date, p_shares);
+      return 'ok';
+    exception when others then
+      return 'err:' || sqlstate || ':' || left(sqlerrm, 90);
+    end;
+  end $f$;
+
+  -- Cómo quedó un gasto: descripción / monto / quién pagó / fecha / quién lo cargó / partes (cantidad y suma).
+  create function pg_temp.exp_state(p_expense uuid) returns text language sql as $f$
+    select x.description || ' / ' || x.amount::text || ' / pagó ' || left(x.paid_by::text, 4) || ' / ' || x.expense_date::text
+        || ' / cargó ' || left(x.created_by::text, 4)
+        || ' / ' || (select count(*) from public.expense_shares s where s.expense_id = x.id)::text || ' partes por '
+        || (select coalesce(sum(s.share_amount), 0) from public.expense_shares s where s.expense_id = x.id)::text
+      from public.expenses x where x.id = p_expense;
+  $f$;
+
+  -- Las partes de un gasto, ordenadas: 'ab12=45.00,cd34=45.00'.
+  create function pg_temp.exp_shares(p_expense uuid) returns text language sql as $f$
+    select coalesce(string_agg(left(s.user_id::text, 4) || '=' || s.share_amount::text, ',' order by s.user_id), '')
+      from public.expense_shares s where s.expense_id = p_expense;
+  $f$;
+
+  create function pg_temp.sh(p_a uuid, p_a_amt numeric, p_b uuid, p_b_amt numeric) returns jsonb language sql as $f$
+    select jsonb_build_array(
+      jsonb_build_object('user_id', p_a, 'share_amount', p_a_amt),
+      jsonb_build_object('user_id', p_b, 'share_amount', p_b_amt));
+  $f$;
+
+  -- ===================== datos de prueba (como postgres, sin RLS) =====================
+  e_open := pg_temp.mk_event('T abierto',          now() + interval '2 days', c_javi); g_open := pg_temp.grp(e_open);
+  e_pend := pg_temp.mk_event('T cerrado con deuda', now() - interval '3 days', c_javi); g_pend := pg_temp.grp(e_pend);
+  e_sett := pg_temp.mk_event('T saldado',          now() - interval '3 days', c_javi); g_sett := pg_temp.grp(e_sett);
+  e_trap := pg_temp.mk_event('T trampa transitoria', now() - interval '3 days', c_javi); g_trap := pg_temp.grp(e_trap);
+
+  insert into public.group_members (group_id, user_id)
+    select g, u from (values (g_open), (g_pend), (g_sett), (g_trap)) as t(g), (values (c_matil), (c_bozzo)) as m(u)
+    on conflict do nothing;
+
+  -- abierto: un gasto que cargó Mati L (pagó ella, partes 50/50 con Javi) y otro igual para las validaciones.
+  x1 := pg_temp.mk_expense(g_open, c_matil, c_matil, 100, c_matil, c_javi);
+  x5 := pg_temp.mk_expense(g_open, c_matil, c_matil, 100, c_matil, c_javi);
+  x6 := pg_temp.mk_expense(g_open, c_matil, c_matil, 100, c_matil, c_javi);
+  -- cerrado con deuda: lo cargó Javi, sin pagos.
+  x2 := pg_temp.mk_expense(g_pend, c_javi, c_javi, 100, c_javi, c_matil);
+  -- saldado: lo cargó Mati L (pagó Javi) y el pago de Mati L lo salda.
+  x3 := pg_temp.mk_expense(g_sett, c_javi, c_matil, 100, c_javi, c_matil);
+  perform pg_temp.mk_payment(g_sett, c_matil, c_javi, 50, c_matil);
+  -- trampa transitoria: x4a + su pago quedan en 0 y x4b (de Mati L) es lo que deja una deuda de 10. Al sacarle las
+  -- partes a x4b, el resto del grupo queda saldado: con policies, esa edición legítima se rechazaría a la mitad.
+  x4a := pg_temp.mk_expense(g_trap, c_javi, c_javi, 100, c_javi, c_matil);
+  perform pg_temp.mk_payment(g_trap, c_matil, c_javi, 50, c_matil);
+  x4b := pg_temp.mk_expense(g_trap, c_matil, c_matil, 20, c_matil, c_javi);
+
+  -- ===================== F) editar un gasto (0046) =====================
+  v_rep := v_rep || pg_temp.line('F0  antes de editar: el estado de los grupos', concat_ws(' ',
+    (select state from public.event_lock_state(e_open)), (select state from public.event_lock_state(e_pend)),
+    (select state from public.event_lock_state(e_sett)), (select state from public.event_lock_state(e_trap))),
+    'open closed settled closed');
+
+  -- quién puede
+  v_rep := v_rep || pg_temp.line('F1  otra persona (miembro) NO puede editar el gasto de Mati L',
+    pg_temp.edit(c_bozzo, x1, 'Hielo', null, 90, c_javi, null, pg_temp.sh(c_javi, 45, c_bozzo, 45)), 'err:42501:Solo quien cargó%');
+  v_rep := v_rep || pg_temp.line('F2  el gasto quedó igual tras el rechazo', pg_temp.exp_state(x1), 'T gasto / 100.00 / pagó c124 / %/ cargó c124 / 2 partes por 100.00');
+
+  v_rep := v_rep || pg_temp.line('F3  quien lo cargó lo edita (descripción, monto, quién pagó, fecha y partes)',
+    pg_temp.edit(c_matil, x1, '  Hielo editado ', null, 90, c_javi, date '2026-10-01', pg_temp.sh(c_matil, 45, c_bozzo, 45)), 'ok');
+  v_rep := v_rep || pg_temp.line('F4  quedó con lo nuevo, y la descripción sin espacios de más', pg_temp.exp_state(x1),
+    'Hielo editado / 90.00 / pagó 704d / 2026-10-01 / cargó c124 / 2 partes por 90.00');
+  v_rep := v_rep || pg_temp.line('F5  las partes se reemplazaron (Mati L y Bozzo; Javi ya no)', pg_temp.exp_shares(x1), 'c124=45.00,f1db=45.00');
+
+  v_rep := v_rep || pg_temp.line('F6  sin fecha, deja la que tenía',
+    pg_temp.edit(c_matil, x1, 'Hielo editado', null, 90, c_javi, null, pg_temp.sh(c_matil, 45, c_bozzo, 45)), 'ok');
+  v_rep := v_rep || pg_temp.line('F7  ...y la fecha sigue siendo la de antes', (select expense_date::text from public.expenses where id = x1), '2026-10-01');
+
+  v_rep := v_rep || pg_temp.line('F8  un admin edita el gasto de otra persona',
+    pg_temp.edit(c_admin, x1, 'Hielo del admin', null, 120, c_matil, null, pg_temp.sh(c_admin, 60, c_javi, 60)), 'ok');
+  v_rep := v_rep || pg_temp.line('F9  ...y sigue figurando quien lo cargó originalmente', pg_temp.exp_state(x1),
+    'Hielo del admin / 120.00 / pagó c124 / 2026-10-01 / cargó c124 / 2 partes por 120.00');
+  v_rep := v_rep || pg_temp.line('F10 ...con las partes del admin y de Javi', pg_temp.exp_shares(x1), '704d=60.00,9840=60.00');
+
+  -- el candado de saldado (spec 022)
+  v_rep := v_rep || pg_temp.line('F11 cerrado con deuda: quien lo cargó edita (sigue abierto para la plata)',
+    pg_temp.edit(c_javi, x2, 'Carne', null, 80, c_javi, null, pg_temp.sh(c_javi, 40, c_matil, 40)), 'ok');
+  v_rep := v_rep || pg_temp.line('F12 saldado: quien lo cargó NO puede editarlo',
+    pg_temp.edit(c_matil, x3, 'Carne', null, 100, c_javi, null, pg_temp.sh(c_javi, 50, c_matil, 50)), 'err:42501:Este evento ya está saldado%');
+  v_rep := v_rep || pg_temp.line('F13 saldado: otra persona recibe el aviso de que no es suyo',
+    pg_temp.edit(c_bozzo, x3, 'Carne', null, 100, c_javi, null, pg_temp.sh(c_javi, 50, c_matil, 50)), 'err:42501:Solo quien cargó%');
+  v_rep := v_rep || pg_temp.line('F14 saldado: el gasto quedó igual', pg_temp.exp_state(x3), 'T gasto / 100.00 / pagó 704d / %/ cargó c124 / 2 partes por 100.00');
+  v_rep := v_rep || pg_temp.line('F14b saldado: quien lo cargó sigue sin poder borrarlo (0044)',
+    pg_temp.attempt(c_matil, array[format('delete from public.expenses where id = %L', x3)]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('F15 saldado: un admin sí puede corregirlo (sube el monto a 120)',
+    pg_temp.edit(c_admin, x3, 'Carne', null, 120, c_javi, null, pg_temp.sh(c_javi, 60, c_matil, 60)), 'ok');
+  v_rep := v_rep || pg_temp.line('F16 ...y el evento se reabre solo: Mati L debe 10 todavía (cerrado)', (select state from public.event_lock_state(e_sett)), 'closed');
+
+  -- la trampa transitoria: sacar las partes viejas deja al resto del grupo saldado un instante
+  begin
+    delete from public.expense_shares where expense_id = x4b;
+    v_state := case when private.group_is_settled(g_trap) then 'saldado' else 'no saldado' end;
+    raise exception using errcode = 'P0001', message = 'PROBE_DONE';
+  exception when sqlstate 'P0001' then null;
+  end;
+  v_rep := v_rep || pg_temp.line('F17 trampa transitoria: sin las partes de x4b el resto del grupo queda saldado (se deshace)', v_state, 'saldado');
+  v_rep := v_rep || pg_temp.line('F17b ...pero con sus partes puestas, el grupo no está saldado',
+    case when private.group_is_settled(g_trap) then 'saldado' else 'no saldado' end, 'no saldado');
+  v_rep := v_rep || pg_temp.line('F18 ...y igual quien cargó x4b lo puede editar (el candado se mira una sola vez)',
+    pg_temp.edit(c_matil, x4b, 'Pan', null, 30, c_matil, null, pg_temp.sh(c_matil, 15, c_javi, 15)), 'ok');
+  v_rep := v_rep || pg_temp.line('F19 ...y quedó con lo nuevo', pg_temp.exp_shares(x4b), '704d=15.00,c124=15.00');
+
+  -- validaciones y atomicidad
+  v_before := pg_temp.exp_state(x5) || ' | ' || pg_temp.exp_shares(x5);
+  v_rep := v_rep || pg_temp.line('F20 las partes tienen que sumar el monto',
+    pg_temp.edit(c_matil, x5, 'X', null, 90, c_matil, null, pg_temp.sh(c_matil, 40, c_javi, 40)), 'err:22023:Las partes no suman%');
+  v_rep := v_rep || pg_temp.line('F20b ...y el gasto quedó como estaba', pg_temp.exp_state(x5) || ' | ' || pg_temp.exp_shares(x5), v_before);
+  v_rep := v_rep || pg_temp.line('F21 un centavo de diferencia por redondeo se tolera',
+    pg_temp.edit(c_matil, x5, 'X', null, 100.01, c_matil, null, pg_temp.sh(c_matil, 50, c_javi, 50)), 'ok');
+  v_rep := v_rep || pg_temp.line('F22 el monto tiene que ser mayor a 0',
+    pg_temp.edit(c_matil, x6, 'X', null, 0, c_matil, null, pg_temp.sh(c_matil, 0, c_javi, 0)), 'err:22023:El monto%');
+  v_rep := v_rep || pg_temp.line('F23 hace falta una descripción',
+    pg_temp.edit(c_matil, x6, '   ', null, 10, c_matil, null, pg_temp.sh(c_matil, 5, c_javi, 5)), 'err:22023:Poné una descripción%');
+  v_rep := v_rep || pg_temp.line('F24 hace falta al menos una parte',
+    pg_temp.edit(c_matil, x6, 'X', null, 10, c_matil, null, '[]'::jsonb), 'err:22023:Elegí entre quiénes%');
+  v_rep := v_rep || pg_temp.line('F25 las partes tienen que venir en una lista',
+    pg_temp.edit(c_matil, x6, 'X', null, 10, c_matil, null, '{}'::jsonb), 'err:22023:Elegí entre quiénes%');
+  v_rep := v_rep || pg_temp.line('F26 hace falta quién pagó',
+    pg_temp.edit(c_matil, x6, 'X', null, 10, null, null, pg_temp.sh(c_matil, 5, c_javi, 5)), 'err:22023:Elegí quién pagó%');
+  v_before := pg_temp.exp_state(x6) || ' | ' || pg_temp.exp_shares(x6);
+  v_rep := v_rep || pg_temp.line('F27 una parte para alguien que no existe falla a la mitad...',
+    pg_temp.edit(c_matil, x6, 'Cambiado', null, 20, c_matil, null, pg_temp.sh(c_matil, 10, c_nadie, 10)), 'err:23503%');
+  v_rep := v_rep || pg_temp.line('F28 ...y no deja nada cambiado (ni el gasto ni las partes)', pg_temp.exp_state(x6) || ' | ' || pg_temp.exp_shares(x6), v_before);
+  v_rep := v_rep || pg_temp.line('F29 la misma persona dos veces falla y deja todo como estaba',
+    pg_temp.edit(c_matil, x6, 'Cambiado', null, 20, c_matil, null, pg_temp.sh(c_matil, 10, c_matil, 10)), 'err:23505%');
+  v_rep := v_rep || pg_temp.line('F30 ...igual que antes', pg_temp.exp_state(x6) || ' | ' || pg_temp.exp_shares(x6), v_before);
+  v_rep := v_rep || pg_temp.line('F31 un gasto que no existe',
+    pg_temp.edit(c_matil, gen_random_uuid(), 'X', null, 10, c_matil, null, pg_temp.sh(c_matil, 5, c_javi, 5)), 'err:P0002:No se encontró%');
+  v_rep := v_rep || pg_temp.line('F32 sin sesión no se edita nada',
+    pg_temp.edit(null, x6, 'X', null, 10, c_matil, null, pg_temp.sh(c_matil, 5, c_javi, 5)), 'err:28000%');
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+
+  -- permisos de ejecución
+  v_rep := v_rep || pg_temp.line('F33 anon no puede ejecutar la función',
+    pg_temp.ask(null, 'anon', format('select public.update_expense(%L, %L, null, 10, %L, null, %L::jsonb)', x6, 'X', c_matil, pg_temp.sh(c_matil, 5, c_javi, 5)::text)), 'err:42501%');
+  v_rep := v_rep || pg_temp.line('F34 un logueado sí (por la API, como authenticated)',
+    pg_temp.attempt(c_matil, array[format('select public.update_expense(%L, %L, null, 10, %L, null, %L::jsonb)', x6, 'Por la API', c_matil, pg_temp.sh(c_matil, 5, c_javi, 5)::text)]), 'ok:1');
+
+  -- lo de siempre no cambió
+  v_rep := v_rep || pg_temp.line('F35 un UPDATE directo de quien cargó el gasto sigue sin pasar (0 filas)',
+    pg_temp.attempt(c_matil, array[format('update public.expenses set amount = 1 where id = %L', x6)]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('F36 el admin sigue pudiendo editar el emoji de un gasto',
+    pg_temp.attempt(c_admin, array[format('update public.expenses set icon = %L where id = %L', '🍺', x6)]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('F37 otra persona sigue sin poder borrar el gasto ajeno',
+    pg_temp.attempt(c_bozzo, array[format('delete from public.expenses where id = %L', x6)]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('F38 quien lo cargó sigue pudiendo borrarlo (evento abierto)',
+    pg_temp.attempt(c_matil, array[format('delete from public.expenses where id = %L', x6)]), 'ok:1');
+
+  v_fail := (select count(*) from unnest(v_rep) l where l like 'FALLA%');
+  raise exception E'\n%\n\n=== % verificaciones, % con FALLA ===', array_to_string(v_rep, E'\n'), array_length(v_rep, 1), v_fail;
+end
+$verify$;

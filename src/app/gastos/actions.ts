@@ -82,6 +82,41 @@ function splitEqual(amount: number, participantIds: string[]) {
   }));
 }
 
+// Lo que mandan los formularios de "Agregar gasto" y de editar un gasto (es el
+// mismo formulario, AddExpenseForm).
+interface ExpenseFields {
+  existingItemId: string;
+  newItemName: string;
+  amount: number;
+  paidBy: string;
+  expenseDate: string;
+  participantIds: string[];
+}
+
+function readExpenseFields(formData: FormData): ExpenseFields {
+  return {
+    existingItemId: String(formData.get("existingItemId") ?? "").trim(),
+    newItemName: String(formData.get("newItemName") ?? "").trim(),
+    amount: Number(formData.get("amount")),
+    paidBy: String(formData.get("paidBy") ?? ""),
+    expenseDate: String(formData.get("date") ?? ""),
+    // Sin repetidos: la misma persona dos veces rompería la clave de
+    // expense_shares (expense_id, user_id).
+    participantIds: [...new Set(formData.getAll("participants").map(String))],
+  };
+}
+
+/** El aviso para el formulario, o null si los datos están completos. */
+function expenseFieldsError(fields: ExpenseFields): string | null {
+  if (!fields.existingItemId && !fields.newItemName) return "Poné una descripción.";
+  if (!Number.isFinite(fields.amount) || fields.amount <= 0)
+    return "El monto tiene que ser mayor a 0.";
+  if (!fields.paidBy) return "Elegí quién pagó.";
+  if (fields.participantIds.length === 0)
+    return "Elegí entre quiénes se divide el gasto.";
+  return null;
+}
+
 // La descripción viene del ItemPicker compartido (mismo catálogo
 // insumo_items que "compra de insumos"): "existingItemId" liga el gasto
 // a ese ítem (para heredar su emoji) y usa su nombre como descripción;
@@ -89,20 +124,27 @@ function splitEqual(amount: number, participantIds: string[]) {
 // "compra de insumos", tipear algo nuevo acá NO crea un insumo_item
 // nuevo (las descripciones de gasto suelen ser puntuales, no cosas
 // reusables, ver specs/002-gastos.md).
-export async function addExpense(groupId: string, formData: FormData) {
-  const existingItemId = String(formData.get("existingItemId") ?? "").trim();
-  const newItemName = String(formData.get("newItemName") ?? "").trim();
-  const amount = Number(formData.get("amount"));
-  const paidBy = String(formData.get("paidBy") ?? "");
-  const expenseDate = String(formData.get("date") ?? "");
-  const participantIds = formData.getAll("participants").map(String);
+async function resolveDescription(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  fields: ExpenseFields,
+): Promise<{ description: string; itemId: string | null } | { error: string }> {
+  if (!fields.existingItemId) {
+    return { description: fields.newItemName, itemId: null };
+  }
+  const { data: item, error } = await supabase
+    .from("insumo_items")
+    .select("name")
+    .eq("id", fields.existingItemId)
+    .single();
+  if (error || !item) return { error: error?.message ?? "No se encontró ese ítem." };
+  return { description: item.name, itemId: fields.existingItemId };
+}
 
-  if (!existingItemId && !newItemName) return { error: "Poné una descripción." };
-  if (!Number.isFinite(amount) || amount <= 0)
-    return { error: "El monto tiene que ser mayor a 0." };
-  if (!paidBy) return { error: "Elegí quién pagó." };
-  if (participantIds.length === 0)
-    return { error: "Elegí entre quiénes se divide el gasto." };
+export async function addExpense(groupId: string, formData: FormData) {
+  const fields = readExpenseFields(formData);
+  const invalid = expenseFieldsError(fields);
+  if (invalid) return { error: invalid };
+  const { amount, paidBy, expenseDate, participantIds } = fields;
 
   const supabase = await createClient();
   const {
@@ -114,20 +156,9 @@ export async function addExpense(groupId: string, formData: FormData) {
   const lockedError = await guardGroupEdit(supabase, groupId, "settlement");
   if (lockedError) return { error: lockedError };
 
-  let description = newItemName;
-  let itemId: string | null = null;
-  if (existingItemId) {
-    const { data: item, error: itemError } = await supabase
-      .from("insumo_items")
-      .select("name")
-      .eq("id", existingItemId)
-      .single();
-    if (itemError || !item) {
-      return { error: itemError?.message ?? "No se encontró ese ítem." };
-    }
-    description = item.name;
-    itemId = existingItemId;
-  }
+  const resolved = await resolveDescription(supabase, fields);
+  if ("error" in resolved) return { error: resolved.error };
+  const { description, itemId } = resolved;
 
   const { data: expense, error } = await supabase
     .from("expenses")
@@ -181,6 +212,53 @@ export async function addExpense(groupId: string, formData: FormData) {
     );
   }
 
+  return { ok: true };
+}
+
+// Editar un gasto: quien lo cargó o un admin (0046). Mismos campos que
+// "Agregar gasto"; las partes se vuelven a repartir en partes iguales entre
+// quienes quedaron tildados. El reemplazo de las partes es atómico y la
+// autorización vive en la función update_expense (una sola vez, al principio),
+// porque a mitad de la edición el estado "saldado" del grupo puede cambiar y
+// unas policies lo verían transitorio. Acá solo se valida el formulario y se
+// avisa antes de escribir cuando el evento ya está saldado.
+export async function updateExpense(
+  groupId: string,
+  expenseId: string,
+  formData: FormData,
+) {
+  const fields = readExpenseFields(formData);
+  const invalid = expenseFieldsError(fields);
+  if (invalid) return { error: invalid };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  // Un evento saldado solo lo corrige un admin (spec 022).
+  const lockedError = await guardGroupEdit(supabase, groupId, "settlement");
+  if (lockedError) return { error: lockedError };
+
+  const resolved = await resolveDescription(supabase, fields);
+  if ("error" in resolved) return { error: resolved.error };
+
+  const { error } = await supabase.rpc("update_expense", {
+    p_expense_id: expenseId,
+    p_description: resolved.description,
+    p_item_id: resolved.itemId,
+    p_amount: fields.amount,
+    p_paid_by: fields.paidBy,
+    p_expense_date: fields.expenseDate || null,
+    p_shares: splitEqual(fields.amount, fields.participantIds).map((s) => ({
+      user_id: s.userId,
+      share_amount: s.amount,
+    })),
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/gastos/${groupId}`);
   return { ok: true };
 }
 

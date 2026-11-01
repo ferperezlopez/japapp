@@ -10,8 +10,10 @@
   (suma `expenses.item_id`, ligando opcionalmente un gasto al catálogo
   `insumo_items` de `specs/013-invitados-tareas-y-stats.md`),
   `supabase/migrations/0035_debt_payments.sql` (tabla `debt_payments`:
-  informe de pago realizado, ver sección 4)
-- **Última actualización:** 2026-10-31
+  informe de pago realizado, ver sección 4),
+  `supabase/migrations/0046_expense_edit.sql` (función `update_expense`:
+  editar un gasto)
+- **Última actualización:** 2026-11-01
 
 ## 1. Resumen
 
@@ -58,10 +60,16 @@ transferencias posible.
   distinto al sugerido. Descuenta directo del cálculo de balances (ver
   sección 4), y puede borrarse (solo quien lo reportó).
 - Borrar un gasto (solo quien lo creó).
+- Editar un gasto ya cargado (`updateExpense`, `0046`): quien lo cargó o un
+  admin, con el mismo formulario que «Agregar gasto» (descripción, monto, quién
+  pagó, fecha y entre quiénes se divide, siempre en partes iguales). Con el
+  evento saldado, solo un admin (`specs/022-eventos-cerrados.md`).
+- «Balances» muestra, en un grupo enlazado a un evento, a quienes confirmaron
+  «Voy» a la juntada más a quien tenga plata en juego (pagó, tiene una parte, o
+  hizo o recibió un pago); en un grupo suelto, a sus miembros como siempre.
 
 ### No incluye (por ahora)
 - División no igualitaria (por monto fijo o porcentaje custom por persona).
-- Editar un gasto ya cargado (solo alta y baja).
 - Borrar un grupo completo.
 - Sacar a otro miembro de un grupo (un miembro puede autoeliminarse via
   RLS — policy `"Un miembro puede salirse de un grupo"` — pero no hay
@@ -95,6 +103,17 @@ Puntos que el SQL no explica por sí solo:
   requiere ser miembro del grupo y `reported_by = auth.uid()`; select
   permite miembros del grupo o cualquiera si el grupo está enlazado a
   un evento; delete solo a quien reportó el pago.
+- `update_expense` (`0046_expense_edit.sql`) edita un gasto: actualiza la fila de
+  `expenses` y reemplaza sus `expense_shares` en una sola transacción. Es
+  `security definer` con la autorización escrita en la propia función (quien
+  cargó el gasto o un admin; con el evento saldado, solo un admin; monto mayor a
+  0, descripción, al menos una parte y partes que suman el monto) y **no cambia
+  ninguna policy**: un `UPDATE` directo a `expenses` sigue siendo solo del admin,
+  y borrar sigue como estaba. Se hizo función y no policies de UPDATE/DELETE
+  porque a mitad de la edición el estado «saldado» del grupo puede cambiar (al
+  sacar las partes viejas, el resto del grupo puede quedar saldado) y las
+  policies de la `0044`, que miran el estado en cada sentencia, rechazarían una
+  edición legítima.
 
 ## 4. Diseño / flujo
 
@@ -245,6 +264,22 @@ Puntos que el SQL no explica por sí solo:
       policy RLS solo lo permite a `reported_by`.
 - [x] Cualquier miembro logueado del grupo puede reportar un pago, no
       solo las dos personas involucradas en esa deuda.
+- [x] En un grupo enlazado a un evento, «Balances» lista a quienes
+      confirmaron «Voy» y a quien tenga plata en juego, y no al miembro que
+      nunca confirmó (ni al que confirmó y cambió de idea sin plata en juego);
+      en un grupo suelto sigue listando a los miembros
+      (`src/lib/gastos/attendees.test.ts`).
+- [x] Quien cargó un gasto (y un admin) ve «Editar» en ese gasto; abre el
+      formulario con sus valores, guarda y las partes se reemplazan sin dejar el
+      gasto a medias; otra persona no ve el botón, y si llamara a la función, la
+      base lo rechaza.
+- [x] Editar un gasto de un evento saldado solo lo puede hacer un admin; en un
+      evento cerrado con deuda, también quien lo cargó. Editar no cambia a quien
+      lo cargó.
+- [x] Una edición que falla a la mitad no deja nada cambiado, y una edición
+      legítima no se rechaza porque el resto del grupo quede saldado mientras se
+      reemplazan las partes (`supabase/verify/0046_0049_gastos_bebidas_clima_menu.sql`,
+      sección F, y `src/app/gastos/actions.test.ts`).
 
 ## 6. Decisiones y tradeoffs
 
@@ -262,11 +297,15 @@ Puntos que el SQL no explica por sí solo:
 | Elegir texto libre nuevo en Gastos NO crea una fila en `insumo_items` (a diferencia de "compra de insumos", donde sí) | Mismo comportamiento que `addTaskAssignee`: cualquier texto nuevo se guarda en el catálogo | Las descripciones de gasto suelen ser puntuales ("Cuota cancha marzo"), no cosas reusables como "Carne" — auto-crearlas ensuciaría el catálogo compartido con Tareas. |
 | Cualquier miembro logueado del grupo puede reportar un pago (`reportPayment`), no solo las dos personas involucradas | Restringir el insert a que `reported_by` sea `fromUserId` o `toUserId` | Mismo criterio de confianza total que ya usa el resto de la app (ej. `futbol_stats`, `event_tasks`: cualquier logueado puede cargar/corregir) — un tercero puede enterarse de que el pago se hizo y registrarlo. |
 | Reportar un pago afecta de verdad el cálculo de balances (tercer parámetro de `calcularBalances`), no es solo un check cosmético | Guardar el pago únicamente como registro histórico, sin tocar el cálculo | Si no descuenta del balance, la misma sugerencia de "para saldar cuentas" seguiría apareciendo después de pagarla — confuso y contradice el propósito de la feature. |
+| Editar un gasto es una función `update_expense` (`security definer`, con la autorización escrita adentro), sin policies nuevas | Policies de UPDATE sobre `expenses` y de DELETE/INSERT sobre `expense_shares` para quien lo cargó y para el admin | Editar es reemplazar las partes y tiene que ser atómico. Con policies, las restrictivas de la `0044` miran el estado «saldado» del grupo en cada sentencia, y a mitad de la edición ese estado puede cambiar (al sacar las partes viejas el resto del grupo puede quedar saldado): una edición legítima de quien no es admin se rechazaría. La función mira el estado una sola vez, al principio. |
+| «Dueño» de un gasto = quien lo cargó (`created_by`) | Quien pagó (`paid_by`) | Es el mismo criterio que la policy de borrado desde la `0001`; quien pagó puede ser otra persona que la que lo cargó. |
+| Editar reparte siempre en partes iguales entre quienes quedan tildados | Conservar partes desiguales | Hoy todas las partes se cargan iguales (`splitEqual`), no hay otra forma de crearlas. |
+| Editar no manda push | Avisar a quienes participan | No se pidió, y cambiar un monto de a poco generaría ruido; si hace falta, es agregarlo en `updateExpense` (como en `addExpense`). |
+| «Balances» muestra a quienes confirmaron «Voy» (más quien tenga plata en juego) en un grupo con evento | Seguir mostrando a todos los miembros del grupo (decisión del 2026-09-15, que aceptaba esa diferencia) | Pedido del usuario (2026-11-01): solo considerar a quienes asistieron. «Asistió» es «confirmó», igual que en Analytics: no hay otro registro de asistencia. La plata nunca se esconde: quien pagó, tiene una parte o hizo o recibió un pago figura siempre. «Agregar miembro» queda como estaba (da acceso al grupo, no cambia las listas). |
 | `debt_payments` es una tabla nueva y separada, no una columna/estado sobre `expenses` | Agregar un campo "pagado" a `expense_shares` o a los settlements calculados | Un settlement no es una fila persistida (se recalcula en cada render) y puede involucrar montos que no corresponden 1:1 a ningún `expense_share` puntual (son netos entre dos personas) — una tabla propia modela mejor "plata que cambió de mano" sin forzar ese concepto sobre el modelo de gastos. |
 
 ## 7. Futuro / fuera de alcance
 
-- Editar un gasto ya cargado (hoy hay que borrarlo y recargarlo).
 - Borrar grupo / sacar miembro desde la UI (la policy de "salirse" ya
   existe en DB, falta el botón).
 - Split no igualitario.
@@ -283,6 +322,14 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-01: **editar un gasto** (quien lo cargó o un admin; con el evento
+  saldado, solo un admin): función `update_expense` (`0046_expense_edit.sql`),
+  `updateExpense`, botón «Editar» (`EditExpenseButton`, que abre `AddExpenseForm`
+  con los valores del gasto en un modal) y la lista de personas del formulario de
+  edición = confirmados + quienes ya están en ese gasto. «Balances» pasa a listar,
+  con evento enlazado, a quienes confirmaron «Voy» más quien tenga plata en juego
+  (`src/lib/gastos/attendees.ts`); ya no aparecen en $0 los miembros que no fueron.
+  Ver `specs/022-eventos-cerrados.md` (candado de saldado).
 - 2026-10-31: los gastos, los pagos y los miembros del grupo de un evento
   **saldado** (cerrado, con gastos y sin saldos pendientes) quedan en solo
   lectura salvo para admins; hasta saldar siguen abiertos como siempre.
