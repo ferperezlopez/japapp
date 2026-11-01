@@ -681,6 +681,48 @@ export interface Database {
           },
         ];
       };
+      event_drinks: {
+        Row: {
+          event_id: string;
+          drink: "vino" | "cerveza" | "gaseosa";
+          bought: number | null;
+          consumed: number | null;
+          updated_by: string;
+          updated_at: string;
+        };
+        Insert: {
+          event_id: string;
+          drink: "vino" | "cerveza" | "gaseosa";
+          bought?: number | null;
+          consumed?: number | null;
+          updated_by: string;
+          updated_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          drink?: "vino" | "cerveza" | "gaseosa";
+          bought?: number | null;
+          consumed?: number | null;
+          updated_by?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_drinks_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_drinks_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       futbol_stats: {
         Row: {
           event_id: string;

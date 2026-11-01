@@ -10,6 +10,8 @@
 -- Cada línea del informe empieza con OK o FALLA.
 --   F: editar un gasto (0046): quién puede, el candado de saldado, el reemplazo atómico de las
 --      partes y que los permisos de siempre (borrar, el emoji del admin) no cambiaron.
+--   G: bebidas del evento (0047): cualquier logueado carga y corrige hasta que se salda; saldado,
+--      solo un admin; las restricciones de la tabla y que se borran con el evento.
 --
 -- Los ids de personas son de ESTA base (Fercho es el admin; Mati L, Javi y Bozzo son miembros
 -- comunes). El editor puede pedir confirmación por los DELETE que tiene el script: es normal.
@@ -22,7 +24,7 @@ declare
   c_javi  constant uuid := '704d9d64-defd-499e-b769-1c2fa0c0d720';
   c_bozzo constant uuid := 'f1db3ce1-16fd-411e-9ead-32b93764f520';
   c_nadie constant uuid := '00000000-0000-4000-8000-0000000000aa';
-  e_open uuid; g_open uuid; e_pend uuid; g_pend uuid; e_sett uuid; g_sett uuid; e_trap uuid; g_trap uuid;
+  e_open uuid; g_open uuid; e_pend uuid; g_pend uuid; e_sett uuid; g_sett uuid; e_trap uuid; g_trap uuid; e_cascade uuid;
   x1 uuid; x2 uuid; x3 uuid; x4a uuid; x4b uuid; x5 uuid; x6 uuid;
   v_before text;
   v_state text;
@@ -146,6 +148,8 @@ begin
   e_sett := pg_temp.mk_event('T saldado',          now() - interval '3 days', c_javi); g_sett := pg_temp.grp(e_sett);
   e_trap := pg_temp.mk_event('T trampa transitoria', now() - interval '3 days', c_javi); g_trap := pg_temp.grp(e_trap);
 
+  e_cascade := pg_temp.mk_event('T se borra con sus bebidas', now() + interval '1 day', c_javi);
+
   insert into public.group_members (group_id, user_id)
     select g, u from (values (g_open), (g_pend), (g_sett), (g_trap)) as t(g), (values (c_matil), (c_bozzo)) as m(u)
     on conflict do nothing;
@@ -266,6 +270,76 @@ begin
     pg_temp.attempt(c_bozzo, array[format('delete from public.expenses where id = %L', x6)]), 'ok:0');
   v_rep := v_rep || pg_temp.line('F38 quien lo cargó sigue pudiendo borrarlo (evento abierto)',
     pg_temp.attempt(c_matil, array[format('delete from public.expenses where id = %L', x6)]), 'ok:1');
+
+
+  -- ===================== G) bebidas del evento (0047) =====================
+  -- Filas de partida (como postgres): una en el cerrado con deuda y otra en el saldado.
+  -- Ojo: F15 reabrió e_sett (el admin le subió el gasto), así que se arma un saldado nuevo para esto.
+  e_sett := pg_temp.mk_event('T saldado (bebidas)', now() - interval '3 days', c_javi);
+  g_sett := pg_temp.grp(e_sett);
+  x3 := pg_temp.mk_expense(g_sett, c_javi, c_matil, 100, c_javi, c_matil);
+  perform pg_temp.mk_payment(g_sett, c_matil, c_javi, 50, c_matil);
+  insert into public.event_drinks (event_id, drink, bought, updated_by) values
+    (e_pend, 'vino', 6, c_matil), (e_sett, 'vino', 6, c_matil), (e_cascade, 'cerveza', 10, c_matil);
+
+  v_rep := v_rep || pg_temp.line('G0  el evento de las bebidas está saldado', (select state from public.event_lock_state(e_sett)), 'settled');
+
+  -- abierto
+  v_rep := v_rep || pg_temp.line('G1  abierto: cargar lo comprado y lo consumido',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_drinks (event_id, drink, bought, consumed, updated_by) values (%L, %L, 6, 4, %L)', e_open, 'vino', c_matil)]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('G2  abierto: cargar y corregir de una vez (upsert, las dos vías)',
+    pg_temp.attempt(c_matil, array[
+      format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 6, %L) on conflict (event_id, drink) do update set bought = excluded.bought, updated_by = excluded.updated_by', e_open, 'cerveza', c_matil),
+      format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 8, %L) on conflict (event_id, drink) do update set bought = excluded.bought, updated_by = excluded.updated_by', e_open, 'cerveza', c_matil)]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('G3  otra persona (miembro, no admin) también puede cargar: es de cualquier logueado',
+    pg_temp.attempt(c_bozzo, array[format('insert into public.event_drinks (event_id, drink, consumed, updated_by) values (%L, %L, 3, %L)', e_open, 'gaseosa', c_bozzo)]), 'ok:1');
+
+  -- cerrado con deuda: sigue abierto para esto (como el resultado del partido)
+  v_rep := v_rep || pg_temp.line('G4  cerrado con deuda: cargar sigue permitido',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 12, %L)', e_pend, 'cerveza', c_matil)]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('G5  cerrado con deuda: corregir lo cargado',
+    pg_temp.attempt(c_bozzo, array[format('update public.event_drinks set consumed = 5, updated_by = %L where event_id = %L and drink = %L', c_bozzo, e_pend, 'vino')]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('G6  cerrado con deuda: sacar una fila',
+    pg_temp.attempt(c_matil, array[format('delete from public.event_drinks where event_id = %L and drink = %L', e_pend, 'vino')]), 'ok:1');
+
+  -- saldado: solo admin
+  v_rep := v_rep || pg_temp.line('G7  saldado: cargar un tipo nuevo, rechazado',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 12, %L)', e_sett, 'cerveza', c_matil)]), 'err:42501%');
+  v_rep := v_rep || pg_temp.line('G8  saldado: corregir lo cargado, 0 filas',
+    pg_temp.attempt(c_matil, array[format('update public.event_drinks set consumed = 5, updated_by = %L where event_id = %L and drink = %L', c_matil, e_sett, 'vino')]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('G9  saldado: sacar una fila, 0 filas',
+    pg_temp.attempt(c_matil, array[format('delete from public.event_drinks where event_id = %L and drink = %L', e_sett, 'vino')]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('G10 saldado: un admin carga',
+    pg_temp.attempt(c_admin, array[format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 12, %L)', e_sett, 'cerveza', c_admin)]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('G11 saldado: un admin corrige',
+    pg_temp.attempt(c_admin, array[format('update public.event_drinks set consumed = 5, updated_by = %L where event_id = %L and drink = %L', c_admin, e_sett, 'vino')]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('G12 saldado: un admin saca una fila',
+    pg_temp.attempt(c_admin, array[format('delete from public.event_drinks where event_id = %L and drink = %L', e_sett, 'vino')]), 'ok:1');
+
+  -- reglas de la tabla
+  v_rep := v_rep || pg_temp.line('G13 quien guarda tiene que ser quien figura como autor',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 1, %L)', e_open, 'gaseosa', c_javi)]), 'err:42501%');
+  v_rep := v_rep || pg_temp.line('G14 no se aceptan cantidades negativas',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, -1, %L)', e_open, 'gaseosa', c_matil)]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('G15 una fila sin ninguna cantidad no tiene sentido',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_drinks (event_id, drink, updated_by) values (%L, %L, %L)', e_open, 'gaseosa', c_matil)]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('G16 solo vino, cerveza y gaseosa',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 1, %L)', e_open, 'fernet', c_matil)]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('G17 un tipo por evento (clave primaria)',
+    pg_temp.attempt(c_matil, array[
+      format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 1, %L)', e_open, 'gaseosa', c_matil),
+      format('insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 2, %L)', e_open, 'gaseosa', c_matil)]), 'err:23505%');
+  v_rep := v_rep || pg_temp.line('G18 las cantidades guardan hasta 2 decimales (redondea)',
+    pg_temp.ask(c_matil, 'authenticated', format('with i as (insert into public.event_drinks (event_id, drink, bought, updated_by) values (%L, %L, 7.456, %L) returning bought) select bought::text from i', e_open, 'gaseosa', c_matil)), 'val:7.46');
+
+  -- quién lo ve y qué pasa al borrar el evento
+  v_rep := v_rep || pg_temp.line('G19 cualquier logueado ve las bebidas de un evento',
+    pg_temp.ask(c_bozzo, 'authenticated', format('select count(*) from public.event_drinks where event_id = %L', e_pend)), 'val:1');
+  v_rep := v_rep || pg_temp.line('G20 sin sesión (anon) no ve nada',
+    pg_temp.ask(null, 'anon', format('select count(*) from public.event_drinks where event_id = %L', e_pend)), 'val:0');
+  delete from public.events where id = e_cascade;
+  v_rep := v_rep || pg_temp.line('G21 al borrar el evento se borran sus bebidas',
+    (select count(*)::text from public.event_drinks where event_id = e_cascade), '0');
 
   v_fail := (select count(*) from unnest(v_rep) l where l like 'FALLA%');
   raise exception E'\n%\n\n=== % verificaciones, % con FALLA ===', array_to_string(v_rep, E'\n'), array_length(v_rep, 1), v_fail;

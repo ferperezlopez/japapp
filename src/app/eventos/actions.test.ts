@@ -32,6 +32,7 @@ import {
   deleteEvent,
   removeGuestFromEvent,
   removeTaskAssignee,
+  saveEventDrinks,
   saveFutbolTeams,
   setRsvp,
   setReservaCanchaAssignee,
@@ -228,6 +229,7 @@ const guarded: GuardedCase[] = [
   ["setReservaCanchaAssignee", "participation", () => setReservaCanchaAssignee(EVENT_ID, null)],
   ["saveFutbolTeams", "participation", () => saveFutbolTeams(EVENT_ID, [])],
   ["upsertFutbolStats", "settlement", () => upsertFutbolStats(EVENT_ID, new FormData())],
+  ["saveEventDrinks", "settlement", () => saveEventDrinks(EVENT_ID, new FormData())],
 ];
 
 describe.each(guarded)("%s", (_name, scope, run) => {
@@ -244,5 +246,79 @@ describe.each(guarded)("%s", (_name, scope, run) => {
     expect(await run()).toEqual({ ok: true });
     expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, scope);
     expect(mocks.from).toHaveBeenCalled();
+  });
+});
+
+// Bebidas del evento (0047): comprado / consumido por tipo, todo opcional.
+describe("saveEventDrinks", () => {
+  function drinksForm(fields: Record<string, string>) {
+    const data = new FormData();
+    for (const [key, value] of Object.entries(fields)) data.set(key, value);
+    return data;
+  }
+
+  it("guarda los tipos que tienen alguna cantidad y saca los que quedaron vacíos", async () => {
+    respondWith({ data: null, error: null });
+    const result = await saveEventDrinks(
+      EVENT_ID,
+      drinksForm({ bought_vino: "6", consumed_vino: "4", bought_cerveza: "10,5" }),
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, "settlement");
+    expect(tables).toEqual(["event_drinks", "event_drinks"]);
+
+    const [[, rows, options]] = callsTo("upsert") as [[string, Record<string, unknown>[], unknown]];
+    expect(options).toEqual({ onConflict: "event_id,drink" });
+    expect(rows.map(({ updated_at, ...rest }) => (void updated_at, rest))).toEqual([
+      { event_id: EVENT_ID, drink: "vino", bought: 6, consumed: 4, updated_by: "user-1" },
+      { event_id: EVENT_ID, drink: "cerveza", bought: 10.5, consumed: null, updated_by: "user-1" },
+    ]);
+    expect(callsTo("eq")).toEqual([["eq", "event_id", EVENT_ID]]);
+    expect(callsTo("in")).toEqual([["in", "drink", ["gaseosa"]]]);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/eventos/${EVENT_ID}`);
+  });
+
+  it("con todo vacío solo borra (no hay nada que guardar)", async () => {
+    respondWith({ data: null, error: null });
+    expect(await saveEventDrinks(EVENT_ID, drinksForm({}))).toEqual({ ok: true });
+    expect(callsTo("upsert")).toEqual([]);
+    expect(callsTo("in")).toEqual([["in", "drink", ["vino", "cerveza", "gaseosa"]]]);
+  });
+
+  it("si todos los tipos tienen datos, no borra nada", async () => {
+    respondWith({ data: null, error: null });
+    await saveEventDrinks(
+      EVENT_ID,
+      drinksForm({ bought_vino: "1", bought_cerveza: "2", consumed_gaseosa: "0" }),
+    );
+    expect(callsTo("delete")).toEqual([]);
+  });
+
+  it("una cantidad inválida se rechaza antes de tocar la sesión o la base", async () => {
+    expect(await saveEventDrinks(EVENT_ID, drinksForm({ consumed_vino: "-3" }))).toEqual({
+      error: "Revisá las cantidades de vino: tienen que ser números de 0 en adelante.",
+    });
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.guardEdit).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("sin sesión no llega a la guarda", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect(await saveEventDrinks(EVENT_ID, drinksForm({ bought_vino: "3" }))).toEqual({
+      error: "No estás logueado.",
+    });
+    expect(mocks.guardEdit).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("si la base rechaza el guardado, devuelve el error y no sigue ni revalida", async () => {
+    respondWith({ data: null, error: { message: "new row violates row-level security policy" } });
+    expect(await saveEventDrinks(EVENT_ID, drinksForm({ bought_vino: "3" }))).toEqual({
+      error: "new row violates row-level security policy",
+    });
+    expect(callsTo("delete")).toEqual([]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 });

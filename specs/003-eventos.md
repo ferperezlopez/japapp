@@ -11,8 +11,10 @@
   puede editar — ver `specs/016-admin.md`),
   `supabase/migrations/0044_lock_closed_events.sql` (un evento cerrado o
   saldado queda en solo lectura salvo para admins — ver
-  `specs/022-eventos-cerrados.md`)
-- **Última actualización:** 2026-10-31
+  `specs/022-eventos-cerrados.md`),
+  `supabase/migrations/0047_event_drinks.sql` (bebidas del evento — ver
+  `specs/023-bebidas-del-evento.md`)
+- **Última actualización:** 2026-11-01
 
 ## 1. Resumen
 
@@ -41,6 +43,9 @@ para el asado/empanadas.
   pendientes) queda en solo lectura para quien no es admin: asistencia,
   invitados, tareas, equipos y datos del evento a las 24 h; resultado,
   gastos y pagos al saldar. El detalle, en `specs/022-eventos-cerrados.md`.
+- Tarjeta «Bebidas» (colapsada, entre las tareas y los gastos): lo que sugiere la
+  calculadora para la gente de la juntada y, opcional, cuánto se compró y cuánto
+  se consumió de cada tipo. Ver `specs/023-bebidas-del-evento.md`.
 - Los eventos son visibles para **cualquier usuario logueado de la app**,
   no están scopeados a un "grupo de gastos" como en `002-gastos.md`.
 
@@ -252,6 +257,9 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-01: tarjeta «Bebidas» en `/eventos/[eventId]` (sugerido por la calculadora
+  + comprado y consumido opcionales por tipo) y tabla `event_drinks` (migración
+  `0047`). Ver `specs/023-bebidas-del-evento.md`.
 - 2026-10-31: un evento cerrado (pasaron 24 h) o saldado queda en solo lectura
   salvo para admins (pedido del usuario: «cualquiera puede volver y editarlos»).
   Migración `0044_lock_closed_events.sql` (policies restrictivas sobre
