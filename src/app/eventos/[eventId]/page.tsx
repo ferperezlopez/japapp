@@ -21,6 +21,8 @@ import { buildMapsLink } from "@/lib/eventos/mapsLink";
 import { getActingUser } from "@/lib/supabase/actingUser";
 import { canEdit, getEventLock } from "@/lib/eventos/lock";
 import { drinksFromRows } from "@/lib/eventos/drinks";
+import { getEventWeather, isWeatherFrozen } from "@/lib/clima/refresh";
+import { WeatherLine } from "@/components/eventos/WeatherLine";
 import { LockBanner } from "@/components/eventos/LockBanner";
 import { WhatsAppShareButton } from "@/components/WhatsAppShareButton";
 
@@ -378,7 +380,12 @@ export default async function EventoPage({
   // (se cierra a las 24 h). "settlement": resultado y plata (se cierra al saldar).
   const canEditParticipation = canEdit(lock, "participation");
   const canEditSettlement = canEdit(lock, "settlement");
-  const [{ data: taskRows }, { data: insumoItems }, { data: drinkRows, error: drinksError }] =
+  const [
+    { data: taskRows },
+    { data: insumoItems },
+    { data: drinkRows, error: drinksError },
+    weather,
+  ] =
     await Promise.all([
       supabase
         .from("event_tasks")
@@ -388,6 +395,10 @@ export default async function EventoPage({
       // Bebidas del evento (0047, spec 023). Si la consulta falla (por ejemplo
       // la tabla todavía no existe), la tarjeta no se muestra.
       supabase.from("event_drinks").select("drink, bought, consumed").eq("event_id", eventId),
+      // Clima del evento (0048, spec 024): el último pronóstico guardado; si falta o
+      // está viejo y el evento no empezó, lo pide a Open-Meteo. Nunca tira: sin dato,
+      // no se muestra.
+      getEventWeather(supabase, { id: eventId, event_date: event.event_date }),
     ]);
   const totalPeople = allProfiles?.length ?? 0;
   const members = allProfiles ?? [];
@@ -444,10 +455,14 @@ export default async function EventoPage({
   // juntada más sus invitados (lo mismo que cuenta el RSVP de la juntada).
   const juntadaHeadcount =
     attendeesJuntada.filter((a) => a.status === "yes").length + guestsJuntada.length;
-  // Mismo criterio que /eventos y Analytics: ya empezó si la fecha guardada pasó.
   // La ruta ya es dinámica por la sesión de arriba, así que no se cachea vieja.
   // eslint-disable-next-line react-hooks/purity -- ruta forzada dinámica por auth.getUser()
-  const eventStarted = new Date(event.event_date).getTime() <= Date.now();
+  const nowMs = Date.now();
+  // Mismo criterio que /eventos y Analytics: ya empezó si la fecha guardada pasó.
+  const eventStarted = new Date(event.event_date).getTime() <= nowMs;
+  // El clima queda fijo desde la hora real de comienzo (los dígitos guardados leídos
+  // como hora de Buenos Aires), no desde la fecha guardada tomada como UTC.
+  const weatherFrozen = isWeatherFrozen(event.event_date, new Date(nowMs));
 
   // Estadísticas del partido: solo si el evento tiene fútbol. MVP y
   // goleador se eligen entre quienes confirmaron "Voy" al fútbol.
@@ -630,6 +645,7 @@ export default async function EventoPage({
           </>
         )}
       </div>
+      {weather && <WeatherLine snapshot={weather} frozen={weatherFrozen} nowMs={nowMs} />}
       {event.description && (
         <p className="mt-2 text-sm text-foreground/80">
           {event.description}

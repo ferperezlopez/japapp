@@ -12,6 +12,8 @@
 --      partes y que los permisos de siempre (borrar, el emoji del admin) no cambiaron.
 --   G: bebidas del evento (0047): cualquier logueado carga y corrige hasta que se salda; saldado,
 --      solo un admin; las restricciones de la tabla y que se borran con el evento.
+--   H: clima del evento (0048): se guarda y se actualiza mientras el evento no empezó (a la hora
+--      real, la guardada leída como hora de Buenos Aires) y después queda fijo, también para un admin.
 --
 -- Los ids de personas son de ESTA base (Fercho es el admin; Mati L, Javi y Bozzo son miembros
 -- comunes). El editor puede pedir confirmación por los DELETE que tiene el script: es normal.
@@ -25,6 +27,7 @@ declare
   c_bozzo constant uuid := 'f1db3ce1-16fd-411e-9ead-32b93764f520';
   c_nadie constant uuid := '00000000-0000-4000-8000-0000000000aa';
   e_open uuid; g_open uuid; e_pend uuid; g_pend uuid; e_sett uuid; g_sett uuid; e_trap uuid; g_trap uuid; e_cascade uuid;
+  e_w_future uuid; e_w_utc uuid; e_w_started uuid; e_w_edge_in uuid; e_w_edge_out uuid; e_w_cascade uuid; e_w_move uuid;
   x1 uuid; x2 uuid; x3 uuid; x4a uuid; x4b uuid; x5 uuid; x6 uuid;
   v_before text;
   v_state text;
@@ -340,6 +343,75 @@ begin
   delete from public.events where id = e_cascade;
   v_rep := v_rep || pg_temp.line('G21 al borrar el evento se borran sus bebidas',
     (select count(*)::text from public.event_drinks where event_id = e_cascade), '0');
+
+  -- ===================== H) clima del evento (0048) =====================
+  -- «Empieza» a la hora real: la fecha guardada son los dígitos de la hora de Buenos Aires (UTC−3).
+  e_w_future   := pg_temp.mk_event('T clima: dentro de 2 días',   now() + interval '2 days', c_javi);
+  -- guardada hace 1 h (como UTC, ya «pasó» para el resto de la app), pero en Buenos Aires empieza dentro de 2 h
+  e_w_utc      := pg_temp.mk_event('T clima: pasado como UTC',    now() - interval '1 hour', c_javi);
+  -- guardada hace 4 h: en Buenos Aires empezó hace 1 h
+  e_w_started  := pg_temp.mk_event('T clima: ya empezó',          now() - interval '4 hours', c_javi);
+  -- a un minuto de empezar, y un minuto después de empezar
+  e_w_edge_in  := pg_temp.mk_event('T clima: falta 1 minuto',     now() - interval '3 hours' + interval '1 minute', c_javi);
+  e_w_edge_out := pg_temp.mk_event('T clima: empezó hace 1 min',  now() - interval '3 hours' - interval '1 minute', c_javi);
+  e_w_cascade  := pg_temp.mk_event('T clima: se borra',           now() + interval '3 days', c_javi);
+  e_w_move     := pg_temp.mk_event('T clima: ya tiene su dato',   now() + interval '2 days', c_javi);
+  insert into public.event_weather (event_id, forecast_for, temperature_c, weather_code) values
+    (e_w_started, '2026-11-05T19:00', 21, 1), (e_w_cascade, '2026-11-05T19:00', 21, 1), (e_w_move, '2026-11-05T19:00', 18, 2);
+
+  v_rep := v_rep || pg_temp.line('H0  event_starts_at lee los dígitos como hora de Buenos Aires (19:30 → 22:30 UTC)',
+    (select to_char(private.event_starts_at(timestamptz '2026-11-05 19:30:00+00') at time zone 'UTC', 'YYYY-MM-DD HH24:MI')), '2026-11-05 22:30');
+
+  v_rep := v_rep || pg_temp.line('H1  antes de empezar: se guarda el pronóstico',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_weather (event_id, forecast_for, temperature_c, precipitation_probability, weather_code, fetched_at, precipitation_mm, wind_kmh) values (%L, %L, 24.5, 10, 1, now(), 0.2, 12)', e_w_future, '2026-11-05T19:00')]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('H2  antes de empezar: se actualiza (upsert, las dos vías)',
+    pg_temp.attempt(c_bozzo, array[
+      format('insert into public.event_weather (event_id, forecast_for, temperature_c) values (%L, %L, 20) on conflict (event_id) do update set temperature_c = excluded.temperature_c, fetched_at = now()', e_w_future, '2026-11-05T19:00'),
+      format('insert into public.event_weather (event_id, forecast_for, temperature_c) values (%L, %L, 22) on conflict (event_id) do update set temperature_c = excluded.temperature_c, fetched_at = now()', e_w_future, '2026-11-05T19:00')]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('H3  la fecha guardada ya pasó como UTC pero en Buenos Aires todavía no empezó: se puede',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_weather (event_id, forecast_for, temperature_c) values (%L, %L, 24)', e_w_utc, '2026-11-05T19:00')]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('H4  falta 1 minuto para empezar: se puede',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_weather (event_id, forecast_for, temperature_c) values (%L, %L, 24)', e_w_edge_in, '2026-11-05T19:00')]), 'ok:1');
+
+  v_rep := v_rep || pg_temp.line('H5  empezó hace 1 minuto: ya no se guarda',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_weather (event_id, forecast_for, temperature_c) values (%L, %L, 24)', e_w_edge_out, '2026-11-05T19:00')]), 'err:42501%');
+  v_rep := v_rep || pg_temp.line('H6  un evento que no existe: no se guarda (la policy lo frena antes que la clave foránea)',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_weather (event_id, forecast_for, temperature_c) values (%L, %L, 24)', gen_random_uuid(), '2026-11-05T19:00')]), 'err:42501%');
+  v_rep := v_rep || pg_temp.line('H7  ya empezó: el dato guardado queda fijo (el update no toca nada)',
+    pg_temp.attempt(c_matil, array[format('update public.event_weather set temperature_c = 99 where event_id = %L', e_w_started)]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('H8  ya empezó: ni un admin lo cambia',
+    pg_temp.attempt(c_admin, array[format('update public.event_weather set temperature_c = 99 where event_id = %L', e_w_started)]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('H9  ya empezó: ni un upsert que lo pise',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_weather (event_id, forecast_for, temperature_c) values (%L, %L, 99) on conflict (event_id) do update set temperature_c = excluded.temperature_c', e_w_started, '2026-11-05T19:00')]), 'err:42501%');
+  v_rep := v_rep || pg_temp.line('H10 ...y el dato sigue siendo el de antes de empezar',
+    (select temperature_c::text from public.event_weather where event_id = e_w_started), '21.0');
+
+  -- no se mueve un dato a otro evento
+  v_rep := v_rep || pg_temp.line('H11 no se puede pasar el dato de un evento que no empezó a uno que sí (update del event_id)',
+    pg_temp.attempt(c_matil, array[format('delete from public.event_weather where event_id = %L', e_w_started), format('update public.event_weather set event_id = %L where event_id = %L', e_w_started, e_w_move)]), 'err:42501%');
+
+  -- reglas de la tabla
+  v_rep := v_rep || pg_temp.line('H12 una probabilidad de lluvia mayor a 100 se rechaza',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_weather (event_id, forecast_for, precipitation_probability) values (%L, %L, 120)', e_w_future, '2026-11-05T19:00')]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('H13 milímetros negativos se rechazan',
+    pg_temp.attempt(c_matil, array[format('update public.event_weather set precipitation_mm = -1 where event_id = %L', e_w_cascade)]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('H14 un código de clima fuera de 0 a 99 se rechaza',
+    pg_temp.attempt(c_matil, array[format('update public.event_weather set weather_code = 150 where event_id = %L', e_w_cascade)]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('H15 un solo pronóstico por evento (clave primaria)',
+    pg_temp.attempt(c_matil, array[format('insert into public.event_weather (event_id, forecast_for, temperature_c) values (%L, %L, 24)', e_w_move, '2026-11-05T19:00')]), 'err:23505%');
+
+  -- quién lo ve, quién lo borra y qué pasa al borrar el evento
+  v_rep := v_rep || pg_temp.line('H16 cualquier logueado ve el clima de un evento',
+    pg_temp.ask(c_bozzo, 'authenticated', format('select count(*) from public.event_weather where event_id = %L', e_w_started)), 'val:1');
+  v_rep := v_rep || pg_temp.line('H17 sin sesión (anon) no ve nada',
+    pg_temp.ask(null, 'anon', format('select count(*) from public.event_weather where event_id = %L', e_w_started)), 'val:0');
+  v_rep := v_rep || pg_temp.line('H18 nadie lo borra a mano (no hay policy de delete), ni un admin',
+    pg_temp.attempt(c_admin, array[format('delete from public.event_weather where event_id = %L', e_w_cascade)]), 'ok:0');
+  delete from public.events where id = e_w_cascade;
+  v_rep := v_rep || pg_temp.line('H19 al borrar el evento se borra su clima',
+    (select count(*)::text from public.event_weather where event_id = e_w_cascade), '0');
+  v_rep := v_rep || pg_temp.line('H20 la función de la hora de comienzo no la ejecuta anon',
+    pg_temp.ask(null, 'anon', 'select private.event_starts_at(now())::text'), 'err:42501%');
 
   v_fail := (select count(*) from unnest(v_rep) l where l like 'FALLA%');
   raise exception E'\n%\n\n=== % verificaciones, % con FALLA ===', array_to_string(v_rep, E'\n'), array_length(v_rep, 1), v_fail;

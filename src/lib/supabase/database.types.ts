@@ -681,6 +681,47 @@ export interface Database {
           },
         ];
       };
+      event_weather: {
+        Row: {
+          event_id: string;
+          forecast_for: string;
+          temperature_c: number | null;
+          precipitation_probability: number | null;
+          precipitation_mm: number | null;
+          wind_kmh: number | null;
+          weather_code: number | null;
+          fetched_at: string;
+        };
+        Insert: {
+          event_id: string;
+          forecast_for: string;
+          temperature_c?: number | null;
+          precipitation_probability?: number | null;
+          precipitation_mm?: number | null;
+          wind_kmh?: number | null;
+          weather_code?: number | null;
+          fetched_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          forecast_for?: string;
+          temperature_c?: number | null;
+          precipitation_probability?: number | null;
+          precipitation_mm?: number | null;
+          wind_kmh?: number | null;
+          weather_code?: number | null;
+          fetched_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_weather_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: true;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       event_drinks: {
         Row: {
           event_id: string;
