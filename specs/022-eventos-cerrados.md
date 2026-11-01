@@ -1,9 +1,9 @@
 # 022 - Eventos cerrados y saldados: solo lectura (salvo admins)
 
-- **Estado:** In Progress (código y migración listos y probados en una réplica local de la base; falta aplicar la `0044` a la base viva)
+- **Estado:** Implemented (migraciones `0044` y `0045` aplicadas a la base viva el 2026-11-01; el script de verificación dio 80/80 en una réplica local y su corrida completa contra la base viva sigue pendiente, ver el changelog)
 - **Rutas:** `/eventos/[eventId]`, `/gastos/[groupId]`
-- **Migraciones relacionadas:** `supabase/migrations/0044_lock_closed_events.sql`
-- **Última actualización:** 2026-10-31
+- **Migraciones relacionadas:** `supabase/migrations/0044_lock_closed_events.sql`, `supabase/migrations/0045_event_closes_at_search_path.sql`
+- **Última actualización:** 2026-11-01
 
 ## 1. Resumen
 
@@ -66,7 +66,8 @@ delicado, cargar o borrar gastos y pagos, que reabre cuentas ya saldadas. Como
 ## 3. Modelo de datos
 
 > Ver `supabase/migrations/0044_lock_closed_events.sql` para las funciones, la
-> RPC y las policies.
+> RPC y las policies. La `0045_event_closes_at_search_path.sql` solo le fija el
+> `search_path` a `private.event_closes_at` (aviso del linter de seguridad).
 
 Lo que el SQL no explica por sí solo:
 
@@ -139,7 +140,8 @@ aplicada, que arma eventos, gastos y pagos de prueba, simula a cada persona
 (`set local role authenticated` + su JWT) y termina siempre con un `raise
 exception` cuyo mensaje es el informe (por eso no deja nada). Corrió con 80
 verificaciones y 0 fallas sobre una réplica local de la base (PostgreSQL con las
-migraciones `0001` a `0044` y los cuatro eventos reales sembrados).
+migraciones `0001` a `0045` y los cuatro eventos reales sembrados). Contra la base
+viva todavía no se corrió completo (ver el changelog del 2026-11-01).
 
 - [x] Los tres eventos pasados reales figuran como saldados y el próximo como
       abierto, o cerrado si ya pasaron 24 h (`event_lock_state`).
@@ -207,7 +209,19 @@ migraciones `0001` a `0044` y los cuatro eventos reales sembrados).
   pantalla del evento y la de gastos (en un evento cerrado, el encabezado dice «Evento»
   y no «Próximo evento»). Ver también `specs/003-eventos.md`, `specs/002-gastos.md` y
   `specs/016-admin.md`.
-- 2026-11-01: script de verificación `supabase/verify/0044_lock_closed_events.sql`. La
-  `0044` todavía **no está aplicada a la base viva**: el servidor de Supabase pide
-  confirmación para correr SQL con DELETE o DDL desde la sesión y no hubo quien la
-  contestara. Al aplicarla (y correr ese script) la spec pasa a `Implemented`.
+- 2026-11-01: script de verificación `supabase/verify/0044_lock_closed_events.sql`.
+- 2026-11-01: **migraciones aplicadas a la base viva**: la `0044` (`lock_closed_events`) y
+  la `0045_event_closes_at_search_path.sql`, que le fija el `search_path` a
+  `private.event_closes_at` (era el único aviso `function_search_path_mutable` del
+  linter de seguridad del proyecto y lo había dejado la `0044`). Comprobado en vivo, solo
+  lectura: los cuatro eventos reales dan saldado ×3 y cerrado (el del 30/10), las 24
+  policies nuevas (20 restrictivas y 4 permisivas de admin) y los permisos de las
+  funciones (`anon` no, `authenticated` sí); después de la `0045` el linter ya no marca
+  la función. El script de 80 verificaciones dio **80/80 en la réplica local** con las
+  migraciones `0001` a `0045`; **su corrida completa contra la base viva sigue
+  pendiente**: el servidor de Supabase pide confirmación para correr SQL con `DELETE` o
+  DDL desde la sesión y nadie la contestó a tiempo. Se puede pegar entero en el SQL
+  editor de Supabase. El único aviso del linter que corresponde a esta spec es
+  `authenticated_security_definer_function_executable` sobre `public.event_lock_state`,
+  a propósito: la app la llama con la sesión de cada persona (igual que
+  `public.is_admin`) y `events` ya es legible para cualquier usuario logueado.
