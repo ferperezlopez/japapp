@@ -45,6 +45,7 @@ export function TaskAssigneesEditor({
   members,
   items,
   isAdmin = false,
+  readOnly = false,
 }: {
   eventId: string;
   taskType: TaskType;
@@ -52,6 +53,8 @@ export function TaskAssigneesEditor({
   members: Member[];
   items?: Item[];
   isAdmin?: boolean;
+  // Evento cerrado (spec 022): se ve quién se anotó, pero no se suma ni se saca a nadie.
+  readOnly?: boolean;
 }) {
   // addTarget: null (cerrado), "__new__" (sumar una persona nueva, con
   // selector de miembro) o un userId (sumarle otro insumo a alguien
@@ -140,7 +143,7 @@ export function TaskAssigneesEditor({
             >
               <Avatar src={a.avatarUrl} name={a.name} size="sm" />
               {a.name}
-              {removeButton(a.id)}
+              {!readOnly && removeButton(a.id)}
             </li>
           ))}
           {assignees.length === 0 && (
@@ -148,7 +151,7 @@ export function TaskAssigneesEditor({
           )}
         </ul>
 
-        {addTarget === "__new__" ? (
+        {readOnly ? null : addTarget === "__new__" ? (
           <div className="mt-1.5 flex flex-wrap items-start gap-2">
             <select
               value={selection}
@@ -242,11 +245,11 @@ export function TaskAssigneesEditor({
                   ) : (
                     "Insumo sin nombre"
                   )}
-                  {removeButton(r.rowId)}
+                  {!readOnly && removeButton(r.rowId)}
                 </li>
               ))}
             </ul>
-            {addTarget === g.userId ? (
+            {readOnly ? null : addTarget === g.userId ? (
               <div className="ml-7 mt-1 flex flex-wrap items-start gap-2">
                 <ItemPicker
                   items={items!}
@@ -293,7 +296,7 @@ export function TaskAssigneesEditor({
         )}
       </ul>
 
-      {addTarget === "__new__" ? (
+      {readOnly ? null : addTarget === "__new__" ? (
         <div className="mt-2 flex flex-wrap items-start gap-2">
           <select
             value={selection}

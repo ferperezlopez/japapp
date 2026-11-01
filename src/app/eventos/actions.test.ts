@@ -8,19 +8,36 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   from: vi.fn(),
   revalidatePath: vi.fn(),
+  getActingUser: vi.fn(),
+  guardEdit: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getUser: mocks.getUser }, from: mocks.from }),
 }));
-// Los importa actions.ts por las otras acciones; acá no se usan.
-vi.mock("@/lib/supabase/actingUser", () => ({ getActingUser: vi.fn() }));
+// El resto los importa actions.ts por las otras acciones; acá no se usan.
+vi.mock("@/lib/supabase/actingUser", () => ({ getActingUser: mocks.getActingUser }));
+// El estado del evento (cerrado / saldado) lo decide la base: acá se simula la
+// respuesta de la guarda para ver qué hace cada acción con ella. La guarda en sí
+// se prueba en src/lib/eventos/lock.test.ts.
+vi.mock("@/lib/eventos/lock", () => ({ guardEdit: mocks.guardEdit }));
 vi.mock("@/lib/push/send", () => ({ sendPushToUsers: vi.fn() }));
 vi.mock("@/lib/push/quorum", () => ({ maybeNotifyQuorum: vi.fn() }));
 vi.mock("@/lib/googlePhotos/sync", () => ({ syncEventMediaToGooglePhotos: vi.fn() }));
 
-import { updateEvent } from "./actions";
+import {
+  addGuestToEvent,
+  addTaskAssignee,
+  deleteEvent,
+  removeGuestFromEvent,
+  removeTaskAssignee,
+  saveFutbolTeams,
+  setRsvp,
+  setReservaCanchaAssignee,
+  updateEvent,
+  upsertFutbolStats,
+} from "./actions";
 
 type Call = [method: string, ...args: unknown[]];
 
@@ -62,6 +79,7 @@ const EVENT_ID = "c91c81de-ae33-49aa-ad58-ca9dac4e18a5";
 const EVENT_DATE = "2026-10-30T21:00";
 const NO_PERMISSION =
   "No se pudo guardar: el evento no existe o no tenés permiso para editarlo.";
+const CLOSED = "Este evento ya terminó: pedíselo a un admin.";
 
 function form(fields: Record<string, string> = {}) {
   const data = new FormData();
@@ -82,6 +100,8 @@ beforeEach(() => {
   calls = [];
   tables = [];
   mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+  mocks.getActingUser.mockResolvedValue({ id: "user-1" });
+  mocks.guardEdit.mockResolvedValue(null);
   respondWith({ data: [{ id: EVENT_ID }], error: null });
 });
 
@@ -155,5 +175,74 @@ describe("updateEvent", () => {
     respondWith({ data: null, error: { message: "fallo de la base" } });
     expect(await updateEvent(EVENT_ID, form())).toEqual({ error: "fallo de la base" });
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateEvent con el evento cerrado", () => {
+  it("contesta el aviso de la guarda y no toca nada, ni siquiera el alta de un lugar nuevo", async () => {
+    mocks.guardEdit.mockResolvedValue(CLOSED);
+    expect(await updateEvent(EVENT_ID, form({ venue: "__new__", newVenueName: "Casa nueva" }))).toEqual({
+      error: CLOSED,
+    });
+    expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, "participation");
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("la guarda va después de validar y de chequear la sesión", async () => {
+    await updateEvent(EVENT_ID, form({ name: "" }));
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    await updateEvent(EVENT_ID, form());
+    expect(mocks.guardEdit).not.toHaveBeenCalled();
+  });
+});
+
+// Cada acción que escribe sobre un evento pregunta primero si se puede. Si la
+// base no va a dejar (evento cerrado o saldado), contesta el aviso y no escribe:
+// una RLS que filtra no da error, y la pantalla daría por hecho lo que no pasó.
+type GuardedCase = [
+  name: string,
+  scope: "participation" | "settlement",
+  run: () => Promise<unknown>,
+];
+
+const guarded: GuardedCase[] = [
+  ["setRsvp", "participation", () => setRsvp(EVENT_ID, "yes")],
+  ["deleteEvent", "participation", () => deleteEvent(EVENT_ID)],
+  [
+    "addGuestToEvent",
+    "participation",
+    () => {
+      const data = new FormData();
+      data.set("existingGuestId", "guest-1");
+      return addGuestToEvent(EVENT_ID, "juntada", data);
+    },
+  ],
+  ["removeGuestFromEvent", "participation", () => removeGuestFromEvent("eg-1", EVENT_ID)],
+  [
+    "addTaskAssignee",
+    "participation",
+    () => addTaskAssignee(EVENT_ID, "lavado_platos", "user-2"),
+  ],
+  ["removeTaskAssignee", "participation", () => removeTaskAssignee("task-1", EVENT_ID)],
+  ["setReservaCanchaAssignee", "participation", () => setReservaCanchaAssignee(EVENT_ID, null)],
+  ["saveFutbolTeams", "participation", () => saveFutbolTeams(EVENT_ID, [])],
+  ["upsertFutbolStats", "settlement", () => upsertFutbolStats(EVENT_ID, new FormData())],
+];
+
+describe.each(guarded)("%s", (_name, scope, run) => {
+  it(`si el evento está bloqueado devuelve el aviso y no escribe nada (alcance: ${scope})`, async () => {
+    mocks.guardEdit.mockResolvedValue(CLOSED);
+    expect(await run()).toEqual({ error: CLOSED });
+    expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, scope);
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("si se puede, sigue como siempre", async () => {
+    respondWith({ data: [], error: null });
+    expect(await run()).toEqual({ ok: true });
+    expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, scope);
+    expect(mocks.from).toHaveBeenCalled();
   });
 });

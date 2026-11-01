@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
 import { resolveIcon } from "@/lib/eventos/insumos";
 import { abbreviateName } from "@/lib/formatName";
+import { OPEN_LOCK, canEdit, getEventLock } from "@/lib/eventos/lock";
+import { LockBanner } from "@/components/eventos/LockBanner";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { CopyableText } from "@/components/ui/CopyableText";
@@ -51,6 +53,7 @@ export default async function GroupPage({
     { data: rsvpRows },
     { data: insumoItems },
     { data: me },
+    lock,
   ] = await Promise.all([
     supabase
       .from("group_members")
@@ -71,8 +74,12 @@ export default async function GroupPage({
     user
       ? supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle()
       : Promise.resolve({ data: null }),
+    // Evento saldado: los gastos y los pagos quedan en solo lectura salvo para
+    // los admins (spec 022). Un grupo suelto, sin evento, no tiene nada que cerrar.
+    linkedEvent ? getEventLock(supabase, linkedEvent.id) : Promise.resolve(OPEN_LOCK),
   ]);
   const isAdmin = me?.is_admin ?? false;
+  const canEditSettlement = canEdit(lock, "settlement");
 
   const members = (membershipRows ?? [])
     .map((row) => row.profiles)
@@ -184,7 +191,8 @@ export default async function GroupPage({
   // un concepto distinto de qué opciones ofrece el selector de "pagó"/"se
   // divide entre" (payerOptions, arriba, basado en confirmación en vivo) —
   // ver specs/004-eventos-gastos-y-fotos.md.
-  const canAddExpense = !!user && members.some((m) => m.id === user.id);
+  // Un admin también puede cargar sin ser miembro (0044).
+  const canAddExpense = (!!user && members.some((m) => m.id === user.id)) || isAdmin;
 
   return (
     <div className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
@@ -194,6 +202,8 @@ export default async function GroupPage({
       <h1 className="mt-1 font-heading text-2xl font-semibold text-foreground">
         {group.name}
       </h1>
+
+      <LockBanner lock={lock} scope="settlement" />
 
       {settlements.length > 0 && (
         <section className="mt-6">
@@ -236,14 +246,16 @@ export default async function GroupPage({
                     <span className="font-medium tabular-nums">
                       ${s.amount.toFixed(2)}
                     </span>
-                    <ReportPaymentButton
-                      groupId={groupId}
-                      fromUserId={s.from}
-                      toUserId={s.to}
-                      fromName={memberName(s.from)}
-                      toName={memberName(s.to)}
-                      suggestedAmount={s.amount}
-                    />
+                    {canEditSettlement && (
+                      <ReportPaymentButton
+                        groupId={groupId}
+                        fromUserId={s.from}
+                        toUserId={s.to}
+                        fromName={memberName(s.from)}
+                        toName={memberName(s.to)}
+                        suggestedAmount={s.amount}
+                      />
+                    )}
                   </div>
                 </li>
               ))}
@@ -274,7 +286,7 @@ export default async function GroupPage({
                     <span className="font-medium tabular-nums">
                       ${Number(p.amount).toFixed(2)}
                     </span>
-                    {p.reported_by === user?.id && (
+                    {(p.reported_by === user?.id || isAdmin) && canEditSettlement && (
                       <DeleteDebtPaymentButton groupId={groupId} paymentId={p.id} />
                     )}
                   </div>
@@ -319,17 +331,19 @@ export default async function GroupPage({
               </li>
             ))}
           </ul>
-          <div className="mt-3">
-            <p className="text-xs font-medium text-foreground/50">Agregar miembro</p>
-            <div className="mt-1">
-              <AddMemberForm groupId={groupId} />
+          {canEditSettlement && (
+            <div className="mt-3">
+              <p className="text-xs font-medium text-foreground/50">Agregar miembro</p>
+              <div className="mt-1">
+                <AddMemberForm groupId={groupId} />
+              </div>
             </div>
-          </div>
+          )}
         </details>
       </section>
 
       <section className="mt-8">
-        {!canAddExpense ? (
+        {!canEditSettlement ? null : !canAddExpense ? (
           <p className="rounded-xl border border-dashed border-surface-border p-4 text-sm text-foreground/50">
             Necesitás ser parte de este grupo para cargar un gasto.
           </p>
@@ -382,7 +396,7 @@ export default async function GroupPage({
                 <span className="font-medium tabular-nums">
                   ${Number(e.amount).toFixed(2)}
                 </span>
-                {e.created_by === user?.id && (
+                {(e.created_by === user?.id || isAdmin) && canEditSettlement && (
                   <DeleteExpenseButton groupId={groupId} expenseId={e.id} />
                 )}
               </div>
