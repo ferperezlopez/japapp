@@ -9,6 +9,9 @@ import { withMinDuration } from "@/lib/withMinDuration";
 
 const numberFormatter = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
 const fmt = (value: number) => numberFormatter.format(value);
+/** «1 botella», «2 botellas», «0,5 botellas», «3 L». */
+const withUnit = (value: number, unit: string) =>
+  `${fmt(value)} ${unit === "botellas" && value === 1 ? "botella" : unit}`;
 
 // Bebidas del evento (spec 023): lo que sugiere la calculadora para quienes
 // van, y —opcional— cuánto se compró y cuánto se consumió realmente de cada
@@ -85,7 +88,7 @@ export function DrinksSection({
                     <span aria-hidden="true">{item.icon}</span> {item.label}
                   </span>
                   <span className="tabular-nums text-foreground/60">
-                    {suggestion === null ? "—" : `sugerido ${fmt(suggestion)} ${item.unit}`}
+                    {suggestion === null ? "—" : `sugerido ${withUnit(suggestion, item.unit)}`}
                   </span>
                 </div>
 
@@ -109,11 +112,11 @@ export function DrinksSection({
                 {(consumedPerPerson !== null || left !== null) && (
                   <p className="mt-2 text-xs text-foreground/60">
                     {consumedPerPerson !== null &&
-                      `Se tomó ${fmt(consumedPerPerson)} ${item.unit} por persona (la calculadora sugiere ${fmt(item.perPersona)}). `}
+                      `Se tomó ${withUnit(consumedPerPerson, item.unit)} por persona (la calculadora sugiere ${withUnit(item.perPersona, item.unit)}). `}
                     {left !== null &&
                       (left >= 0
-                        ? `Sobró ${fmt(left)} ${item.unit}.`
-                        : `Se tomó ${fmt(-left)} ${item.unit} más de lo que figura comprado.`)}
+                        ? `Sobró ${withUnit(left, item.unit)}.`
+                        : `Se tomó ${withUnit(-left, item.unit)} más de lo que figura comprado.`)}
                   </p>
                 )}
               </div>

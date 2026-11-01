@@ -119,6 +119,11 @@ describe("fetchForecast", () => {
     expect(await fetchForecast(EVENT_DATE, { fetchImpl })).toBeNull();
   });
 
+  it("un error de la API se descarta aunque el cuerpo traiga datos que sirvan", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(json), { status: 503 }));
+    expect(await fetchForecast(EVENT_DATE, { fetchImpl })).toBeNull();
+  });
+
   it("devuelve null si la red falla", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     expect(await fetchForecast(EVENT_DATE, { fetchImpl })).toBeNull();

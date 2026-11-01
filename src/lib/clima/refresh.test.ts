@@ -67,6 +67,14 @@ describe("shouldRefresh", () => {
     expect(shouldRefresh({ eventDate: EVENT_DATE, now, snapshot: almost })).toBe(false);
   });
 
+  it("el límite son 3 horas: a las 2 h 59 min no se vuelve a pedir, a las 3 h sí", () => {
+    const now = at(START - 10 * HOUR);
+    const hace = (minutes: number) => snapshot({ fetchedAt: new Date(now.getTime() - minutes * 60_000).toISOString() });
+    expect(REFRESH_AFTER_MS).toBe(3 * HOUR);
+    expect(shouldRefresh({ eventDate: EVENT_DATE, now, snapshot: hace(179) })).toBe(false);
+    expect(shouldRefresh({ eventDate: EVENT_DATE, now, snapshot: hace(180) })).toBe(true);
+  });
+
   it("si se movió la hora del evento, se vuelve a pedir aunque el dato sea reciente", () => {
     const fresh = snapshot({ forecastFor: "2026-11-04T19:00", fetchedAt: at(START - 2 * HOUR).toISOString() });
     expect(shouldRefresh({ eventDate: EVENT_DATE, now: at(START - HOUR), snapshot: fresh })).toBe(true);

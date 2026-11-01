@@ -279,8 +279,12 @@ begin
   -- permisos de ejecución
   v_rep := v_rep || pg_temp.line('F33 anon no puede ejecutar la función',
     pg_temp.ask(null, 'anon', format('select public.update_expense(%L, %L, null, 10, %L, null, %L::jsonb)', x6, 'X', c_matil, pg_temp.sh(c_matil, 5, c_javi, 5)::text)), 'err:42501%');
-  v_rep := v_rep || pg_temp.line('F34 un logueado sí (por la API, como authenticated)',
-    pg_temp.attempt(c_matil, array[format('select public.update_expense(%L, %L, null, 10, %L, null, %L::jsonb)', x6, 'Por la API', c_matil, pg_temp.sh(c_matil, 5, c_javi, 5)::text)]), 'ok:1');
+  -- La segunda sentencia divide por cero si la edición no quedó hecha: así se ve que la función, ejecutada
+  -- con el rol authenticated, edita de verdad (y no solo contesta «ok»).
+  v_rep := v_rep || pg_temp.line('F34 un logueado sí (por la API, como authenticated), y la edición queda hecha',
+    pg_temp.attempt(c_matil, array[
+      format('select public.update_expense(%L, %L, null, 10, %L, null, %L::jsonb)', x6, 'Por la API', c_matil, pg_temp.sh(c_matil, 5, c_javi, 5)::text),
+      format('select 1 / count(*) from public.expenses where id = %L and description = %L', x6, 'Por la API')]), 'ok:1');
 
   -- lo de siempre no cambió
   v_rep := v_rep || pg_temp.line('F35 un UPDATE directo de quien cargó el gasto sigue sin pasar (0 filas)',
