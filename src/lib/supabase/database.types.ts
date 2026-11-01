@@ -43,6 +43,11 @@ export interface Database {
         Args: Record<string, never>;
         Returns: { user_id: string }[];
       };
+      // Migración 0044: 'open' | 'closed' | 'settled' + si quien consulta es admin.
+      event_lock_state: {
+        Args: { p_event_id: string };
+        Returns: { state: string; is_admin: boolean }[];
+      };
     };
     Tables: {
       push_subscriptions: {
