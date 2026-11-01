@@ -71,8 +71,11 @@ Lo que el SQL no explica por sí solo:
    campo «Menú»; la antigüedad se escribe con `formatDaysAgo` («ayer», «hace 5 días»,
    «hace 6 semanas», «hace 3 meses»).
 3. `createEvent` / `updateEvent` leen `menu` con `parseMenu`: vacío es «sin menú»
-   (`null`; al editar, vaciar el campo lo borra), uno demasiado largo se rechaza con un
-   aviso antes de tocar la base. `createEvent` no manda la columna si no hay menú.
+   (`null`), uno demasiado largo se rechaza con un aviso antes de tocar la base.
+   `createEvent` no manda la columna si no hay menú. `updateEvent` solo la toca cuando se
+   pone, se cambia o se saca un menú: el formulario de edición manda también el menú con
+   el que se abrió (campo oculto `menuBefore`), y vaciar el campo borra el menú solo si
+   antes había uno.
 4. La página del evento lee el menú en una consulta aparte y lo muestra en el
    encabezado; el formulario de edición lo trae cargado.
 
@@ -104,6 +107,7 @@ Lo que el SQL no explica por sí solo:
 | Relleno inferido de los insumos asignados, con un `UPDATE` suelto | Cargarlo a mano evento por evento, o no rellenar | Sin historial las sugerencias no sirven al principio; los insumos (carbón, tapas de empanadas) lo dicen sin ambigüedad en estos cuatro eventos. Va por fuera de la migración porque es un dato. |
 | Los días se cuentan en el calendario de Buenos Aires | Horas transcurridas | «Hace 2 días» es lo que se dice a viva voz; con horas, un asado de anteayer a la noche figuraba «hace 1 día». |
 | El menú y la lista de eventos se leen en consultas aparte | Sumar `menu` a las consultas principales | Si el código llega antes que la migración, falla solo la consulta del menú y no la lista de eventos ni la página del evento. |
+| `updateEvent` solo manda `menu` si hay uno nuevo o había uno antes (campo oculto `menuBefore`) | Mandarlo siempre, con `null` si el campo está vacío | Con el código desplegado antes que la `0049`, mandarlo siempre haría fallar **toda** edición de eventos (la columna no existe). Así, editar un evento sin menú anda con o sin la migración; solo poner o sacar un menú la necesita. |
 | Un menú escrito a mano se guarda tal cual; uno de la lista, con su escritura canónica | Guardar siempre lo tipeado | Evita «asado» y «Asado» como dos menús en el historial. |
 
 ## 7. Futuro / fuera de alcance

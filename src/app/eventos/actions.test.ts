@@ -360,16 +360,26 @@ describe("el menú del evento", () => {
     expect(payload.menu).toBe("Empanadas");
   });
 
-  it("updateEvent con el campo vacío borra el menú", async () => {
-    await updateEvent(EVENT_ID, form({ menu: "" }));
+  it("updateEvent con el campo vacío borra el menú que había", async () => {
+    await updateEvent(EVENT_ID, form({ menu: "", menuBefore: "Asado" }));
     const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
     expect(payload).toHaveProperty("menu", null);
   });
 
-  it("updateEvent sin el campo no toca el menú", async () => {
-    await updateEvent(EVENT_ID, form());
+  it("updateEvent cambia un menú por otro", async () => {
+    await updateEvent(EVENT_ID, form({ menu: "pizza", menuBefore: "Asado" }));
     const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
-    expect(payload).not.toHaveProperty("menu");
+    expect(payload.menu).toBe("Pizza");
+  });
+
+  it("updateEvent sin menú antes ni ahora no toca la columna (anda aunque la 0049 no esté aplicada)", async () => {
+    await updateEvent(EVENT_ID, form({ menu: "", menuBefore: "" }));
+    await updateEvent(EVENT_ID, form({ menu: "   ", menuBefore: "  " }));
+    await updateEvent(EVENT_ID, form());
+    for (const [, payload] of callsTo("update") as [string, Record<string, unknown>][]) {
+      expect(payload).not.toHaveProperty("menu");
+    }
+    expect(callsTo("update")).toHaveLength(3);
   });
 
   it("updateEvent rechaza un menú demasiado largo antes de tocar la base", async () => {

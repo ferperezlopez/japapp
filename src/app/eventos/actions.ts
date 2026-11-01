@@ -156,6 +156,8 @@ export async function updateEvent(eventId: string, formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const hasFutbol = formData.get("hasFutbol") === "on";
   const menu = parseMenu(formData.get("menu"));
+  // El menú con el que se abrió el formulario de edición (campo oculto).
+  const menuBefore = String(formData.get("menuBefore") ?? "").trim();
 
   if (!name) return { error: "Poné un nombre para el evento." };
   if (!eventDate) return { error: "Elegí fecha y hora." };
@@ -191,8 +193,10 @@ export async function updateEvent(eventId: string, formData: FormData) {
       location,
       description: description || null,
       has_futbol: hasFutbol,
-      // Solo si el formulario trae el campo (siempre lo trae): vaciarlo borra el menú.
-      ...(formData.has("menu") ? { menu: menu.menu } : {}),
+      // El menú solo se toca cuando se pone, se cambia o se saca uno (vaciar el campo lo
+      // borra). Editar un evento sin menú, antes y ahora, no manda la columna: así el
+      // código anda aunque la migración 0049 todavía no esté aplicada.
+      ...(menu.menu !== null || menuBefore !== "" ? { menu: menu.menu } : {}),
     })
     .eq("id", eventId)
     .select("id");

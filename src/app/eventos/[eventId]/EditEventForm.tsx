@@ -90,6 +90,9 @@ export function EditEventForm({
       }}
       className="animate-reveal space-y-3 rounded-xl border border-surface-border bg-surface p-4"
     >
+      {/* El menú con el que se abrió el formulario: updateEvent solo toca la columna
+          cuando se pone, se cambia o se saca un menú (spec 025). */}
+      <input type="hidden" name="menuBefore" value={event.menu ?? ""} />
       <EventFormFields
         venues={venues}
         members={members}
