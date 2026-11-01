@@ -11,7 +11,7 @@
   `insumo_items` de `specs/013-invitados-tareas-y-stats.md`),
   `supabase/migrations/0035_debt_payments.sql` (tabla `debt_payments`:
   informe de pago realizado, ver sección 4)
-- **Última actualización:** 2026-09-19
+- **Última actualización:** 2026-10-31
 
 ## 1. Resumen
 
@@ -283,6 +283,16 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-10-31: los gastos, los pagos y los miembros del grupo de un evento
+  **saldado** (cerrado, con gastos y sin saldos pendientes) quedan en solo
+  lectura salvo para admins; hasta saldar siguen abiertos como siempre.
+  Migración `0044_lock_closed_events.sql` (policies restrictivas sobre
+  `expenses`, `expense_shares`, `debt_payments` y `group_members`), guardas en
+  `addMemberByEmail`, `addExpense`, `deleteExpense`, `reportPayment` y
+  `deleteDebtPayment`, y franja con candado en `/gastos/[groupId]` («Cuentas
+  saldadas»). Un admin puede además cargar y borrar cualquier gasto o pago, sea o
+  no miembro o autor (cuatro policies aditivas). Los grupos sueltos, sin evento,
+  no cambian. Ver `specs/022-eventos-cerrados.md`.
 - 2026-09-19: "Para saldar cuentas" mostraba cada fila en 2 líneas
   (nombre completo + texto "le paga ... a"), confuso de leer, y no había
   forma de informar que un pago sugerido ya se hizo. Se agregó

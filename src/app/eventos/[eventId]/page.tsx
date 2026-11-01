@@ -18,6 +18,8 @@ import { TaskAssignSelect } from "./TaskAssignSelect";
 import { TaskAssigneesEditor } from "./TaskAssigneesEditor";
 import { buildMapsLink } from "@/lib/eventos/mapsLink";
 import { getActingUser } from "@/lib/supabase/actingUser";
+import { canEdit, getEventLock } from "@/lib/eventos/lock";
+import { LockBanner } from "@/components/eventos/LockBanner";
 import { WhatsAppShareButton } from "@/components/WhatsAppShareButton";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
@@ -76,6 +78,8 @@ function MapIcon() {
     </svg>
   );
 }
+
+const STATUS_LABEL = { yes: "Voy", maybe: "Tal vez", no: "No voy" } as const;
 
 const GROUPS: { status: "yes" | "maybe" | "no"; label: string }[] = [
   { status: "yes", label: "Van" },
@@ -153,6 +157,7 @@ function RsvpSection({
   registeredGuests,
   members,
   isAdmin,
+  editable,
 }: {
   title: string;
   eventId: string;
@@ -167,6 +172,9 @@ function RsvpSection({
   registeredGuests: { id: string; name: string }[];
   members: { id: string; name: string | null; email: string }[];
   isAdmin: boolean;
+  // false con el evento cerrado (spec 022): se ve la respuesta propia y la
+  // lista, pero no se cambia ni se suman o sacan invitados.
+  editable: boolean;
 }) {
   // Lista de anotados para compartir por WhatsApp: mismos datos que ya
   // se muestran en "Ver detalle de asistentes" (attendees confirmados +
@@ -195,7 +203,16 @@ function RsvpSection({
         guestCount={guests.length}
       />
       <div className="mt-3">
-        <RsvpButtons eventId={eventId} kind={kind} currentStatus={myStatus} />
+        {editable ? (
+          <RsvpButtons eventId={eventId} kind={kind} currentStatus={myStatus} />
+        ) : (
+          <p className="text-sm text-foreground/60">
+            Tu respuesta:{" "}
+            <span className="font-medium text-foreground">
+              {myStatus ? STATUS_LABEL[myStatus] : "sin respuesta"}
+            </span>
+          </p>
+        )}
       </div>
       <details className="mt-4">
         <summary className="cursor-pointer text-sm font-medium text-foreground/50">
@@ -240,7 +257,7 @@ function RsvpSection({
                       <span className="text-foreground/40">
                         (trajo: {g.broughtByName})
                       </span>
-                      {(g.addedBy === currentUserId || isAdmin) && (
+                      {(g.addedBy === currentUserId || isAdmin) && editable && (
                         <RemoveGuestButton
                           eventGuestId={g.eventGuestId}
                           eventId={eventId}
@@ -257,15 +274,17 @@ function RsvpSection({
           })}
         </div>
 
-        <div className="mt-4">
-          <AddGuestForm
-            eventId={eventId}
-            kind={kind}
-            guests={registeredGuests}
-            members={members}
-            currentUserId={currentUserId}
-          />
-        </div>
+        {editable && (
+          <div className="mt-4">
+            <AddGuestForm
+              eventId={eventId}
+              kind={kind}
+              guests={registeredGuests}
+              members={members}
+              currentUserId={currentUserId}
+            />
+          </div>
+        )}
 
         {totalConfirmed > 0 && (
           <WhatsAppShareButton href={shareUrl} label="Compartir lista por WhatsApp" />
@@ -328,6 +347,7 @@ export default async function EventoPage({
     { data: registeredGuests },
     { data: eventGuestRows },
     { data: me },
+    lock,
   ] = await Promise.all([
     supabase
       .from("event_rsvps")
@@ -348,8 +368,14 @@ export default async function EventoPage({
     user
       ? supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle()
       : Promise.resolve({ data: null }),
+    // Evento cerrado o saldado: solo lectura salvo para los admins (spec 022).
+    getEventLock(supabase, eventId),
   ]);
   const isAdmin = me?.is_admin ?? false;
+  // "participation": datos del evento, asistencia, invitados, tareas y equipos
+  // (se cierra a las 24 h). "settlement": resultado y plata (se cierra al saldar).
+  const canEditParticipation = canEdit(lock, "participation");
+  const canEditSettlement = canEdit(lock, "settlement");
   const [{ data: taskRows }, { data: insumoItems }] = await Promise.all([
     supabase
       .from("event_tasks")
@@ -549,7 +575,8 @@ export default async function EventoPage({
   const eventSummary = (
     <>
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-eventos">
-        Próximo evento
+        {/* Un evento cerrado ya no es «próximo» (y la franja de abajo lo dice). */}
+        {lock.state === "open" ? "Próximo evento" : "Evento"}
       </p>
       <h1 className="mt-1 font-heading text-2xl font-semibold text-foreground">
         {event.name}
@@ -604,9 +631,10 @@ export default async function EventoPage({
       </Link>
 
       <div className="animate-reveal bg-grain mt-3 rounded-2xl border border-surface-border bg-surface p-5">
-        {/* Editar: quien creó el evento o un admin (0043_admin_edit_any_event.sql).
-            Borrar sigue siendo solo del creador (más abajo). */}
-        {event.created_by === user?.id || isAdmin ? (
+        {/* Editar: quien creó el evento o un admin (0043_admin_edit_any_event.sql);
+            con el evento cerrado, solo un admin (0044). Borrar sigue siendo solo
+            del creador (más abajo). */}
+        {(event.created_by === user?.id || isAdmin) && canEditParticipation ? (
           <EditEventForm
             eventId={eventId}
             venues={venues ?? []}
@@ -634,6 +662,8 @@ export default async function EventoPage({
         <WhatsAppShareButton href={whatsappShareUrl} label="Compartir en WhatsApp" />
       </div>
 
+      <LockBanner lock={lock} scope="participation" />
+
       <SectionDivider label="Evento" colorClass="text-eventos" />
 
       <RsvpSection
@@ -650,6 +680,7 @@ export default async function EventoPage({
         registeredGuests={registeredGuests ?? []}
         members={members}
         isAdmin={isAdmin}
+        editable={canEditParticipation}
       />
 
       <section className="mt-8">
@@ -686,6 +717,7 @@ export default async function EventoPage({
                         : undefined
                     }
                     isAdmin={isAdmin}
+                    readOnly={!canEditParticipation}
                   />
                 </div>
               </div>
@@ -732,6 +764,7 @@ export default async function EventoPage({
             registeredGuests={registeredGuests ?? []}
             members={members}
             isAdmin={isAdmin}
+            editable={canEditParticipation}
           />
           <div id="tarea-reserva_cancha" className="mt-4 rounded-xl border border-surface-border bg-surface p-4">
             <label className="block text-xs font-medium text-foreground/50">
@@ -742,6 +775,7 @@ export default async function EventoPage({
                 eventId={eventId}
                 assignedTo={reservaCanchaAssignedTo}
                 members={members}
+                readOnly={!canEditParticipation}
               />
             </div>
           </div>
@@ -750,6 +784,7 @@ export default async function EventoPage({
             stats={futbolStats}
             candidates={futbolTeamCandidates}
             isAdmin={isAdmin}
+            readOnly={!canEditSettlement}
           />
           <FutbolTeamsSection
             eventId={eventId}
@@ -759,6 +794,7 @@ export default async function EventoPage({
             initialAssignment={futbolTeams}
             stats={futbolStats}
             isAdmin={isAdmin}
+            readOnly={!canEditParticipation}
           />
         </>
       )}
@@ -787,7 +823,7 @@ export default async function EventoPage({
         </div>
       </section>
 
-      {event.created_by === user?.id && (
+      {event.created_by === user?.id && canEditParticipation && (
         <div className="mt-8">
           <DeleteEventButton eventId={eventId} />
         </div>

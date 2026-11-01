@@ -5,8 +5,9 @@
 - **Migraciones relacionadas:** `supabase/migrations/0023_admin_role.sql`,
   `supabase/migrations/0025_admin_delete_any_guest.sql`,
   `supabase/migrations/0040_profiles_update_column_privileges.sql`,
-  `supabase/migrations/0043_admin_edit_any_event.sql`
-- **Última actualización:** 2026-10-28
+  `supabase/migrations/0043_admin_edit_any_event.sql`,
+  `supabase/migrations/0044_lock_closed_events.sql`
+- **Última actualización:** 2026-10-31
 
 ## 1. Resumen
 
@@ -58,6 +59,12 @@ Un solo usuario tiene el rol hoy: **Fernando Pérez López**
   consulta («¿por qué no puedo editar un evento?»): el lápiz y la policy
   de `update` eran solo del creador. Borrar un evento sigue siendo solo
   del creador.
+- **Editar un evento cerrado o saldado, y corregir la plata** (2026-10-31): desde
+  la `0044`, un evento cerrado (pasaron 24 h) o saldado queda en solo lectura para
+  todos *menos* los admins (`specs/022-eventos-cerrados.md`). Para que esa promesa
+  alcance a la plata, un admin también puede cargar y borrar **cualquier** gasto o
+  pago, sea o no miembro del grupo y sea o no quien lo cargó (cuatro policies
+  aditivas en `expenses` y `debt_payments`; valen también con el evento abierto).
 - **Ver el email de registro en la ficha de otro**: `/perfil/[userId]`
   muestra "Email de registro: {email}" cuando el viewer es admin — para
   poder identificar de quién se trata una entrada rara en una lista de
@@ -130,6 +137,14 @@ completo. Puntos que el SQL no explica por sí solo:
   creador. El `with check` del creador (el `using`, por omisión) sigue
   impidiéndole reasignar `created_by`; el del admin no lo restringe, pero
   `updateEvent` nunca escribe esa columna.
+- `0044_lock_closed_events.sql` (2026-10-31) suma cuatro policies **permisivas**
+  para el admin: `expenses` (insertar con `created_by = auth.uid()`, y borrar) y
+  `debt_payments` (insertar con `reported_by = auth.uid()`, y borrar), aditivas a
+  «Los miembros pueden cargar gastos en sus grupos» / «Quien creo el gasto lo
+  puede borrar» / «Los miembros pueden registrar pagos…» / «Quien registro el pago
+  lo puede borrar». Todas las policies restrictivas de esa migración (que cierran
+  el evento) dejan pasar a `public.is_admin(auth.uid())`. El permiso es el del
+  usuario real, no el de «actuar como».
 - `0040_profiles_update_column_privileges.sql` (2026-10-09) cierra un
   hueco que existía desde `0023`: la policy "Un usuario puede actualizar
   su propio perfil" (`0001_init.sql`) filtra por fila, no por columna, y
@@ -252,6 +267,11 @@ completo. Puntos que el SQL no explica por sí solo:
       creó otra persona y guardar lo modifica; como no-admin que no creó el
       evento, no aparece.
 - [x] Como admin, «Borrar evento» no aparece en un evento ajeno.
+- [x] Como admin, en un evento cerrado o saldado se puede editar el evento,
+      cambiar la asistencia, los invitados, las tareas, los equipos y el resultado,
+      y cargar o borrar gastos y pagos ajenos, aunque no sea miembro del grupo. La
+      pantalla le muestra «Como admin, vos sí podés editarlo» y los mismos
+      controles que a cualquiera con el evento abierto.
 
 ## 6. Decisiones y tradeoffs
 
@@ -261,6 +281,7 @@ completo. Puntos que el SQL no explica por sí solo:
 | Cookie httpOnly de 8hs en vez de sesión/estado en base | Guardar la impersonación activa en una tabla | Una cookie de corta duración alcanza para el caso de uso (una sesión de uso de la app) y evita agregar una tabla nueva solo para un estado efímero; el límite de 8hs evita que quede "olvidada" activa por días. |
 | Editar perfiles de otros como mecanismo *separado* de "actuar como" | Unificar todo bajo impersonación (ej. "actuar como Bob" también habilitaría editar su perfil desde `/perfil`) | Son dos intenciones distintas: corregir el alias de alguien es una acción puntual y rápida, mientras que "actuar como" es un modo de uso más amplio (con su propio banner). Mezclarlas hubiera hecho más confuso cuándo se está o no impersonando. |
 | Un admin edita cualquier evento, pero no lo borra | Que cualquier miembro edite cualquier evento; o dejar la edición solo del creador | El usuario eligió «creador + admins» (2026-10-28): mismo patrón que invitados y fotos. Borrar arrastra RSVPs, invitados, tareas y fotos y no se pidió ampliarlo. |
+| Un admin puede cargar y borrar cualquier gasto o pago (2026-10-31) | Dejar la plata como estaba (solo quien la cargó, y solo miembros) | Con los eventos cerrados en solo lectura, un gasto mal cargado por otra persona no lo podría corregir ni un admin. Mismo patrón aditivo que invitados, fotos y eventos. |
 | Alcance de "actuar como" limitado a RSVP en esta entrega | Cablear las ~15 server actions de la app de una sola vez | Cada acción necesita su propia policy "espejo" con `public.is_admin(auth.uid())` — hacerlas todas de una sería un PR enorme y de alto riesgo de revisar. RSVP es el caso de uso insignia ("confirmar en nombre de alguien"); el resto queda documentado como extensión mecánica futura. |
 | Sin auditoría de qué se hizo impersonando | Sumar una columna `impersonated_by` a las tablas afectadas | Mismo criterio de confianza total que ya rige el resto de la app (nada se audita más allá de los `created_by`/`updated_by` que ya existían); agregar auditoría no fue pedido y hubiera sumado columnas a varias tablas para un caso de uso de un solo admin. |
 | Policies de storage `avatars` admin sin restringir por carpeta | Que el admin solo pueda subir dentro de su propia carpeta (como hoy) | `AdminUploadAvatarForm` sube al path del *target*, corriendo con la sesión real del admin (no impersonando) — sin esta policy la subida fallaría contra la carpeta ajena. |
@@ -288,6 +309,10 @@ completo. Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-10-31: eventos cerrados y saldados en solo lectura salvo para admins
+  (migración `0044`, ver `specs/022-eventos-cerrados.md`). Un admin puede cargar y
+  borrar cualquier gasto o pago (cuatro policies aditivas en `expenses` y
+  `debt_payments`).
 - 2026-10-28: un admin puede editar cualquier evento (migración `0043`,
   policy de `update` sobre `events`; el lápiz de `/eventos/[eventId]` se
   muestra con `created_by === user.id || isAdmin`). `updateEvent` ahora avisa

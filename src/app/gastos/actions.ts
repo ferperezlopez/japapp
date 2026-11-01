@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { guardGroupEdit } from "@/lib/eventos/lock";
 import { sendPushToUsers } from "@/lib/push/send";
 
 export async function createGroup(formData: FormData) {
@@ -39,6 +40,11 @@ export async function addMemberByEmail(groupId: string, formData: FormData) {
   if (!email) return { error: "Poné el email de la persona." };
 
   const supabase = await createClient();
+
+  // Un evento saldado no admite gente nueva en su grupo (spec 022); un grupo
+  // suelto, sin evento, no tiene nada que cerrar.
+  const lockedError = await guardGroupEdit(supabase, groupId, "settlement");
+  if (lockedError) return { error: lockedError };
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -103,6 +109,10 @@ export async function addExpense(groupId: string, formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
+
+  // Un gasto nuevo reabriría las cuentas de un evento saldado: solo un admin.
+  const lockedError = await guardGroupEdit(supabase, groupId, "settlement");
+  if (lockedError) return { error: lockedError };
 
   let description = newItemName;
   let itemId: string | null = null;
@@ -204,6 +214,12 @@ export async function updateExpenseIcon(expenseId: string, icon: string) {
 
 export async function deleteExpense(groupId: string, expenseId: string) {
   const supabase = await createClient();
+
+  // Una RLS que filtra un DELETE no da error (0 filas): sin esto la pantalla
+  // daría por borrado un gasto de un evento saldado.
+  const lockedError = await guardGroupEdit(supabase, groupId, "settlement");
+  if (lockedError) return { error: lockedError };
+
   const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
   if (error) return { error: error.message };
 
@@ -233,6 +249,9 @@ export async function reportPayment(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  const lockedError = await guardGroupEdit(supabase, groupId, "settlement");
+  if (lockedError) return { error: lockedError };
+
   const { error } = await supabase.from("debt_payments").insert({
     group_id: groupId,
     from_user_id: fromUserId,
@@ -248,6 +267,10 @@ export async function reportPayment(
 
 export async function deleteDebtPayment(groupId: string, paymentId: string) {
   const supabase = await createClient();
+
+  // Borrar un pago de un evento saldado lo reabriría: solo un admin.
+  const lockedError = await guardGroupEdit(supabase, groupId, "settlement");
+  if (lockedError) return { error: lockedError };
 
   // La policy RLS "Quien registro el pago lo puede borrar" es la
   // barrera real acá, igual que deleteExpense.

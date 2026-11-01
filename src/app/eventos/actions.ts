@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActingUser } from "@/lib/supabase/actingUser";
+import { guardEdit } from "@/lib/eventos/lock";
 import { sendPushToUsers } from "@/lib/push/send";
 import { maybeNotifyQuorum } from "@/lib/push/quorum";
 import { syncEventMediaToGooglePhotos } from "@/lib/googlePhotos/sync";
@@ -157,6 +158,11 @@ export async function updateEvent(eventId: string, formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  // Un evento cerrado solo lo edita un admin (spec 022). Va antes de
+  // resolveVenueLocation, que puede crear un lugar nuevo.
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
+
   const location = await resolveVenueLocation(supabase, formData, user.id);
 
   // La barrera real es RLS: la policy "Quien creo el evento lo puede editar"
@@ -203,6 +209,11 @@ export async function setRsvp(
   const actor = await getActingUser(supabase);
   if (!actor) return { error: "No estás logueado." };
 
+  // El permiso es del usuario real: un admin "actuando como" otra persona
+  // puede corregir la asistencia de un evento cerrado.
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
+
   const { error } = await supabase.from("event_rsvps").upsert(
     {
       event_id: eventId,
@@ -227,6 +238,11 @@ export async function setRsvp(
 
 export async function deleteEvent(eventId: string) {
   const supabase = await createClient();
+
+  // Antes de tocar Storage: si la base no va a dejar borrar el evento
+  // (cerrado y quien lo borra no es admin), tampoco hay que perder las fotos.
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
 
   // Borrar las fotos del evento en Storage antes de borrar la fila: el
   // `on delete cascade` de event_media limpia Postgres solo, pero no hay
@@ -361,9 +377,13 @@ export async function upsertFutbolStats(eventId: string, formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
-  // Cualquier logueado puede cargar/corregir el resultado (policy RLS
-  // "using (true)" en el update) — mismo criterio de confianza total que
-  // el resto de la app, no solo el creador del evento.
+  // Una vez saldado el evento, el resultado solo lo corrige un admin (spec 022).
+  const lockedError = await guardEdit(supabase, eventId, "settlement");
+  if (lockedError) return { error: lockedError };
+
+  // Mientras tanto, cualquier logueado puede cargar/corregir el resultado
+  // (policy RLS "using (true)" en el update) — mismo criterio de confianza
+  // total que el resto de la app, no solo el creador del evento.
   const { error } = await supabase.from("futbol_stats").upsert(
     {
       event_id: eventId,
@@ -403,6 +423,11 @@ export async function addGuestToEvent(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  // Antes de registrar al invitado nuevo: si el evento está cerrado no tiene
+  // que quedar un invitado huérfano en el catálogo.
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
+
   let guestId = existingGuestId;
 
   if (!guestId) {
@@ -441,6 +466,11 @@ export async function addGuestToEvent(
 export async function removeGuestFromEvent(eventGuestId: string, eventId: string) {
   const supabase = await createClient();
 
+  // Una RLS que filtra un DELETE no da error (0 filas): sin esto la pantalla
+  // daría por sacado a un invitado de un evento cerrado.
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
+
   // La policy RLS "Quien sumo al invitado lo puede sacar" (added_by =
   // auth.uid()) es la barrera real acá, igual que en deleteEvent — no se
   // re-valida en la action, solo se oculta el botón en la UI a quien no
@@ -474,6 +504,10 @@ export async function addTaskAssignee(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
+
+  // Antes de registrar un insumo nuevo en el catálogo.
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
 
   let itemId: string | null = null;
   if (taskType === "compra_insumos") {
@@ -532,6 +566,10 @@ export async function addTaskAssignee(
 
 export async function removeTaskAssignee(taskId: string, eventId: string) {
   const supabase = await createClient();
+
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
+
   const { error } = await supabase.from("event_tasks").delete().eq("id", taskId);
   if (error) return { error: error.message };
 
@@ -613,6 +651,11 @@ export async function setReservaCanchaAssignee(
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
+  // Antes del delete: reasignar es borrar y volver a insertar, y con el evento
+  // cerrado el delete queda en 0 filas y el insert falla.
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
+
   const { error: deleteError } = await supabase
     .from("event_tasks")
     .delete()
@@ -660,6 +703,11 @@ export async function saveFutbolTeams(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
+
+  // Antes del delete: se reemplaza todo (borrar y volver a insertar), y con el
+  // evento cerrado el delete queda en 0 filas y el insert falla.
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
 
   // Se chequea antes de borrar (no después de insertar) para distinguir
   // "primera vez que se arman" de "ya había equipos guardados" — el

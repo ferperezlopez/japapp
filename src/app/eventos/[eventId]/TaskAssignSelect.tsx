@@ -12,12 +12,26 @@ export function TaskAssignSelect({
   eventId,
   assignedTo,
   members,
+  readOnly = false,
 }: {
   eventId: string;
   assignedTo: string | null;
   members: { id: string; name: string | null; email: string }[];
+  // Evento cerrado (spec 022): se ve quién la tiene, pero no se puede reasignar.
+  readOnly?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+
+  if (readOnly) {
+    const assignee = members.find((m) => m.id === assignedTo);
+    return (
+      <p className="text-sm text-foreground/80">
+        {assignee ? (assignee.name ?? assignee.email) : (
+          <span className="text-foreground/40">Sin asignar</span>
+        )}
+      </p>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">

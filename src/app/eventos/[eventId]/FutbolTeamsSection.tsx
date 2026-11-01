@@ -24,6 +24,7 @@ export function FutbolTeamsSection({
   initialAssignment,
   stats,
   isAdmin,
+  readOnly = false,
 }: {
   eventId: string;
   eventName: string;
@@ -32,6 +33,8 @@ export function FutbolTeamsSection({
   initialAssignment: SavedAssignment[];
   stats: Stats;
   isAdmin: boolean;
+  // Evento cerrado (spec 022): se pueden ver y compartir los equipos, no armarlos ni editarlos.
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -49,18 +52,22 @@ export function FutbolTeamsSection({
           >
             👀 Ver equipos
           </button>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
-          >
-            Editar equipos
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
+            >
+              Editar equipos
+            </button>
+          )}
         </div>
       ) : (
         <>
-          <p className="text-foreground/50">Todavía no se armaron los equipos.</p>
-          {candidates.length > 0 && (
+          <p className="text-foreground/50">
+            {readOnly ? "No se armaron equipos." : "Todavía no se armaron los equipos."}
+          </p>
+          {!readOnly && candidates.length > 0 && (
             <button
               type="button"
               onClick={() => setOpen(true)}
@@ -79,10 +86,14 @@ export function FutbolTeamsSection({
           initialAssignment={initialAssignment}
           stats={stats}
           isAdmin={isAdmin}
-          onEdit={() => {
-            setViewOpen(false);
-            setOpen(true);
-          }}
+          onEdit={
+            readOnly
+              ? undefined
+              : () => {
+                  setViewOpen(false);
+                  setOpen(true);
+                }
+          }
           onClose={() => setViewOpen(false)}
         />
       )}
@@ -118,7 +129,7 @@ function ViewTeamsModal({
   initialAssignment: SavedAssignment[];
   stats: Stats;
   isAdmin: boolean;
-  onEdit: () => void;
+  onEdit?: () => void;
   onClose: () => void;
 }) {
   useBackButtonClose(onClose);
@@ -180,13 +191,15 @@ function ViewTeamsModal({
           eventName={eventName}
           eventDateLabel={eventDateLabel}
         />
-        <button
-          type="button"
-          onClick={onEdit}
-          className="mt-4 block text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
-        >
-          Editar equipos
-        </button>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="mt-4 block text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
+          >
+            Editar equipos
+          </button>
+        )}
       </div>
     </div>
   );

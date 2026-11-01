@@ -26,11 +26,14 @@ export function FutbolStatsForm({
   stats,
   candidates,
   isAdmin,
+  readOnly = false,
 }: {
   eventId: string;
   stats: Stats | null;
   candidates: Candidate[];
   isAdmin: boolean;
+  // Evento saldado (spec 022): se ve el resultado, pero no se carga ni se corrige.
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,16 +115,20 @@ export function FutbolStatsForm({
           </div>
         ) : (
           <p className="text-foreground/50">
-            Todavía no se cargó el resultado del partido.
+            {readOnly
+              ? "No se cargó el resultado del partido."
+              : "Todavía no se cargó el resultado del partido."}
           </p>
         )}
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mt-2 text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
-        >
-          {hasStats ? "Editar resultado" : "Cargar resultado"}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="mt-2 text-xs font-medium text-foreground/50 transition-colors duration-200 hover:text-eventos"
+          >
+            {hasStats ? "Editar resultado" : "Cargar resultado"}
+          </button>
+        )}
       </div>
     );
   }

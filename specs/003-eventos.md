@@ -8,8 +8,11 @@
   `supabase/migrations/0005_evento_futbol.sql` (agrega `has_futbol` y
   `kind` — ver `specs/006-evento-futbol.md`),
   `supabase/migrations/0043_admin_edit_any_event.sql` (un admin también
-  puede editar — ver `specs/016-admin.md`)
-- **Última actualización:** 2026-10-28
+  puede editar — ver `specs/016-admin.md`),
+  `supabase/migrations/0044_lock_closed_events.sql` (un evento cerrado o
+  saldado queda en solo lectura salvo para admins — ver
+  `specs/022-eventos-cerrados.md`)
+- **Última actualización:** 2026-10-31
 
 ## 1. Resumen
 
@@ -24,13 +27,20 @@ para el asado/empanadas.
 - Crear un evento: nombre, fecha/hora, lugar opcional, descripción
   opcional.
 - Confirmar asistencia propia en 3 estados: `yes` / `no` / `maybe`,
-  modificable en cualquier momento (upsert).
+  modificable (upsert) hasta 24 h después de la hora del evento; pasado
+  ese plazo el evento queda «cerrado» y solo un admin puede cambiarla
+  (`specs/022-eventos-cerrados.md`).
 - Ver la lista de quién confirmó qué, agrupada por estado, con contador
   (colapsada por defecto detrás de "Ver detalle de asistentes" — el
   resumen y los botones de RSVP quedan siempre visibles sin abrir nada).
 - Editar un evento ya creado (quien lo creó o un admin): nombre,
-  fecha/hora, lugar, notas y si tiene fútbol.
-- Borrar un evento (solo quien lo creó).
+  fecha/hora, lugar, notas y si tiene fútbol. Una vez cerrado, solo un
+  admin (spec 022).
+- Borrar un evento (solo quien lo creó; cerrado, solo si además es admin).
+- Un evento cerrado (pasaron 24 h) o saldado (además, sin cuentas
+  pendientes) queda en solo lectura para quien no es admin: asistencia,
+  invitados, tareas, equipos y datos del evento a las 24 h; resultado,
+  gastos y pagos al saldar. El detalle, en `specs/022-eventos-cerrados.md`.
 - Los eventos son visibles para **cualquier usuario logueado de la app**,
   no están scopeados a un "grupo de gastos" como en `002-gastos.md`.
 
@@ -185,6 +195,11 @@ Puntos que el SQL no explica por sí solo:
       filas.
 - [x] Un admin que no creó el evento no ve «Borrar evento» (borrar sigue
       siendo solo del creador).
+- [x] Con el evento cerrado (pasaron 24 h), quien no es admin no puede cambiar
+      la asistencia, sumar ni sacar invitados, tareas ni equipos, ni editar o
+      borrar el evento: la pantalla lo esconde, muestra una franja con candado
+      y «Tu respuesta: …» en vez de los botones, y la base lo rechaza. Un
+      admin sí puede (`specs/022-eventos-cerrados.md`).
 - [x] Todas las rutas de `/eventos` requieren login.
 - [x] El detalle de asistentes (listas Van/Tal vez/No van + Invitados)
       arranca colapsado; el resumen y los botones de RSVP siguen
@@ -237,6 +252,14 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-10-31: un evento cerrado (pasaron 24 h) o saldado queda en solo lectura
+  salvo para admins (pedido del usuario: «cualquiera puede volver y editarlos»).
+  Migración `0044_lock_closed_events.sql` (policies restrictivas sobre
+  `events`, `event_rsvps`, `event_guests`, `event_tasks` y `futbol_teams`),
+  `src/lib/eventos/lock.ts` y guardas en las acciones, franja con candado y modo
+  solo lectura en `/eventos/[eventId]`, «Tu respuesta: …» en lugar de los
+  botones de asistencia y el encabezado «Evento» (en vez de «Próximo evento») en
+  un evento cerrado. Ver `specs/022-eventos-cerrados.md`.
 - 2026-10-28: un admin también puede editar eventos que creó otra persona
   (consulta del usuario: «¿por qué no puedo editar un evento?» — el lápiz
   era solo del creador y la policy de `update` de `0002` también). Migración
