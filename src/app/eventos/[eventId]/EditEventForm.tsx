@@ -27,6 +27,7 @@ interface EventDefaults {
   location: string | null;
   description: string | null;
   hasFutbol: boolean;
+  menu: string | null;
 }
 
 export function EditEventForm({
@@ -98,6 +99,7 @@ export function EditEventForm({
         defaultNewVenueName={defaultNewVenueName}
         defaultDescription={event.description ?? ""}
         defaultHasFutbol={event.hasFutbol}
+        defaultMenu={event.menu ?? ""}
       />
 
       <div className="flex items-center gap-2">

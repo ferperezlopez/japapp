@@ -15,7 +15,9 @@
   `supabase/migrations/0047_event_drinks.sql` (bebidas del evento — ver
   `specs/023-bebidas-del-evento.md`),
   `supabase/migrations/0048_event_weather.sql` (clima del evento — ver
-  `specs/024-clima-del-evento.md`)
+  `specs/024-clima-del-evento.md`),
+  `supabase/migrations/0049_event_menu.sql` (menú del evento — ver
+  `specs/025-menu-del-evento.md`)
 - **Última actualización:** 2026-11-01
 
 ## 1. Resumen
@@ -29,7 +31,8 @@ para el asado/empanadas.
 
 ### Incluye
 - Crear un evento: nombre, fecha/hora, lugar opcional, descripción
-  opcional.
+  opcional y menú opcional (con sugerencias según los eventos anteriores y hace cuánto
+  no se hace cada uno; ver `specs/025-menu-del-evento.md`).
 - Confirmar asistencia propia en 3 estados: `yes` / `no` / `maybe`,
   modificable (upsert) hasta 24 h después de la hora del evento; pasado
   ese plazo el evento queda «cerrado» y solo un admin puede cambiarla
@@ -262,6 +265,9 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-01: menú opcional del evento (columna `events.menu`, migración `0049`):
+  campo en el alta y la edición, sugerencias al crear según los eventos anteriores, y el
+  menú en el encabezado. Ver `specs/025-menu-del-evento.md`.
 - 2026-11-01: clima del evento en el encabezado de `/eventos/[eventId]` y tabla
   `event_weather` (migración `0048`). Ver `specs/024-clima-del-evento.md`.
 - 2026-11-01: tarjeta «Bebidas» en `/eventos/[eventId]` (sugerido por la calculadora

@@ -6,13 +6,16 @@ import { createEvent } from "./actions";
 import { Button } from "@/components/ui/Button";
 import { EventFormFields } from "./EventFormFields";
 import { withMinDuration } from "@/lib/withMinDuration";
+import type { MenuSuggestion } from "@/lib/eventos/menu";
 
 export function CreateEventForm({
   venues,
   members,
+  menuSuggestions = [],
 }: {
   venues: { id: string; name: string }[];
   members: { id: string; name: string | null; email: string }[];
+  menuSuggestions?: MenuSuggestion[];
 }) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -38,7 +41,7 @@ export function CreateEventForm({
       }}
       className="space-y-3 rounded-xl border border-surface-border bg-surface p-4"
     >
-      <EventFormFields venues={venues} members={members} />
+      <EventFormFields venues={venues} members={members} menuSuggestions={menuSuggestions} />
 
       <div className="flex items-center gap-2">
         <Button type="submit" loading={pending}>

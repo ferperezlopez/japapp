@@ -6,6 +6,7 @@ import { getActingUser } from "@/lib/supabase/actingUser";
 import { guardEdit } from "@/lib/eventos/lock";
 import { DRINK_KEYS } from "@/lib/calculators/bebidas";
 import { hasAnyAmount, parseDrinksForm } from "@/lib/eventos/drinks";
+import { parseMenu } from "@/lib/eventos/menu";
 import { sendPushToUsers } from "@/lib/push/send";
 import { maybeNotifyQuorum } from "@/lib/push/quorum";
 import { syncEventMediaToGooglePhotos } from "@/lib/googlePhotos/sync";
@@ -88,9 +89,11 @@ export async function createEvent(formData: FormData) {
   const eventDate = String(formData.get("eventDate") ?? "");
   const description = String(formData.get("description") ?? "").trim();
   const hasFutbol = formData.get("hasFutbol") === "on";
+  const menu = parseMenu(formData.get("menu"));
 
   if (!name) return { error: "Poné un nombre para el evento." };
   if (!eventDate) return { error: "Elegí fecha y hora." };
+  if (!menu.ok) return { error: menu.error };
 
   const supabase = await createClient();
   const {
@@ -109,6 +112,8 @@ export async function createEvent(formData: FormData) {
       description: description || null,
       created_by: user.id,
       has_futbol: hasFutbol,
+      // El menú es opcional (0049): sin menú no se manda la columna.
+      ...(menu.menu ? { menu: menu.menu } : {}),
     })
     .select("id")
     .single();
@@ -150,9 +155,11 @@ export async function updateEvent(eventId: string, formData: FormData) {
   const eventDate = String(formData.get("eventDate") ?? "");
   const description = String(formData.get("description") ?? "").trim();
   const hasFutbol = formData.get("hasFutbol") === "on";
+  const menu = parseMenu(formData.get("menu"));
 
   if (!name) return { error: "Poné un nombre para el evento." };
   if (!eventDate) return { error: "Elegí fecha y hora." };
+  if (!menu.ok) return { error: menu.error };
 
   const supabase = await createClient();
   const {
@@ -184,6 +191,8 @@ export async function updateEvent(eventId: string, formData: FormData) {
       location,
       description: description || null,
       has_futbol: hasFutbol,
+      // Solo si el formulario trae el campo (siempre lo trae): vaciarlo borra el menú.
+      ...(formData.has("menu") ? { menu: menu.menu } : {}),
     })
     .eq("id", eventId)
     .select("id");

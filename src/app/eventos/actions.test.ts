@@ -29,6 +29,7 @@ vi.mock("@/lib/googlePhotos/sync", () => ({ syncEventMediaToGooglePhotos: vi.fn(
 import {
   addGuestToEvent,
   addTaskAssignee,
+  createEvent,
   deleteEvent,
   removeGuestFromEvent,
   removeTaskAssignee,
@@ -320,5 +321,61 @@ describe("saveEventDrinks", () => {
     });
     expect(callsTo("delete")).toEqual([]);
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+// Menú del evento (0049): opcional, con escritura canónica si es de la lista.
+describe("el menú del evento", () => {
+  it("createEvent guarda el menú con su escritura canónica", async () => {
+    await createEvent(form({ menu: "  pizza " }));
+    const [[, payload]] = callsTo("insert") as [[string, Record<string, unknown>]];
+    expect(payload.menu).toBe("Pizza");
+  });
+
+  it("createEvent guarda uno escrito a mano tal cual", async () => {
+    await createEvent(form({ menu: "Choripán y morcilla" }));
+    const [[, payload]] = callsTo("insert") as [[string, Record<string, unknown>]];
+    expect(payload.menu).toBe("Choripán y morcilla");
+  });
+
+  it("createEvent sin menú no manda la columna (el evento se crea como siempre)", async () => {
+    await createEvent(form({ menu: "   " }));
+    await createEvent(form());
+    for (const [, payload] of callsTo("insert") as [string, Record<string, unknown>][]) {
+      expect(payload).not.toHaveProperty("menu");
+    }
+  });
+
+  it("createEvent rechaza un menú demasiado largo antes de tocar la base", async () => {
+    expect(await createEvent(form({ menu: "x".repeat(41) }))).toEqual({
+      error: "El menú puede tener hasta 40 caracteres.",
+    });
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("updateEvent guarda el menú con su escritura canónica", async () => {
+    expect(await updateEvent(EVENT_ID, form({ menu: "empanadas" }))).toEqual({ ok: true });
+    const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
+    expect(payload.menu).toBe("Empanadas");
+  });
+
+  it("updateEvent con el campo vacío borra el menú", async () => {
+    await updateEvent(EVENT_ID, form({ menu: "" }));
+    const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
+    expect(payload).toHaveProperty("menu", null);
+  });
+
+  it("updateEvent sin el campo no toca el menú", async () => {
+    await updateEvent(EVENT_ID, form());
+    const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
+    expect(payload).not.toHaveProperty("menu");
+  });
+
+  it("updateEvent rechaza un menú demasiado largo antes de tocar la base", async () => {
+    expect(await updateEvent(EVENT_ID, form({ menu: "x".repeat(41) }))).toEqual({
+      error: "El menú puede tener hasta 40 caracteres.",
+    });
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 });

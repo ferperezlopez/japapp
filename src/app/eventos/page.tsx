@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CreateEventForm } from "./CreateEventForm";
 import { EventListCard } from "./EventListCard";
 import { getActingUser } from "@/lib/supabase/actingUser";
+import { suggestMenus } from "@/lib/eventos/menu";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "short",
@@ -18,7 +19,15 @@ export default async function EventosPage() {
   // reflejar el estado de esa persona, no el del admin real.
   const actor = await getActingUser(supabase);
 
-  const [{ data: events }, { data: rsvps }, { data: venues }, { data: members }, { data: eventGuests }, { data: photoRows }] =
+  const [
+    { data: events },
+    { data: rsvps },
+    { data: venues },
+    { data: members },
+    { data: eventGuests },
+    { data: photoRows },
+    { data: menuRows },
+  ] =
     await Promise.all([
       supabase
         .from("events")
@@ -29,6 +38,10 @@ export default async function EventosPage() {
       supabase.from("profiles").select("id, name, email").order("name"),
       supabase.from("event_guests").select("event_id, kind"),
       supabase.from("event_media").select("event_id").eq("legacy", false),
+      // Menús de los eventos anteriores, para sugerir uno al crear (0049, spec 025).
+      // En una consulta aparte a propósito: si la columna todavía no existe, falla
+      // esta sola y no se llevan puesta la lista de eventos.
+      supabase.from("events").select("event_date, menu").not("menu", "is", null),
     ]);
 
   // La confirmación de la juntada (kind="juntada") es la que define el
@@ -70,6 +83,10 @@ export default async function EventosPage() {
   // so this can't be cached/prerendered stale.
   // eslint-disable-next-line react-hooks/purity -- see comment above
   const now = Date.now();
+  const menuSuggestions = suggestMenus(
+    (menuRows ?? []).map((row) => ({ menu: row.menu, eventDate: row.event_date })),
+    new Date(now),
+  );
   const upcoming = (events ?? []).filter(
     (e) => new Date(e.event_date).getTime() >= now,
   );
@@ -127,7 +144,11 @@ export default async function EventosPage() {
       </p>
 
       <div className="mt-6">
-        <CreateEventForm venues={venues ?? []} members={members ?? []} />
+        <CreateEventForm
+          venues={venues ?? []}
+          members={members ?? []}
+          menuSuggestions={menuSuggestions}
+        />
       </div>
 
       <section className="mt-8">

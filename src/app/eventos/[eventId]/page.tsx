@@ -21,6 +21,7 @@ import { buildMapsLink } from "@/lib/eventos/mapsLink";
 import { getActingUser } from "@/lib/supabase/actingUser";
 import { canEdit, getEventLock } from "@/lib/eventos/lock";
 import { drinksFromRows } from "@/lib/eventos/drinks";
+import { menuIcon } from "@/lib/eventos/menu";
 import { getEventWeather, isWeatherFrozen } from "@/lib/clima/refresh";
 import { WeatherLine } from "@/components/eventos/WeatherLine";
 import { LockBanner } from "@/components/eventos/LockBanner";
@@ -385,6 +386,7 @@ export default async function EventoPage({
     { data: insumoItems },
     { data: drinkRows, error: drinksError },
     weather,
+    { data: menuRow },
   ] =
     await Promise.all([
       supabase
@@ -399,7 +401,11 @@ export default async function EventoPage({
       // está viejo y el evento no empezó, lo pide a Open-Meteo. Nunca tira: sin dato,
       // no se muestra.
       getEventWeather(supabase, { id: eventId, event_date: event.event_date }),
+      // Menú del evento (0049, spec 025), en una consulta aparte: si la columna
+      // todavía no existe, falla esta sola y la página sigue andando.
+      supabase.from("events").select("menu").eq("id", eventId).maybeSingle(),
     ]);
+  const menu = menuRow?.menu ?? null;
   const totalPeople = allProfiles?.length ?? 0;
   const members = allProfiles ?? [];
   const memberName = (userId: string) =>
@@ -630,6 +636,15 @@ export default async function EventoPage({
             </span>
           </>
         )}
+        {menu && (
+          <>
+            <span className="h-4 w-px bg-surface-border" aria-hidden="true" />
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true">{menuIcon(menu) ?? "🍽️"}</span>
+              {menu}
+            </span>
+          </>
+        )}
         {eventVenue?.address && (
           <>
             <span className="h-4 w-px bg-surface-border" aria-hidden="true" />
@@ -682,6 +697,7 @@ export default async function EventoPage({
               location: event.location,
               description: event.description,
               hasFutbol: event.has_futbol,
+              menu,
             }}
           >
             {eventSummary}

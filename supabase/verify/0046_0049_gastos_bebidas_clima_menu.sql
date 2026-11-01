@@ -14,6 +14,8 @@
 --      solo un admin; las restricciones de la tabla y que se borran con el evento.
 --   H: clima del evento (0048): se guarda y se actualiza mientras el evento no empezó (a la hora
 --      real, la guardada leída como hora de Buenos Aires) y después queda fijo, también para un admin.
+--   I: menú del evento (0049): el largo, quién lo puede editar (como el resto del evento, con el candado
+--      de 0044) y el relleno de los eventos pasados a partir de los insumos asignados.
 --
 -- Los ids de personas son de ESTA base (Fercho es el admin; Mati L, Javi y Bozzo son miembros
 -- comunes). El editor puede pedir confirmación por los DELETE que tiene el script: es normal.
@@ -28,6 +30,7 @@ declare
   c_nadie constant uuid := '00000000-0000-4000-8000-0000000000aa';
   e_open uuid; g_open uuid; e_pend uuid; g_pend uuid; e_sett uuid; g_sett uuid; e_trap uuid; g_trap uuid; e_cascade uuid;
   e_w_future uuid; e_w_utc uuid; e_w_started uuid; e_w_edge_in uuid; e_w_edge_out uuid; e_w_cascade uuid; e_w_move uuid;
+  e_m_emp uuid; e_m_asa uuid; e_m_none uuid; e_m_both uuid; e_m_set uuid;
   x1 uuid; x2 uuid; x3 uuid; x4a uuid; x4b uuid; x5 uuid; x6 uuid;
   v_before text;
   v_state text;
@@ -108,6 +111,21 @@ begin
     insert into public.debt_payments (group_id, from_user_id, to_user_id, amount, reported_by)
       values (p_group, p_from, p_to, p_amount, p_reporter) returning id into v_id;
     return v_id;
+  end $f$;
+
+  -- Un insumo del catálogo por nombre (lo crea si no existe) y una tarea de compra de ese insumo en un evento.
+  create function pg_temp.item(p_name text, p_uid uuid) returns uuid language plpgsql as $f$
+  declare v_id uuid;
+  begin
+    insert into public.insumo_items (name, created_by) values (p_name, p_uid) on conflict (name) do nothing;
+    select id into v_id from public.insumo_items where name = p_name;
+    return v_id;
+  end $f$;
+
+  create function pg_temp.supply(p_event uuid, p_item text, p_uid uuid) returns void language plpgsql as $f$
+  begin
+    insert into public.event_tasks (event_id, task_type, assigned_to, item_id, updated_by)
+      values (p_event, 'compra_insumos', p_uid, pg_temp.item(p_item, p_uid), p_uid);
   end $f$;
 
   -- Llama a update_expense como p_uid (sin cambiar de rol, para poder mirar el resultado después) y
@@ -412,6 +430,68 @@ begin
     (select count(*)::text from public.event_weather where event_id = e_w_cascade), '0');
   v_rep := v_rep || pg_temp.line('H20 la función de la hora de comienzo no la ejecuta anon',
     pg_temp.ask(null, 'anon', 'select private.event_starts_at(now())::text'), 'err:42501%');
+
+  -- ===================== I) menú del evento (0049) =====================
+  v_rep := v_rep || pg_temp.line('I0  events.menu existe y es texto',
+    (select data_type from information_schema.columns where table_schema = 'public' and table_name = 'events' and column_name = 'menu'), 'text');
+
+  -- quién lo edita: como el resto del evento (el creador y el admin; cerrado, solo el admin)
+  v_rep := v_rep || pg_temp.line('I1  el creador le pone menú a su evento',
+    pg_temp.attempt(c_javi, array[format('update public.events set menu = %L where id = %L', 'Asado', e_open)]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('I2  otra persona no puede (0 filas), como con el resto del evento',
+    pg_temp.attempt(c_matil, array[format('update public.events set menu = %L where id = %L', 'Asado', e_open)]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('I3  un admin sí puede, en cualquier evento',
+    pg_temp.attempt(c_admin, array[format('update public.events set menu = %L where id = %L', 'Asado', e_open)]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('I4  cerrado: el creador ya no puede (0044)',
+    pg_temp.attempt(c_javi, array[format('update public.events set menu = %L where id = %L', 'Asado', e_pend)]), 'ok:0');
+  v_rep := v_rep || pg_temp.line('I5  cerrado: un admin sí',
+    pg_temp.attempt(c_admin, array[format('update public.events set menu = %L where id = %L', 'Asado', e_pend)]), 'ok:1');
+
+  -- el largo
+  v_rep := v_rep || pg_temp.line('I6  un menú vacío se rechaza (sin menú es null)',
+    pg_temp.attempt(c_javi, array[format('update public.events set menu = %L where id = %L', '', e_open)]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('I7  uno de solo espacios también',
+    pg_temp.attempt(c_javi, array[format('update public.events set menu = %L where id = %L', '    ', e_open)]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('I8  uno de más de 40 caracteres se rechaza',
+    pg_temp.attempt(c_javi, array[format('update public.events set menu = %L where id = %L', repeat('x', 41), e_open)]), 'err:23514%');
+  v_rep := v_rep || pg_temp.line('I9  uno de justo 40 caracteres entra',
+    pg_temp.attempt(c_javi, array[format('update public.events set menu = %L where id = %L', repeat('x', 40), e_open)]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('I10 se puede sacar el menú (null)',
+    pg_temp.attempt(c_javi, array[format('update public.events set menu = null where id = %L', e_open)]), 'ok:1');
+
+  -- crear eventos: con y sin menú, como siempre
+  v_rep := v_rep || pg_temp.line('I11 crear un evento con menú',
+    pg_temp.attempt(c_matil, array[format('insert into public.events (name, event_date, created_by, menu) values (%L, now() + interval %L, %L, %L)', 'T con menú', '5 days', c_matil, 'Pizza')]), 'ok:1');
+  v_rep := v_rep || pg_temp.line('I12 crear un evento sin menú (como hasta ahora)',
+    pg_temp.attempt(c_matil, array[format('insert into public.events (name, event_date, created_by) values (%L, now() + interval %L, %L)', 'T sin menú', '5 days', c_matil)]), 'ok:1');
+
+  -- el relleno de los eventos pasados, a partir de los insumos asignados (se corre una vez, después de la migración)
+  e_m_emp  := pg_temp.mk_event('T relleno: empanadas',       now() - interval '40 days', c_javi);
+  e_m_asa  := pg_temp.mk_event('T relleno: asado',           now() - interval '30 days', c_javi);
+  e_m_none := pg_temp.mk_event('T relleno: sin pistas',      now() - interval '20 days', c_javi);
+  e_m_both := pg_temp.mk_event('T relleno: las dos cosas',   now() - interval '10 days', c_javi);
+  e_m_set  := pg_temp.mk_event('T relleno: ya tiene menú',   now() - interval '5 days',  c_javi);
+  update public.events set menu = 'Pizza' where id = e_m_set;
+  perform pg_temp.supply(e_m_emp, 'Tapas de empanadas', c_matil); perform pg_temp.supply(e_m_emp, 'Vinos', c_matil);
+  perform pg_temp.supply(e_m_asa, 'Carbón', c_matil);              perform pg_temp.supply(e_m_asa, 'Cervezas', c_matil);
+  perform pg_temp.supply(e_m_none, 'Postre', c_matil);
+  perform pg_temp.supply(e_m_both, 'Relleno empanadas', c_matil);  perform pg_temp.supply(e_m_both, 'Carbón', c_matil);
+  perform pg_temp.supply(e_m_set, 'Carbón', c_matil);
+
+  update public.events e set menu = 'Empanadas'
+   where e.menu is null
+     and exists (select 1 from public.event_tasks t join public.insumo_items i on i.id = t.item_id
+                  where t.event_id = e.id and t.task_type = 'compra_insumos' and i.name ilike '%empanada%');
+  update public.events e set menu = 'Asado'
+   where e.menu is null
+     and exists (select 1 from public.event_tasks t join public.insumo_items i on i.id = t.item_id
+                  where t.event_id = e.id and t.task_type = 'compra_insumos' and i.name in ('Carbón', 'Carne', 'Entrañas'));
+
+  v_rep := v_rep || pg_temp.line('I13 relleno: tapas de empanadas → Empanadas', (select menu from public.events where id = e_m_emp), 'Empanadas');
+  v_rep := v_rep || pg_temp.line('I14 relleno: carbón → Asado', (select menu from public.events where id = e_m_asa), 'Asado');
+  v_rep := v_rep || pg_temp.line('I15 relleno: sin pistas queda sin menú', (select coalesce(menu, 'sin menú') from public.events where id = e_m_none), 'sin menú');
+  v_rep := v_rep || pg_temp.line('I16 relleno: con empanadas y carbón gana empanadas (la primera regla)', (select menu from public.events where id = e_m_both), 'Empanadas');
+  v_rep := v_rep || pg_temp.line('I17 relleno: no pisa un menú ya cargado', (select menu from public.events where id = e_m_set), 'Pizza');
 
   v_fail := (select count(*) from unnest(v_rep) l where l like 'FALLA%');
   raise exception E'\n%\n\n=== % verificaciones, % con FALLA ===', array_to_string(v_rep, E'\n'), array_length(v_rep, 1), v_fail;

@@ -372,6 +372,7 @@ export interface Database {
           has_futbol: boolean;
           futbol_quorum_notified: boolean;
           juntada_quorum_notified: boolean;
+          menu: string | null;
         };
         Insert: {
           id?: string;
@@ -385,6 +386,7 @@ export interface Database {
           has_futbol?: boolean;
           futbol_quorum_notified?: boolean;
           juntada_quorum_notified?: boolean;
+          menu?: string | null;
         };
         Update: {
           id?: string;
@@ -398,6 +400,7 @@ export interface Database {
           has_futbol?: boolean;
           futbol_quorum_notified?: boolean;
           juntada_quorum_notified?: boolean;
+          menu?: string | null;
         };
         Relationships: [
           {
