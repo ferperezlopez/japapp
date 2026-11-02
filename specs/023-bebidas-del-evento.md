@@ -1,9 +1,9 @@
 # 023 - Bebidas del evento: calculadora y consumo real
 
-- **Estado:** In Progress (código y migración listos y probados en una réplica local de la base; falta aplicar la `0047` a la base viva y desplegar)
+- **Estado:** Implemented (migración `0047` aplicada a la base viva el 2026-11-02 y verificada; el código sale con el PR #85)
 - **Rutas:** `/calculadoras/bebidas`, `/eventos/[eventId]`
 - **Migraciones relacionadas:** `supabase/migrations/0047_event_drinks.sql`
-- **Última actualización:** 2026-11-01
+- **Última actualización:** 2026-11-02
 
 ## 1. Resumen
 
@@ -122,6 +122,12 @@ Lo que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-02: la migración `0047` (junto con la `0048` y la `0049`, en una sola llamada) se
+  aplicó a la base viva y se verificó en vivo sin escribir nada: la tabla con RLS y sus 7
+  policies (4 permisivas y 3 restrictivas de «saldado: solo admin», con las mismas expresiones
+  que el archivo) y, bajo el rol `authenticated`, una persona común no carga bebidas en un
+  evento saldado pero un admin sí, no se carga a nombre de otra persona, una fila sin
+  cantidades y un tipo inexistente se rechazan. Pasa a `Implemented`.
 - 2026-11-01: creada. Calculadora de bebidas (`src/lib/calculators/bebidas.ts`,
   `/calculadoras/bebidas`), tabla `event_drinks` (`0047_event_drinks.sql`),
   `saveEventDrinks`, `DrinksSection` en la página del evento y

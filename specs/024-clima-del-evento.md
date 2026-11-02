@@ -1,9 +1,9 @@
 # 024 - Clima del evento
 
-- **Estado:** In Progress (código y migración listos y probados con una réplica local de la base y un servidor de Open-Meteo falso; falta aplicar la `0048` a la base viva, desplegar y ver la primera llamada real a la API, que no se alcanza desde el entorno de desarrollo)
+- **Estado:** Implemented (migración `0048` aplicada a la base viva el 2026-11-02 y verificada; la primera llamada real a Open-Meteo ocurre en producción, porque la API no se alcanza desde el entorno de desarrollo)
 - **Rutas:** `/eventos/[eventId]`
 - **Migraciones relacionadas:** `supabase/migrations/0048_event_weather.sql`
-- **Última actualización:** 2026-11-01
+- **Última actualización:** 2026-11-02
 
 ## 1. Resumen
 
@@ -123,6 +123,13 @@ falso.
 
 ## 8. Changelog
 
+- 2026-11-02: la migración `0048` (junto con la `0047` y la `0049`, en una sola llamada) se
+  aplicó a la base viva y se verificó en vivo sin escribir nada: la tabla con RLS y sus 3
+  policies (con las mismas expresiones que el archivo), `private.event_starts_at` con
+  `search_path` fijo y sin acceso para `anon` (19:30 tipeado da 22:30 UTC, o sea 19:30 de
+  Buenos Aires) y, bajo el rol `authenticated`, el clima de un evento que ya empezó se
+  rechaza, el de un evento futuro se guarda y una probabilidad de 101 se rechaza. Pasa a
+  `Implemented`; queda ver la primera llamada real a la API en producción.
 - 2026-11-01: creada. Tabla `event_weather` y `private.event_starts_at`
   (`0048_event_weather.sql`), `src/lib/clima/` (cliente de Open-Meteo, códigos de cielo,
   decisión de refresco y formato), `WeatherLine` en el encabezado del evento y spec. La
