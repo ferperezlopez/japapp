@@ -1,9 +1,9 @@
 # 025 - Menú del evento y sugerencias al crear
 
-- **Estado:** In Progress (código y migración listos y probados en una réplica local de la base; falta aplicar la `0049` a la base viva, correr el relleno de los eventos pasados y desplegar)
+- **Estado:** Implemented (migración `0049` aplicada a la base viva y relleno de los eventos pasados hecho el 2026-11-02; el código sale con el PR #85)
 - **Rutas:** `/eventos` (formulario de alta), `/eventos/[eventId]` (encabezado y edición)
 - **Migraciones relacionadas:** `supabase/migrations/0049_event_menu.sql`
-- **Última actualización:** 2026-11-01
+- **Última actualización:** 2026-11-02
 
 ## 1. Resumen
 
@@ -119,6 +119,13 @@ Lo que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-02: la migración `0049` (junto con la `0047` y la `0048`, en una sola llamada) se
+  aplicó a la base viva y se verificó en vivo sin escribir nada: la columna `events.menu` y
+  su restricción de largo (un menú vacío o de 41 caracteres se rechaza, uno de 40 entra).
+  El relleno de los eventos pasados se corrió con los dos `UPDATE` de la regla de la sección 3
+  (los de `supabase/verify/0046_0049_gastos_bebidas_clima_menu.sql`, sección I: primero
+  empanadas, después asado, sin pisar menús cargados): 18/9 Empanadas; 2/10, 16/10 y 30/10
+  Asado, lo previsto. Pasa a `Implemented`.
 - 2026-11-01: creada. Columna `events.menu` (`0049_event_menu.sql`),
   `src/lib/eventos/menu.ts` (lista, normalización, sugerencias y antigüedad), campo y
   sugerencias en `EventFormFields`, `createEvent`/`updateEvent`, menú en el encabezado
