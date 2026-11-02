@@ -185,8 +185,13 @@ Puntos que el SQL no explica por sí solo:
    `payments` que ajusta el balance exactamente igual que un gasto de un
    solo participante (quien pagó suma, quien recibió resta) — por eso un
    pago reportado achica la sugerencia de "para saldar cuentas" en el
-   próximo cálculo, sin tocar ningún `expense` existente. El parámetro es
-   opcional (default `[]`) para no romper otros call sites/tests.
+   próximo cálculo, sin tocar ningún `expense` existente. El parámetro era
+   opcional (default `[]`) «para no romper otros call sites» y justo el
+   recordatorio automático (`/api/cron/balance-reminders`, spec 017) se quedó
+   sin pasarlo: avisaba a quien ya había informado su pago. Desde 2026-11-01
+   es **obligatorio** (también en `hasPendingSettlement`): quien no tenga pagos
+   pasa `[]`, y el recordatorio los descuenta con `debtorsToRemind`
+   (`src/lib/gastos/reminders.ts`).
 8. `reportPayment(groupId, fromUserId, toUserId, amount)` (server action,
    `src/app/gastos/actions.ts`) valida `amount > 0` y sesión, inserta en
    `debt_payments` con `reported_by: user.id`, y revalida la página. Se
@@ -322,6 +327,10 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-01: el recordatorio automático de saldo pendiente (spec 017) ignoraba
+  los pagos informados y le avisaba a quien ya había pagado: ahora los descuenta.
+  `payments` pasa a ser obligatorio en `calcularBalances` y `hasPendingSettlement`
+  para que ningún consumidor se lo vuelva a olvidar. Sin migración.
 - 2026-11-01: **editar un gasto** (quien lo cargó o un admin; con el evento
   saldado, solo un admin): función `update_expense` (`0046_expense_edit.sql`),
   `updateExpense`, botón «Editar» (`EditExpenseButton`, que abre `AddExpenseForm`

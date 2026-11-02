@@ -26,10 +26,16 @@ export interface Settlement {
 // Mismo efecto en el balance que un gasto de un solo participante:
 // quien paga suma a su balance (debe menos), quien recibe resta (le
 // deben menos).
+//
+// `payments` es obligatorio a propósito (antes era opcional, con default
+// `[]`): un consumidor que se olvidaba de pasarlo calculaba en silencio con
+// los saldos «en bruto», y así el recordatorio automático le avisaba a quien
+// ya había pagado (specs/017-push-notifications.md). Quien de verdad no tenga
+// pagos pasa `[]` y lo deja a la vista.
 export function calcularBalances(
   memberIds: string[],
   expenses: ExpenseForBalance[],
-  payments: PaymentForBalance[] = [],
+  payments: PaymentForBalance[],
 ): Balance[] {
   const balanceByUser = new Map<string, number>(
     memberIds.map((id) => [id, 0]),
@@ -110,7 +116,7 @@ export function simplificarDeudas(balances: Balance[]): Settlement[] {
 export function hasPendingSettlement(
   memberIds: string[],
   expenses: ExpenseForBalance[],
-  payments: PaymentForBalance[] = [],
+  payments: PaymentForBalance[],
 ): boolean {
   return simplificarDeudas(calcularBalances(memberIds, expenses, payments)).length > 0;
 }

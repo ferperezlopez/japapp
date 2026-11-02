@@ -1,9 +1,20 @@
-import { describe, expect, it } from "vitest";
-import { calcularBalances, simplificarDeudas } from "./balances";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import {
+  calcularBalances,
+  hasPendingSettlement,
+  simplificarDeudas,
+  type PaymentForBalance,
+} from "./balances";
 
 describe("calcularBalances", () => {
+  it("exige los pagos en el tipo: omitirlos no compila (el olvido que dejaba avisar a quien ya pagó)", () => {
+    // Lo comprueba `tsc`: si `payments` volviera a ser opcional, el tipo del
+    // tercer parámetro sería `PaymentForBalance[] | undefined` y esto no compilaría.
+    expectTypeOf(calcularBalances).parameter(2).toEqualTypeOf<PaymentForBalance[]>();
+  });
+
   it("devuelve balance 0 para todos si no hay gastos", () => {
-    const result = calcularBalances(["a", "b"], []);
+    const result = calcularBalances(["a", "b"], [], []);
     expect(result).toEqual([
       { userId: "a", balance: 0 },
       { userId: "b", balance: 0 },
@@ -11,9 +22,11 @@ describe("calcularBalances", () => {
   });
 
   it("balancea a 0 si el pagador consume todo su propio gasto", () => {
-    const result = calcularBalances(["a"], [
-      { paidBy: "a", shares: [{ userId: "a", amount: 100 }] },
-    ]);
+    const result = calcularBalances(
+      ["a"],
+      [{ paidBy: "a", shares: [{ userId: "a", amount: 100 }] }],
+      [],
+    );
     expect(result).toEqual([{ userId: "a", balance: 0 }]);
   });
 
@@ -29,6 +42,7 @@ describe("calcularBalances", () => {
           ],
         },
       ],
+      [],
     );
     expect(result).toEqual([
       { userId: "a", balance: 50 },
@@ -48,6 +62,7 @@ describe("calcularBalances", () => {
           ],
         },
       ],
+      [],
     );
     expect(result).toEqual([
       { userId: "a", balance: 80 },
@@ -64,6 +79,7 @@ describe("calcularBalances", () => {
           shares: [{ userId: "a", amount: 30 }],
         },
       ],
+      [],
     );
     // "outsider" no está en memberIds, así que solo vemos el lado deudor de "a".
     expect(result).toEqual([{ userId: "a", balance: -30 }]);
@@ -81,6 +97,7 @@ describe("calcularBalances", () => {
           ],
         },
       ],
+      [],
     );
     expect(result).toEqual([{ userId: "a", balance: 90 }]);
   });
@@ -98,6 +115,7 @@ describe("calcularBalances", () => {
           ],
         },
       ],
+      [],
     );
     expect(result.find((b) => b.userId === "a")?.balance).toBeCloseTo(6.67, 2);
     expect(result.find((b) => b.userId === "b")?.balance).toBe(-3.33);
@@ -123,6 +141,7 @@ describe("calcularBalances", () => {
           ],
         },
       ],
+      [],
     );
     expect(result).toEqual([
       { userId: "a", balance: 0 },
@@ -182,6 +201,7 @@ describe("calcularBalances", () => {
           ],
         },
       ],
+      [],
     );
     // totalPaid = -10 + 10 = 0, así que "a" solo se ve afectado por su
     // propia share negativa (0 - (-10) = 10); "b" resta su share normal.
@@ -189,6 +209,28 @@ describe("calcularBalances", () => {
       { userId: "a", balance: 10 },
       { userId: "b", balance: -10 },
     ]);
+  });
+});
+
+describe("hasPendingSettlement", () => {
+  const expenses = [
+    {
+      paidBy: "a",
+      shares: [
+        { userId: "a", amount: 50 },
+        { userId: "b", amount: 50 },
+      ],
+    },
+  ];
+
+  it("exige los pagos en el tipo: omitirlos no compila", () => {
+    expectTypeOf(hasPendingSettlement).parameter(2).toEqualTypeOf<PaymentForBalance[]>();
+  });
+
+  it("hay saldo pendiente hasta que los pagos informados lo saldan", () => {
+    expect(hasPendingSettlement(["a", "b"], expenses, [])).toBe(true);
+    expect(hasPendingSettlement(["a", "b"], expenses, [{ from: "b", to: "a", amount: 30 }])).toBe(true);
+    expect(hasPendingSettlement(["a", "b"], expenses, [{ from: "b", to: "a", amount: 50 }])).toBe(false);
   });
 });
 
