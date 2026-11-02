@@ -67,7 +67,7 @@ describe("lockedMessage", () => {
       "Este evento ya terminó: la asistencia, los invitados, las tareas y los equipos quedaron en solo lectura. Si hay que corregir algo, pedíselo a un admin.",
     );
     expect(lockedMessage("settlement")).toBe(
-      "Este evento ya está saldado: los gastos, los pagos y el resultado quedaron en solo lectura. Si hay que corregir algo, pedíselo a un admin.",
+      "Este evento ya está saldado: los gastos, los pagos, el resultado y las bebidas quedaron en solo lectura. Si hay que corregir algo, pedíselo a un admin.",
     );
   });
 });

@@ -6,8 +6,9 @@
   `supabase/migrations/0025_admin_delete_any_guest.sql`,
   `supabase/migrations/0040_profiles_update_column_privileges.sql`,
   `supabase/migrations/0043_admin_edit_any_event.sql`,
-  `supabase/migrations/0044_lock_closed_events.sql`
-- **Última actualización:** 2026-10-31
+  `supabase/migrations/0044_lock_closed_events.sql`,
+  `supabase/migrations/0046_expense_edit.sql`
+- **Última actualización:** 2026-11-01
 
 ## 1. Resumen
 
@@ -65,6 +66,11 @@ Un solo usuario tiene el rol hoy: **Fernando Pérez López**
   alcance a la plata, un admin también puede cargar y borrar **cualquier** gasto o
   pago, sea o no miembro del grupo y sea o no quien lo cargó (cuatro policies
   aditivas en `expenses` y `debt_payments`; valen también con el evento abierto).
+- **Editar cualquier gasto** (2026-11-01): un admin puede corregir (monto, quién
+  pagó, fecha, descripción, entre quiénes) un gasto que cargó otra persona, también
+  con el evento saldado; quien lo cargó solo puede mientras no esté saldado. Es la
+  función `update_expense` (`0046`, ver `specs/002-gastos.md`), que no agrega
+  policies: un `UPDATE` directo a `expenses` sigue siendo solo del admin.
 - **Ver el email de registro en la ficha de otro**: `/perfil/[userId]`
   muestra "Email de registro: {email}" cuando el viewer es admin — para
   poder identificar de quién se trata una entrada rara en una lista de
@@ -309,6 +315,9 @@ completo. Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-01: un admin (y quien lo cargó, mientras el evento no esté saldado)
+  puede editar un gasto: función `update_expense` (migración `0046`), botón «Editar»
+  en `/gastos/[groupId]`. Ver `specs/002-gastos.md`.
 - 2026-10-31: eventos cerrados y saldados en solo lectura salvo para admins
   (migración `0044`, ver `specs/022-eventos-cerrados.md`). Un admin puede cargar y
   borrar cualquier gasto o pago (cuatro policies aditivas en `expenses` y

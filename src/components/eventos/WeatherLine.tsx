@@ -1,0 +1,40 @@
+import { describeSnapshot, formatAgo } from "@/lib/clima/format";
+import { EVENT_WEATHER_LOCATION } from "@/lib/clima/location";
+import type { WeatherSnapshot } from "@/lib/clima/types";
+
+// El clima del evento (spec 024), en el encabezado: «☀️ 24° · Despejado · lluvia 10% ·
+// viento 12 km/h». Antes de que empiece dice de cuándo es el dato; una vez que empezó
+// queda fijo y lo aclara. Open-Meteo pide que se nombre la fuente (CC BY 4.0).
+export function WeatherLine({
+  snapshot,
+  frozen,
+  nowMs,
+}: {
+  snapshot: WeatherSnapshot;
+  /** El evento ya empezó: el pronóstico no se actualiza más. */
+  frozen: boolean;
+  /** «Ahora», resuelto por la página (este componente no llama a Date.now). */
+  nowMs: number;
+}) {
+  const parts = describeSnapshot(snapshot);
+  const freshness = frozen
+    ? "Pronóstico final, fijado al empezar el evento"
+    : `Pronóstico para ${EVENT_WEATHER_LOCATION.name}, actualizado ${formatAgo(new Date(snapshot.fetchedAt), new Date(nowMs))}`;
+
+  return (
+    <div className="mt-2" data-testid="event-weather">
+      <p className="text-sm text-foreground/80">{parts.join(" · ")}</p>
+      <p className="text-xs text-foreground/40">
+        {freshness} ·{" "}
+        <a
+          href="https://open-meteo.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-foreground/60"
+        >
+          Open-Meteo.com
+        </a>
+      </p>
+    </div>
+  );
+}

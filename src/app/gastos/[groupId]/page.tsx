@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { balanceUniverse } from "@/lib/gastos/attendees";
 import { calcularBalances, simplificarDeudas } from "@/lib/gastos/balances";
 import { resolveIcon } from "@/lib/eventos/insumos";
 import { abbreviateName } from "@/lib/formatName";
@@ -12,6 +13,7 @@ import { CopyableText } from "@/components/ui/CopyableText";
 import { AddMemberForm } from "./AddMemberForm";
 import { AddExpenseForm } from "@/components/gastos/AddExpenseForm";
 import { DeleteExpenseButton } from "@/components/gastos/DeleteExpenseButton";
+import { EditExpenseButton } from "@/components/gastos/EditExpenseButton";
 import { ExpenseIconEditor } from "@/components/gastos/ExpenseIconEditor";
 import { ReportPaymentButton } from "@/components/gastos/ReportPaymentButton";
 import { DeleteDebtPaymentButton } from "@/components/gastos/DeleteDebtPaymentButton";
@@ -110,6 +112,20 @@ export default async function GroupPage({
     ? payerOptions.map((p) => p.id)
     : members.map((m) => m.id);
 
+  // Las personas del formulario para corregir un gasto: las mismas que al
+  // cargarlo (con evento, quienes confirmaron "Voy"; sin evento, cualquiera)
+  // más quienes ya figuran en ese gasto, para que alguien que ya estaba
+  // aunque no haya confirmado no quede sin poder corregirse.
+  const peopleForExpense = (e: {
+    paid_by: string;
+    expense_shares: { user_id: string }[];
+  }) => {
+    const inExpense = new Set([e.paid_by, ...e.expense_shares.map((s) => s.user_id)]);
+    return profiles
+      .filter((p) => !linkedEvent || confirmedIds.has(p.id) || inExpense.has(p.id))
+      .map(({ id, name, email, avatar_url }) => ({ id, name, email, avatar_url }));
+  };
+
   const memberName = (id: string) =>
     profiles.find((p) => p.id === id)?.name ??
     profiles.find((p) => p.id === id)?.email ??
@@ -150,22 +166,25 @@ export default async function GroupPage({
     .eq("group_id", groupId)
     .order("created_at", { ascending: false });
 
-  // El universo de balances es "miembros formales" + cualquiera que ya
-  // aparezca pagando o participando de un gasto de este grupo — desde que
-  // el selector de "pagó"/"participantes" en AddExpenseForm dejó de estar
-  // limitado a los miembros formales (ver specs/002-gastos.md), alguien
-  // puede aparecer en un gasto sin ser "miembro". Sin esto, calcularBalances
+  // El universo de balances: con un evento enlazado, quienes confirmaron
+  // "Voy" (lo mismo que ofrecen "pagó" y "se divide entre"); en un grupo
+  // suelto, sus miembros. En los dos casos se suma a cualquiera que ya
+  // aparezca pagando, con una parte o en un pago: sin eso calcularBalances
   // perdería silenciosamente esa plata (solo devuelve balance para los ids
-  // que se le pasan).
-  const relevantIds = new Set(members.map((m) => m.id));
-  for (const e of expenses ?? []) {
-    relevantIds.add(e.paid_by);
-    for (const s of e.expense_shares) relevantIds.add(s.user_id);
-  }
-  for (const p of debtPayments ?? []) {
-    relevantIds.add(p.from_user_id);
-    relevantIds.add(p.to_user_id);
-  }
+  // que se le pasan). Ver src/lib/gastos/attendees.ts y specs/002-gastos.md.
+  const relevantIds = balanceUniverse({
+    linkedToEvent: !!linkedEvent,
+    confirmedIds,
+    memberIds: members.map((m) => m.id),
+    expenses: (expenses ?? []).map((e) => ({
+      paidBy: e.paid_by,
+      shares: e.expense_shares.map((s) => ({ userId: s.user_id })),
+    })),
+    payments: (debtPayments ?? []).map((p) => ({
+      from: p.from_user_id,
+      to: p.to_user_id,
+    })),
+  });
   const balanceMemberIds = profiles
     .filter((p) => relevantIds.has(p.id))
     .map((p) => p.id);
@@ -397,7 +416,24 @@ export default async function GroupPage({
                   ${Number(e.amount).toFixed(2)}
                 </span>
                 {(e.created_by === user?.id || isAdmin) && canEditSettlement && (
-                  <DeleteExpenseButton groupId={groupId} expenseId={e.id} />
+                  <>
+                    <EditExpenseButton
+                      groupId={groupId}
+                      expense={{
+                        id: e.id,
+                        itemId: e.item_id,
+                        description: e.description,
+                        amount: Number(e.amount),
+                        paidBy: e.paid_by,
+                        date: e.expense_date,
+                        participantIds: e.expense_shares.map((s) => s.user_id),
+                      }}
+                      people={peopleForExpense(e)}
+                      items={insumoItems ?? []}
+                      isAdmin={isAdmin}
+                    />
+                    <DeleteExpenseButton groupId={groupId} expenseId={e.id} />
+                  </>
                 )}
               </div>
             </li>

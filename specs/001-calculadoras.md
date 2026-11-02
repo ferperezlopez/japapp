@@ -1,9 +1,10 @@
-# 001 - Calculadoras (asado y empanadas)
+# 001 - Calculadoras (asado, empanadas y bebidas)
 
 - **Estado:** Implemented
-- **Rutas:** `/calculadoras`, `/calculadoras/asado`, `/calculadoras/empanadas`
+- **Rutas:** `/calculadoras`, `/calculadoras/asado`, `/calculadoras/empanadas`,
+  `/calculadoras/bebidas`
 - **Migraciones relacionadas:** No aplica (feature stateless, sin DB)
-- **Última actualización:** 2026-08-18
+- **Última actualización:** 2026-11-01
 
 ## 1. Resumen
 
@@ -20,6 +21,11 @@ Google Sheets original cada vez.
   carbón, picada y papas fritas.
 - Calculadora de empanadas: a partir de N docenas, cantidad de cada
   ingrediente del relleno.
+- Calculadora de bebidas (2026-11-01): a partir de N personas, cantidad sugerida de
+  vino (0,5 botellas por persona), cerveza (0,75 L) y gaseosa (0,5 L). Los factores
+  vienen de la planilla de bebidas del grupo. Se usa también en la tarjeta de
+  bebidas de cada evento; ver `specs/023-bebidas-del-evento.md`. La calculadora de
+  asado conserva sus propios factores de vino y gaseosa (0,4).
 - Lista de ingredientes de la ensalada criolla (no escala 1:1, se indica
   "duplicar/triplicar la receta" para grupos grandes).
 - Lista de condimentos "a gusto" (no escalan) para empanadas.
@@ -81,6 +87,10 @@ planillas de Google Sheets originales del grupo.
 
 ## 8. Changelog
 
+- 2026-11-01: pestaña **Bebidas** (`src/lib/calculators/bebidas.ts`,
+  `src/app/calculadoras/bebidas/page.tsx`, factores de la planilla de bebidas:
+  vino 0,5 botellas, cerveza 0,75 L, gaseosa 0,5 L por persona). La de asado no se
+  tocó. Ver `specs/023-bebidas-del-evento.md`.
 - 2026-08-18: spec retroactiva creada, feature ya implementada en
   commit `046bbf1` ("Scaffold JAPApp: calculadoras de asado/empanadas y
   gastos compartidos").

@@ -27,6 +27,7 @@ interface EventDefaults {
   location: string | null;
   description: string | null;
   hasFutbol: boolean;
+  menu: string | null;
 }
 
 export function EditEventForm({
@@ -89,6 +90,9 @@ export function EditEventForm({
       }}
       className="animate-reveal space-y-3 rounded-xl border border-surface-border bg-surface p-4"
     >
+      {/* El menú con el que se abrió el formulario: updateEvent solo toca la columna
+          cuando se pone, se cambia o se saca un menú (spec 025). */}
+      <input type="hidden" name="menuBefore" value={event.menu ?? ""} />
       <EventFormFields
         venues={venues}
         members={members}
@@ -98,6 +102,7 @@ export function EditEventForm({
         defaultNewVenueName={defaultNewVenueName}
         defaultDescription={event.description ?? ""}
         defaultHasFutbol={event.hasFutbol}
+        defaultMenu={event.menu ?? ""}
       />
 
       <div className="flex items-center gap-2">

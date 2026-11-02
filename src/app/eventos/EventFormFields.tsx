@@ -1,6 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import {
+  MAX_MENU_LENGTH,
+  MENU_OPTIONS,
+  formatDaysAgo,
+  normalizeMenu,
+  type MenuSuggestion,
+} from "@/lib/eventos/menu";
 
 const weekdayFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "long",
@@ -24,6 +31,8 @@ export function EventFormFields({
   defaultNewVenueHostUserId = "",
   defaultDescription = "",
   defaultHasFutbol = false,
+  defaultMenu = "",
+  menuSuggestions = [],
 }: {
   venues: { id: string; name: string }[];
   members: { id: string; name: string | null; email: string }[];
@@ -34,9 +43,13 @@ export function EventFormFields({
   defaultNewVenueHostUserId?: string;
   defaultDescription?: string;
   defaultHasFutbol?: boolean;
+  defaultMenu?: string;
+  /** Qué menús sugerir (spec 025): los que ya se hicieron, del que hace más que no se hace. */
+  menuSuggestions?: MenuSuggestion[];
 }) {
   const [eventDateValue, setEventDateValue] = useState(defaultEventDate);
   const [venueSelection, setVenueSelection] = useState(defaultVenueValue);
+  const [menu, setMenu] = useState(defaultMenu);
 
   return (
     <>
@@ -139,6 +152,55 @@ export function EventFormFields({
             className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-foreground/50">
+          Menú (opcional)
+        </label>
+        {menuSuggestions.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Menús sugeridos">
+            {menuSuggestions.map((suggestion) => {
+              const selected = normalizeMenu(menu) === normalizeMenu(suggestion.menu);
+              return (
+                <button
+                  key={suggestion.menu}
+                  type="button"
+                  onClick={() => setMenu(suggestion.menu)}
+                  aria-pressed={selected}
+                  className={`rounded-full border px-3 py-1 text-xs transition-colors duration-200 ${
+                    selected
+                      ? "border-eventos bg-eventos-soft font-medium text-eventos"
+                      : "border-surface-border text-foreground/70 hover:border-eventos hover:text-eventos"
+                  }`}
+                >
+                  {suggestion.icon && <span aria-hidden="true">{suggestion.icon} </span>}
+                  {suggestion.menu} · {formatDaysAgo(suggestion.daysAgo)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <input
+          type="text"
+          name="menu"
+          value={menu}
+          onChange={(e) => setMenu(e.target.value)}
+          maxLength={MAX_MENU_LENGTH}
+          list="menu-options"
+          placeholder="Asado, empanadas, pizza…"
+          className="mt-1.5 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+        />
+        <datalist id="menu-options">
+          {MENU_OPTIONS.map((option) => (
+            <option key={option.label} value={option.label} />
+          ))}
+        </datalist>
+        {menuSuggestions.length > 0 && (
+          <p className="mt-1 text-xs text-foreground/40">
+            Sugerido según los eventos anteriores: primero lo que hace más que no se hace.
+          </p>
+        )}
       </div>
 
       <label className="flex items-center gap-2 text-sm text-foreground/70">

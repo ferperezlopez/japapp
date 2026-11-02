@@ -48,6 +48,18 @@ export interface Database {
         Args: { p_event_id: string };
         Returns: { state: string; is_admin: boolean }[];
       };
+      update_expense: {
+        Args: {
+          p_expense_id: string;
+          p_description: string;
+          p_item_id: string | null;
+          p_amount: number;
+          p_paid_by: string;
+          p_expense_date: string | null;
+          p_shares: { user_id: string; share_amount: number }[];
+        };
+        Returns: undefined;
+      };
     };
     Tables: {
       push_subscriptions: {
@@ -360,6 +372,7 @@ export interface Database {
           has_futbol: boolean;
           futbol_quorum_notified: boolean;
           juntada_quorum_notified: boolean;
+          menu: string | null;
         };
         Insert: {
           id?: string;
@@ -373,6 +386,7 @@ export interface Database {
           has_futbol?: boolean;
           futbol_quorum_notified?: boolean;
           juntada_quorum_notified?: boolean;
+          menu?: string | null;
         };
         Update: {
           id?: string;
@@ -386,6 +400,7 @@ export interface Database {
           has_futbol?: boolean;
           futbol_quorum_notified?: boolean;
           juntada_quorum_notified?: boolean;
+          menu?: string | null;
         };
         Relationships: [
           {
@@ -665,6 +680,89 @@ export interface Database {
             columns: ["item_id"];
             isOneToOne: false;
             referencedRelation: "insumo_items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      event_weather: {
+        Row: {
+          event_id: string;
+          forecast_for: string;
+          temperature_c: number | null;
+          precipitation_probability: number | null;
+          precipitation_mm: number | null;
+          wind_kmh: number | null;
+          weather_code: number | null;
+          fetched_at: string;
+        };
+        Insert: {
+          event_id: string;
+          forecast_for: string;
+          temperature_c?: number | null;
+          precipitation_probability?: number | null;
+          precipitation_mm?: number | null;
+          wind_kmh?: number | null;
+          weather_code?: number | null;
+          fetched_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          forecast_for?: string;
+          temperature_c?: number | null;
+          precipitation_probability?: number | null;
+          precipitation_mm?: number | null;
+          wind_kmh?: number | null;
+          weather_code?: number | null;
+          fetched_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_weather_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: true;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      event_drinks: {
+        Row: {
+          event_id: string;
+          drink: "vino" | "cerveza" | "gaseosa";
+          bought: number | null;
+          consumed: number | null;
+          updated_by: string;
+          updated_at: string;
+        };
+        Insert: {
+          event_id: string;
+          drink: "vino" | "cerveza" | "gaseosa";
+          bought?: number | null;
+          consumed?: number | null;
+          updated_by: string;
+          updated_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          drink?: "vino" | "cerveza" | "gaseosa";
+          bought?: number | null;
+          consumed?: number | null;
+          updated_by?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_drinks_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "event_drinks_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];

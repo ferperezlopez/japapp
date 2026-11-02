@@ -9,13 +9,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   from: vi.fn(),
+  rpc: vi.fn(),
   revalidatePath: vi.fn(),
   guardGroupEdit: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ auth: { getUser: mocks.getUser }, from: mocks.from }),
+  createClient: async () => ({
+    auth: { getUser: mocks.getUser },
+    from: mocks.from,
+    rpc: mocks.rpc,
+  }),
 }));
 vi.mock("@/lib/push/send", () => ({ sendPushToUsers: vi.fn() }));
 // La guarda en sí se prueba en src/lib/eventos/lock.test.ts.
@@ -27,6 +32,7 @@ import {
   deleteDebtPayment,
   deleteExpense,
   reportPayment,
+  updateExpense,
 } from "./actions";
 
 /**
@@ -64,6 +70,7 @@ beforeEach(() => {
   mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
   mocks.guardGroupEdit.mockResolvedValue(null);
   mocks.from.mockImplementation(() => fakeQuery({ data: [], error: null }));
+  mocks.rpc.mockResolvedValue({ data: null, error: null });
 });
 
 const guarded: [name: string, run: () => Promise<unknown>][] = [
@@ -124,5 +131,175 @@ describe("las validaciones siguen yendo primero", () => {
       error: "No estás logueado.",
     });
     expect(mocks.guardGroupEdit).not.toHaveBeenCalled();
+  });
+});
+
+// Editar un gasto (0046): el reemplazo de las partes y la autorización viven en
+// la función update_expense de la base; acá se prueba lo que arma la acción.
+describe("updateExpense", () => {
+  const EXPENSE_ID = "0b8d4a5e-3f0f-4d8e-9f58-111111111111";
+
+  it("manda a la base el gasto corregido con las partes repartidas en partes iguales", async () => {
+    const result = await updateExpense(
+      GROUP_ID,
+      EXPENSE_ID,
+      formWith({
+        newItemName: "  Hielo  ",
+        amount: "100",
+        paidBy: "user-1",
+        date: "2026-11-02",
+        participants: ["user-1", "user-2", "user-3"],
+      }),
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(mocks.guardGroupEdit).toHaveBeenCalledWith(expect.anything(), GROUP_ID, "settlement");
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledWith("update_expense", {
+      p_expense_id: EXPENSE_ID,
+      p_description: "Hielo",
+      p_item_id: null,
+      p_amount: 100,
+      p_paid_by: "user-1",
+      p_expense_date: "2026-11-02",
+      // 100 / 3: el centavo que sobra va a la primera persona y las partes suman 100.
+      p_shares: [
+        { user_id: "user-1", share_amount: 33.34 },
+        { user_id: "user-2", share_amount: 33.33 },
+        { user_id: "user-3", share_amount: 33.33 },
+      ],
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/gastos/${GROUP_ID}`);
+  });
+
+  it("sin fecha deja la que ya tenía el gasto (manda null)", async () => {
+    await updateExpense(
+      GROUP_ID,
+      EXPENSE_ID,
+      formWith({ newItemName: "Hielo", amount: "10", paidBy: "user-1", participants: ["user-1"] }),
+    );
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "update_expense",
+      expect.objectContaining({ p_expense_date: null }),
+    );
+  });
+
+  it("si la descripción es un ítem del catálogo, usa su nombre y lo liga", async () => {
+    mocks.from.mockImplementation(() => fakeQuery({ data: { name: "Carne" }, error: null }));
+    await updateExpense(
+      GROUP_ID,
+      EXPENSE_ID,
+      formWith({
+        existingItemId: "item-1",
+        amount: "50",
+        paidBy: "user-2",
+        participants: ["user-1", "user-2"],
+      }),
+    );
+    expect(mocks.from).toHaveBeenCalledWith("insumo_items");
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "update_expense",
+      expect.objectContaining({ p_description: "Carne", p_item_id: "item-1" }),
+    );
+  });
+
+  it("si el ítem del catálogo no existe, avisa y no escribe", async () => {
+    mocks.from.mockImplementation(() => fakeQuery({ data: null, error: null }));
+    expect(
+      await updateExpense(
+        GROUP_ID,
+        EXPENSE_ID,
+        formWith({
+          existingItemId: "item-borrado",
+          amount: "50",
+          paidBy: "user-2",
+          participants: ["user-1"],
+        }),
+      ),
+    ).toEqual({ error: "No se encontró ese ítem." });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("no repite a nadie aunque llegue dos veces en el formulario", async () => {
+    await updateExpense(
+      GROUP_ID,
+      EXPENSE_ID,
+      formWith({
+        newItemName: "Pan",
+        amount: "20",
+        paidBy: "user-1",
+        participants: ["user-1", "user-1", "user-2"],
+      }),
+    );
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "update_expense",
+      expect.objectContaining({
+        p_shares: [
+          { user_id: "user-1", share_amount: 10 },
+          { user_id: "user-2", share_amount: 10 },
+        ],
+      }),
+    );
+  });
+
+  it("con el evento saldado devuelve el aviso y no escribe nada", async () => {
+    mocks.guardGroupEdit.mockResolvedValue(SETTLED);
+    expect(
+      await updateExpense(
+        GROUP_ID,
+        EXPENSE_ID,
+        formWith({ newItemName: "Hielo", amount: "10", paidBy: "user-1", participants: ["user-1"] }),
+      ),
+    ).toEqual({ error: SETTLED });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("si la base lo rechaza (no es suyo, o se saldó mientras tanto), devuelve su mensaje y no revalida", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { message: "Solo quien cargó el gasto o un admin puede editarlo." },
+    });
+    expect(
+      await updateExpense(
+        GROUP_ID,
+        EXPENSE_ID,
+        formWith({ newItemName: "Hielo", amount: "10", paidBy: "user-1", participants: ["user-1"] }),
+      ),
+    ).toEqual({ error: "Solo quien cargó el gasto o un admin puede editarlo." });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("las validaciones del formulario van primero, sin preguntarle nada a la base", async () => {
+    const ok = { newItemName: "Hielo", amount: "10", paidBy: "user-1", participants: ["user-1"] };
+    expect(await updateExpense(GROUP_ID, EXPENSE_ID, formWith({ ...ok, newItemName: "" }))).toEqual({
+      error: "Poné una descripción.",
+    });
+    expect(await updateExpense(GROUP_ID, EXPENSE_ID, formWith({ ...ok, amount: "0" }))).toEqual({
+      error: "El monto tiene que ser mayor a 0.",
+    });
+    expect(await updateExpense(GROUP_ID, EXPENSE_ID, formWith({ ...ok, paidBy: "" }))).toEqual({
+      error: "Elegí quién pagó.",
+    });
+    expect(await updateExpense(GROUP_ID, EXPENSE_ID, formWith({ ...ok, participants: [] }))).toEqual({
+      error: "Elegí entre quiénes se divide el gasto.",
+    });
+    expect(mocks.guardGroupEdit).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("sin sesión no se llega a la guarda", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect(
+      await updateExpense(
+        GROUP_ID,
+        EXPENSE_ID,
+        formWith({ newItemName: "Hielo", amount: "10", paidBy: "user-1", participants: ["user-1"] }),
+      ),
+    ).toEqual({ error: "No estás logueado." });
+    expect(mocks.guardGroupEdit).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 });

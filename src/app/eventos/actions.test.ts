@@ -29,9 +29,11 @@ vi.mock("@/lib/googlePhotos/sync", () => ({ syncEventMediaToGooglePhotos: vi.fn(
 import {
   addGuestToEvent,
   addTaskAssignee,
+  createEvent,
   deleteEvent,
   removeGuestFromEvent,
   removeTaskAssignee,
+  saveEventDrinks,
   saveFutbolTeams,
   setRsvp,
   setReservaCanchaAssignee,
@@ -228,6 +230,7 @@ const guarded: GuardedCase[] = [
   ["setReservaCanchaAssignee", "participation", () => setReservaCanchaAssignee(EVENT_ID, null)],
   ["saveFutbolTeams", "participation", () => saveFutbolTeams(EVENT_ID, [])],
   ["upsertFutbolStats", "settlement", () => upsertFutbolStats(EVENT_ID, new FormData())],
+  ["saveEventDrinks", "settlement", () => saveEventDrinks(EVENT_ID, new FormData())],
 ];
 
 describe.each(guarded)("%s", (_name, scope, run) => {
@@ -244,5 +247,145 @@ describe.each(guarded)("%s", (_name, scope, run) => {
     expect(await run()).toEqual({ ok: true });
     expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, scope);
     expect(mocks.from).toHaveBeenCalled();
+  });
+});
+
+// Bebidas del evento (0047): comprado / consumido por tipo, todo opcional.
+describe("saveEventDrinks", () => {
+  function drinksForm(fields: Record<string, string>) {
+    const data = new FormData();
+    for (const [key, value] of Object.entries(fields)) data.set(key, value);
+    return data;
+  }
+
+  it("guarda los tipos que tienen alguna cantidad y saca los que quedaron vacíos", async () => {
+    respondWith({ data: null, error: null });
+    const result = await saveEventDrinks(
+      EVENT_ID,
+      drinksForm({ bought_vino: "6", consumed_vino: "4", bought_cerveza: "10,5" }),
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, "settlement");
+    expect(tables).toEqual(["event_drinks", "event_drinks"]);
+
+    const [[, rows, options]] = callsTo("upsert") as [[string, Record<string, unknown>[], unknown]];
+    expect(options).toEqual({ onConflict: "event_id,drink" });
+    expect(rows.map(({ updated_at, ...rest }) => (void updated_at, rest))).toEqual([
+      { event_id: EVENT_ID, drink: "vino", bought: 6, consumed: 4, updated_by: "user-1" },
+      { event_id: EVENT_ID, drink: "cerveza", bought: 10.5, consumed: null, updated_by: "user-1" },
+    ]);
+    expect(callsTo("eq")).toEqual([["eq", "event_id", EVENT_ID]]);
+    expect(callsTo("in")).toEqual([["in", "drink", ["gaseosa"]]]);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/eventos/${EVENT_ID}`);
+  });
+
+  it("con todo vacío solo borra (no hay nada que guardar)", async () => {
+    respondWith({ data: null, error: null });
+    expect(await saveEventDrinks(EVENT_ID, drinksForm({}))).toEqual({ ok: true });
+    expect(callsTo("upsert")).toEqual([]);
+    expect(callsTo("in")).toEqual([["in", "drink", ["vino", "cerveza", "gaseosa"]]]);
+  });
+
+  it("si todos los tipos tienen datos, no borra nada", async () => {
+    respondWith({ data: null, error: null });
+    await saveEventDrinks(
+      EVENT_ID,
+      drinksForm({ bought_vino: "1", bought_cerveza: "2", consumed_gaseosa: "0" }),
+    );
+    expect(callsTo("delete")).toEqual([]);
+  });
+
+  it("una cantidad inválida se rechaza antes de tocar la sesión o la base", async () => {
+    expect(await saveEventDrinks(EVENT_ID, drinksForm({ consumed_vino: "-3" }))).toEqual({
+      error: "Revisá las cantidades de vino: tienen que ser números de 0 en adelante.",
+    });
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.guardEdit).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("sin sesión no llega a la guarda", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect(await saveEventDrinks(EVENT_ID, drinksForm({ bought_vino: "3" }))).toEqual({
+      error: "No estás logueado.",
+    });
+    expect(mocks.guardEdit).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("si la base rechaza el guardado, devuelve el error y no sigue ni revalida", async () => {
+    respondWith({ data: null, error: { message: "new row violates row-level security policy" } });
+    expect(await saveEventDrinks(EVENT_ID, drinksForm({ bought_vino: "3" }))).toEqual({
+      error: "new row violates row-level security policy",
+    });
+    expect(callsTo("delete")).toEqual([]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+// Menú del evento (0049): opcional, con escritura canónica si es de la lista.
+describe("el menú del evento", () => {
+  it("createEvent guarda el menú con su escritura canónica", async () => {
+    await createEvent(form({ menu: "  pizza " }));
+    const [[, payload]] = callsTo("insert") as [[string, Record<string, unknown>]];
+    expect(payload.menu).toBe("Pizza");
+  });
+
+  it("createEvent guarda uno escrito a mano tal cual", async () => {
+    await createEvent(form({ menu: "Choripán y morcilla" }));
+    const [[, payload]] = callsTo("insert") as [[string, Record<string, unknown>]];
+    expect(payload.menu).toBe("Choripán y morcilla");
+  });
+
+  it("createEvent sin menú no manda la columna (el evento se crea como siempre)", async () => {
+    await createEvent(form({ menu: "   " }));
+    await createEvent(form());
+    for (const [, payload] of callsTo("insert") as [string, Record<string, unknown>][]) {
+      expect(payload).not.toHaveProperty("menu");
+    }
+  });
+
+  it("createEvent rechaza un menú demasiado largo antes de tocar la base", async () => {
+    expect(await createEvent(form({ menu: "x".repeat(41) }))).toEqual({
+      error: "El menú puede tener hasta 40 caracteres.",
+    });
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("updateEvent guarda el menú con su escritura canónica", async () => {
+    expect(await updateEvent(EVENT_ID, form({ menu: "empanadas" }))).toEqual({ ok: true });
+    const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
+    expect(payload.menu).toBe("Empanadas");
+  });
+
+  it("updateEvent con el campo vacío borra el menú que había", async () => {
+    await updateEvent(EVENT_ID, form({ menu: "", menuBefore: "Asado" }));
+    const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
+    expect(payload).toHaveProperty("menu", null);
+  });
+
+  it("updateEvent cambia un menú por otro", async () => {
+    await updateEvent(EVENT_ID, form({ menu: "pizza", menuBefore: "Asado" }));
+    const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
+    expect(payload.menu).toBe("Pizza");
+  });
+
+  it("updateEvent sin menú antes ni ahora no toca la columna (anda aunque la 0049 no esté aplicada)", async () => {
+    await updateEvent(EVENT_ID, form({ menu: "", menuBefore: "" }));
+    await updateEvent(EVENT_ID, form({ menu: "   ", menuBefore: "  " }));
+    await updateEvent(EVENT_ID, form());
+    for (const [, payload] of callsTo("update") as [string, Record<string, unknown>][]) {
+      expect(payload).not.toHaveProperty("menu");
+    }
+    expect(callsTo("update")).toHaveLength(3);
+  });
+
+  it("updateEvent rechaza un menú demasiado largo antes de tocar la base", async () => {
+    expect(await updateEvent(EVENT_ID, form({ menu: "x".repeat(41) }))).toEqual({
+      error: "El menú puede tener hasta 40 caracteres.",
+    });
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 });

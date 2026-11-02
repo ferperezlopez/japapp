@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { RsvpButtons } from "@/components/eventos/RsvpButtons";
 import { AttendanceSummary } from "@/components/eventos/AttendanceSummary";
 import { DeleteEventButton } from "./DeleteEventButton";
+import { DrinksSection } from "./DrinksSection";
 import { EditEventForm } from "./EditEventForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
 import { FutbolTeamsSection } from "./FutbolTeamsSection";
@@ -19,6 +20,10 @@ import { TaskAssigneesEditor } from "./TaskAssigneesEditor";
 import { buildMapsLink } from "@/lib/eventos/mapsLink";
 import { getActingUser } from "@/lib/supabase/actingUser";
 import { canEdit, getEventLock } from "@/lib/eventos/lock";
+import { drinksFromRows } from "@/lib/eventos/drinks";
+import { menuIcon } from "@/lib/eventos/menu";
+import { getEventWeather, isWeatherFrozen } from "@/lib/clima/refresh";
+import { WeatherLine } from "@/components/eventos/WeatherLine";
 import { LockBanner } from "@/components/eventos/LockBanner";
 import { WhatsAppShareButton } from "@/components/WhatsAppShareButton";
 
@@ -376,13 +381,31 @@ export default async function EventoPage({
   // (se cierra a las 24 h). "settlement": resultado y plata (se cierra al saldar).
   const canEditParticipation = canEdit(lock, "participation");
   const canEditSettlement = canEdit(lock, "settlement");
-  const [{ data: taskRows }, { data: insumoItems }] = await Promise.all([
-    supabase
-      .from("event_tasks")
-      .select("id, task_type, assigned_to, item_id")
-      .eq("event_id", eventId),
-    supabase.from("insumo_items").select("id, name, icon").order("name"),
-  ]);
+  const [
+    { data: taskRows },
+    { data: insumoItems },
+    { data: drinkRows, error: drinksError },
+    weather,
+    { data: menuRow },
+  ] =
+    await Promise.all([
+      supabase
+        .from("event_tasks")
+        .select("id, task_type, assigned_to, item_id")
+        .eq("event_id", eventId),
+      supabase.from("insumo_items").select("id, name, icon").order("name"),
+      // Bebidas del evento (0047, spec 023). Si la consulta falla (por ejemplo
+      // la tabla todavía no existe), la tarjeta no se muestra.
+      supabase.from("event_drinks").select("drink, bought, consumed").eq("event_id", eventId),
+      // Clima del evento (0048, spec 024): el último pronóstico guardado; si falta o
+      // está viejo y el evento no empezó, lo pide a Open-Meteo. Nunca tira: sin dato,
+      // no se muestra.
+      getEventWeather(supabase, { id: eventId, event_date: event.event_date }),
+      // Menú del evento (0049, spec 025), en una consulta aparte: si la columna
+      // todavía no existe, falla esta sola y la página sigue andando.
+      supabase.from("events").select("menu").eq("id", eventId).maybeSingle(),
+    ]);
+  const menu = menuRow?.menu ?? null;
   const totalPeople = allProfiles?.length ?? 0;
   const members = allProfiles ?? [];
   const memberName = (userId: string) =>
@@ -434,6 +457,18 @@ export default async function EventoPage({
 
   const attendeesJuntada = allAttendees.filter((a) => a.kind === "juntada");
   const attendeesFutbol = allAttendees.filter((a) => a.kind === "futbol");
+  // Con cuánta gente se calcula la bebida: quienes confirmaron «Voy» a la
+  // juntada más sus invitados (lo mismo que cuenta el RSVP de la juntada).
+  const juntadaHeadcount =
+    attendeesJuntada.filter((a) => a.status === "yes").length + guestsJuntada.length;
+  // La ruta ya es dinámica por la sesión de arriba, así que no se cachea vieja.
+  // eslint-disable-next-line react-hooks/purity -- ruta forzada dinámica por auth.getUser()
+  const nowMs = Date.now();
+  // Mismo criterio que /eventos y Analytics: ya empezó si la fecha guardada pasó.
+  const eventStarted = new Date(event.event_date).getTime() <= nowMs;
+  // El clima queda fijo desde la hora real de comienzo (los dígitos guardados leídos
+  // como hora de Buenos Aires), no desde la fecha guardada tomada como UTC.
+  const weatherFrozen = isWeatherFrozen(event.event_date, new Date(nowMs));
 
   // Estadísticas del partido: solo si el evento tiene fútbol. MVP y
   // goleador se eligen entre quienes confirmaron "Voy" al fútbol.
@@ -601,6 +636,15 @@ export default async function EventoPage({
             </span>
           </>
         )}
+        {menu && (
+          <>
+            <span className="h-4 w-px bg-surface-border" aria-hidden="true" />
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true">{menuIcon(menu) ?? "🍽️"}</span>
+              {menu}
+            </span>
+          </>
+        )}
         {eventVenue?.address && (
           <>
             <span className="h-4 w-px bg-surface-border" aria-hidden="true" />
@@ -616,6 +660,7 @@ export default async function EventoPage({
           </>
         )}
       </div>
+      {weather && <WeatherLine snapshot={weather} frozen={weatherFrozen} nowMs={nowMs} />}
       {event.description && (
         <p className="mt-2 text-sm text-foreground/80">
           {event.description}
@@ -652,6 +697,7 @@ export default async function EventoPage({
               location: event.location,
               description: event.description,
               hasFutbol: event.has_futbol,
+              menu,
             }}
           >
             {eventSummary}
@@ -725,6 +771,16 @@ export default async function EventoPage({
           </div>
         </details>
       </section>
+
+      {!drinksError && (
+        <DrinksSection
+          eventId={eventId}
+          people={juntadaHeadcount}
+          saved={drinksFromRows(drinkRows ?? [])}
+          started={eventStarted}
+          editable={canEditSettlement}
+        />
+      )}
 
       <section className="mt-8">
         <h2 className="text-sm font-medium">Gastos</h2>

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/calculadoras/asado", label: "Asado" },
   { href: "/calculadoras/empanadas", label: "Empanadas" },
+  { href: "/calculadoras/bebidas", label: "Bebidas" },
 ] as const;
 
 export function CalculatorTabs() {

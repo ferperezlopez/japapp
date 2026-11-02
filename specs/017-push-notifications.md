@@ -7,7 +7,7 @@
   `supabase/migrations/0029_admin_list_push_subscribers.sql`,
   `supabase/migrations/0030_push_quorum_and_balance_reminders.sql`,
   `supabase/migrations/0031_balance_reminders_service_role_grants.sql`
-- **Última actualización:** 2026-09-18
+- **Última actualización:** 2026-11-01
 
 ## 1. Resumen
 
@@ -81,8 +81,9 @@ una acción de usuario).
 - **Tarea asignada** (`addTaskAssignee`, `setReservaCanchaAssignee`):
   solo a quien recibe la tarea, nunca si se la asigna a sí mismo.
 - **Recordatorio de saldo pendiente** (`/api/cron/balance-reminders`,
-  cron diario de Vercel): a quienes todavía deben plata 24hs+ después
-  de un evento, como máximo una vez por evento+persona.
+  cron diario de Vercel): a quienes todavía deben plata —después de los
+  pagos informados— 24hs+ después de un evento, como máximo una vez por
+  evento+persona.
 
 ### No incluye
 
@@ -282,12 +283,21 @@ una acción de usuario).
    24hs y 30 días atrás (condición del usuario: `eventoFinalizado &&
    horasDesdeFinalizacion >= 24`; la cota de 30 días es solo para
    acotar el query, no reprocesa toda la historia).
-4. Por cada evento: trae `group_members` y `expenses` (con
-   `expense_shares` embebido, mismo patrón que
-   `src/app/gastos/[groupId]/page.tsx`), calcula los balances con
-   `calcularBalances` (`src/lib/gastos/balances.ts`, reuso puro sin
-   tocar el módulo) y arma la lista de deudores (`balance < -0.01`) que
-   todavía no tengan fila en `balance_reminders_sent` para ese evento.
+4. Por cada evento: trae `expenses` (con `expense_shares` embebido, mismo
+   patrón que `src/app/gastos/[groupId]/page.tsx`), los **pagos
+   informados** del grupo (`debt_payments`, `0035`) y quiénes ya recibieron
+   el aviso (`balance_reminders_sent`), y arma la lista de deudores con
+   `debtorsToRemind` (`src/lib/gastos/reminders.ts`): el balance de cada
+   persona **después de los gastos y de los pagos informados**
+   (`calcularBalances`, `src/lib/gastos/balances.ts`; el mismo criterio que
+   «Para saldar cuentas» en `/gastos/[groupId]`), deudor = `balance <
+   -0.01`, sin quienes ya tengan fila en `balance_reminders_sent` para ese
+   evento. No hace falta leer los miembros del grupo: deber plata supone
+   tener plata en juego (quien no tiene nada tiene balance 0), y así también
+   se avisa a quien se salió del grupo debiendo. Si falla cualquiera de
+   esas lecturas se saltea el evento en esa corrida —no se calcula con datos
+   incompletos— y se reintenta en la próxima mientras siga dentro de la
+   ventana de 30 días; la respuesta del endpoint cuenta los `eventsSkipped`.
 5. Si hay deudores nuevos, llama `sendPushToUsers` (reuso tal cual,
    `src/lib/push/send.ts`) con el copy exacto dado por el usuario —
    sin el monto, porque puede verse desde la pantalla bloqueada — y
@@ -341,6 +351,10 @@ una acción de usuario).
       ningún push.
 - [x] Un usuario con saldo pendiente 24hs+ después de un evento recibe
       el recordatorio; alguien sin deuda o que ya saldó no recibe nada.
+- [x] «Ya saldó» incluye los pagos informados (`debt_payments`): quien
+      informó un pago que cubre su deuda no recibe el recordatorio; con un
+      pago parcial sí (le sigue faltando algo). Si una lectura falla, el
+      evento se saltea en esa corrida y no se avisa a nadie por él.
 - [x] El mismo usuario nunca recibe más de un recordatorio para el
       mismo evento, aunque el cron corra varias veces.
 - [x] Pegarle al endpoint del cron sin el header `Authorization`
@@ -360,6 +374,7 @@ una acción de usuario).
 | Quórum: debounce de 1 minuto antes de notificar | Notificar al instante al cruzar el umbral | Pedido explícito del usuario: cubre el caso de alguien que confirma por error y se arrepiente enseguida, sin haber ya generado un aviso a todo el grupo. |
 | Recordatorio de saldo: cron de Vercel + service role key, solo en ese endpoint | Posponer esta feature hasta tener otra infra de cron | Elegido explícitamente por el usuario — es el único caso sin sesión de usuario, y acotar la service role key a un único endpoint protegido por secreto es el mismo criterio ya usado (y rechazado en otros contextos, ver `specs/016-admin.md`) para no exponerla de más. |
 | Cron diario (no cada hora) | Cron más frecuente para acercarse más a las 24hs exactas | El plan Hobby de Vercel limita los cron jobs a granularidad diaria; la condición del usuario ya es "24hs o más" (no "exactamente"), así que el margen extra de hasta ~24hs es aceptable para un grupo de amigos cerrado. |
+| El recordatorio descuenta los pagos informados y no lee los miembros del grupo | Seguir calculando con los gastos «en bruto» (como hasta el 2026-11-01) | Era un olvido, no una decisión: `calcularBalances` recibía `payments` como parámetro opcional y el cron nunca lo pasó, así que avisaba a quien ya había informado su pago (3 de los 16 avisos enviados hasta el 1/11). El parámetro ahora es obligatorio para que no se repita en otro consumidor. Los miembros no cambiaban el resultado (quien no tiene plata en juego tiene balance 0), así que se dejaron de leer. |
 
 ## 7. Futuro / fuera de alcance de esta entrega
 
@@ -372,6 +387,14 @@ lo único que queda fuera de alcance:
 
 ## 8. Changelog
 
+- 2026-11-01: arreglado el recordatorio de saldo pendiente: ahora descuenta
+  los pagos informados (`debt_payments`). Antes los ignoraba y le avisaba a
+  quien ya había pagado y lo había informado (3 de los 16 avisos enviados
+  desde el 20/9: dos el 4/10 y uno el 1/11, que motivó el arreglo). Cálculo en
+  `src/lib/gastos/reminders.ts` (`debtorsToRemind`), `payments` obligatorio en
+  `calcularBalances` y `hasPendingSettlement`, y si falla una lectura se
+  saltea el evento en esa corrida. Sin migración; quien ya recibió un aviso
+  por error no recibe otro por ese evento (una vez por evento+persona).
 - 2026-09-18: implementado el recordatorio de saldo pendiente (item 7,
   el último de los 7 casos de uso originales) — cron diario de Vercel
   (`/api/cron/balance-reminders`, `vercel.json`), protegido por

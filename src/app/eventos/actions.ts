@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActingUser } from "@/lib/supabase/actingUser";
 import { guardEdit } from "@/lib/eventos/lock";
+import { DRINK_KEYS } from "@/lib/calculators/bebidas";
+import { hasAnyAmount, parseDrinksForm } from "@/lib/eventos/drinks";
+import { parseMenu } from "@/lib/eventos/menu";
 import { sendPushToUsers } from "@/lib/push/send";
 import { maybeNotifyQuorum } from "@/lib/push/quorum";
 import { syncEventMediaToGooglePhotos } from "@/lib/googlePhotos/sync";
@@ -86,9 +89,11 @@ export async function createEvent(formData: FormData) {
   const eventDate = String(formData.get("eventDate") ?? "");
   const description = String(formData.get("description") ?? "").trim();
   const hasFutbol = formData.get("hasFutbol") === "on";
+  const menu = parseMenu(formData.get("menu"));
 
   if (!name) return { error: "Poné un nombre para el evento." };
   if (!eventDate) return { error: "Elegí fecha y hora." };
+  if (!menu.ok) return { error: menu.error };
 
   const supabase = await createClient();
   const {
@@ -107,6 +112,8 @@ export async function createEvent(formData: FormData) {
       description: description || null,
       created_by: user.id,
       has_futbol: hasFutbol,
+      // El menú es opcional (0049): sin menú no se manda la columna.
+      ...(menu.menu ? { menu: menu.menu } : {}),
     })
     .select("id")
     .single();
@@ -148,9 +155,13 @@ export async function updateEvent(eventId: string, formData: FormData) {
   const eventDate = String(formData.get("eventDate") ?? "");
   const description = String(formData.get("description") ?? "").trim();
   const hasFutbol = formData.get("hasFutbol") === "on";
+  const menu = parseMenu(formData.get("menu"));
+  // El menú con el que se abrió el formulario de edición (campo oculto).
+  const menuBefore = String(formData.get("menuBefore") ?? "").trim();
 
   if (!name) return { error: "Poné un nombre para el evento." };
   if (!eventDate) return { error: "Elegí fecha y hora." };
+  if (!menu.ok) return { error: menu.error };
 
   const supabase = await createClient();
   const {
@@ -182,6 +193,10 @@ export async function updateEvent(eventId: string, formData: FormData) {
       location,
       description: description || null,
       has_futbol: hasFutbol,
+      // El menú solo se toca cuando se pone, se cambia o se saca uno (vaciar el campo lo
+      // borra). Editar un evento sin menú, antes y ahora, no manda la columna: así el
+      // código anda aunque la migración 0049 todavía no esté aplicada.
+      ...(menu.menu !== null || menuBefore !== "" ? { menu: menu.menu } : {}),
     })
     .eq("id", eventId)
     .select("id");
@@ -399,6 +414,57 @@ export async function upsertFutbolStats(eventId: string, formData: FormData) {
   );
 
   if (error) return { error: error.message };
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+// Bebidas del evento (0047): cuánto se compró y cuánto se consumió realmente,
+// por tipo. Todo opcional: un tipo con las dos cantidades vacías se saca. Mismo
+// criterio que el resultado del partido: cualquier logueado carga y corrige
+// hasta que el evento se salda; después, solo un admin (spec 022).
+export async function saveEventDrinks(eventId: string, formData: FormData) {
+  const parsed = parseDrinksForm(formData);
+  if (!parsed.ok) return { error: parsed.error };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  // Una RLS que filtra un DELETE no da error (0 filas): sin esto la pantalla
+  // daría por guardado lo que un evento saldado no deja cambiar.
+  const lockedError = await guardEdit(supabase, eventId, "settlement");
+  if (lockedError) return { error: lockedError };
+
+  const now = new Date().toISOString();
+  const toSave = DRINK_KEYS.filter((drink) => hasAnyAmount(parsed.amounts[drink]));
+  const toRemove = DRINK_KEYS.filter((drink) => !hasAnyAmount(parsed.amounts[drink]));
+
+  if (toSave.length > 0) {
+    const { error } = await supabase.from("event_drinks").upsert(
+      toSave.map((drink) => ({
+        event_id: eventId,
+        drink,
+        bought: parsed.amounts[drink].bought,
+        consumed: parsed.amounts[drink].consumed,
+        updated_by: user.id,
+        updated_at: now,
+      })),
+      { onConflict: "event_id,drink" },
+    );
+    if (error) return { error: error.message };
+  }
+
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("event_drinks")
+      .delete()
+      .eq("event_id", eventId)
+      .in("drink", toRemove);
+    if (error) return { error: error.message };
+  }
 
   revalidatePath(`/eventos/${eventId}`);
   return { ok: true };
