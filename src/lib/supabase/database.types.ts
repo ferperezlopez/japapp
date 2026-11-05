@@ -60,6 +60,23 @@ export interface Database {
         };
         Returns: undefined;
       };
+      // Migración 0050: edita una sede y, si cambia el nombre, lo propaga a events.location.
+      update_venue: {
+        Args: {
+          p_venue_id: string;
+          p_name: string;
+          p_address: string | null;
+          p_host_user_id: string | null;
+          p_lat: number | null;
+          p_lng: number | null;
+        };
+        Returns: undefined;
+      };
+      // Migración 0050: completa la ubicación de una sede que no la tiene (nunca pisa).
+      set_venue_coordinates: {
+        Args: { p_venue_id: string; p_lat: number; p_lng: number };
+        Returns: undefined;
+      };
     };
     Tables: {
       push_subscriptions: {
@@ -466,6 +483,9 @@ export interface Database {
           created_at: string;
           host_user_id: string | null;
           address: string | null;
+          // Migración 0050: la ubicación sacada del link de la sede (los dos o ninguno).
+          lat: number | null;
+          lng: number | null;
         };
         Insert: {
           id?: string;
@@ -474,7 +494,10 @@ export interface Database {
           created_at?: string;
           host_user_id?: string | null;
           address?: string | null;
+          lat?: number | null;
+          lng?: number | null;
         };
+        // Sin UPDATE directo desde la 0050: una sede se edita con update_venue.
         Update: {
           id?: string;
           name?: string;
@@ -482,6 +505,8 @@ export interface Database {
           created_at?: string;
           host_user_id?: string | null;
           address?: string | null;
+          lat?: number | null;
+          lng?: number | null;
         };
         Relationships: [
           {
@@ -694,6 +719,9 @@ export interface Database {
           wind_kmh: number | null;
           weather_code: number | null;
           fetched_at: string;
+          // Migración 0050: con qué ubicación se pidió (nulos en lo anterior: era Buenos Aires).
+          lat: number | null;
+          lng: number | null;
         };
         Insert: {
           event_id: string;
@@ -704,6 +732,8 @@ export interface Database {
           wind_kmh?: number | null;
           weather_code?: number | null;
           fetched_at?: string;
+          lat?: number | null;
+          lng?: number | null;
         };
         Update: {
           event_id?: string;
@@ -714,6 +744,8 @@ export interface Database {
           wind_kmh?: number | null;
           weather_code?: number | null;
           fetched_at?: string;
+          lat?: number | null;
+          lng?: number | null;
         };
         Relationships: [
           {
