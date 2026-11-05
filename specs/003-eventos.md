@@ -17,8 +17,10 @@
   `supabase/migrations/0048_event_weather.sql` (clima del evento — ver
   `specs/024-clima-del-evento.md`),
   `supabase/migrations/0049_event_menu.sql` (menú del evento — ver
-  `specs/025-menu-del-evento.md`)
-- **Última actualización:** 2026-11-01
+  `specs/025-menu-del-evento.md`),
+  `supabase/migrations/0050_venue_location_and_edit.sql` (los lugares guardan su
+  ubicación y se pueden editar — ver `specs/007-lugares-de-evento.md`)
+- **Última actualización:** 2026-11-05
 
 ## 1. Resumen
 
@@ -49,8 +51,11 @@ para el asado/empanadas.
   invitados, tareas, equipos y datos del evento a las 24 h; resultado,
   gastos y pagos al saldar. El detalle, en `specs/022-eventos-cerrados.md`.
 - Clima del evento en el encabezado (pronóstico de Open-Meteo para la hora del
-  evento, que se actualiza al abrir la página hasta que empieza y después queda
-  fijo). Ver `specs/024-clima-del-evento.md`.
+  evento en la ubicación de la sede, que se actualiza al abrir la página hasta que
+  empieza y después queda fijo). Ver `specs/024-clima-del-evento.md`.
+- Editar el lugar del evento desde «✏️ Editar lugar» en el encabezado (cualquier
+  logueado): nombre, link de GPS y de quién es la casa; si cambia el nombre se
+  renombra en los eventos que lo usaban. Ver `specs/007-lugares-de-evento.md`.
 - Tarjeta «Bebidas» (colapsada, entre las tareas y los gastos): lo que sugiere la
   calculadora para la gente de la juntada y, opcional, cuánto se compró y cuánto
   se consumió de cada tipo. Ver `specs/023-bebidas-del-evento.md`.
@@ -265,6 +270,10 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-05: el clima del encabezado es el de la ubicación de la sede y vuelve
+  «✏️ Editar lugar» (nombre, link de GPS y de quién es la casa), que se había sacado
+  el 2026-09-18. Migración `0050`. Ver `specs/007-lugares-de-evento.md` y
+  `specs/024-clima-del-evento.md`.
 - 2026-11-01: menú opcional del evento (columna `events.menu`, migración `0049`):
   campo en el alta y la edición, sugerencias al crear según los eventos anteriores, y el
   menú en el encabezado. Ver `specs/025-menu-del-evento.md`.
