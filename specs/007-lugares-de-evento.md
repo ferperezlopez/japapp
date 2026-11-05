@@ -1,6 +1,6 @@
 # 007 - Lugares de evento (venues) + día de semana visible
 
-- **Estado:** Implemented (la migración `0050` está escrita y verificada en una réplica local; falta aplicarla a la base viva: hasta entonces no andan la edición de lugares ni la ubicación para el clima, el resto sí)
+- **Estado:** Implemented (migración `0050` aplicada a la base viva el 2026-11-05 y verificada; la lectura de un link corto de Google solo se puede probar en producción, porque el entorno de desarrollo no llega a Google)
 - **Rutas:** `/eventos` (formulario de alta), `/eventos/[eventId]` («✏️ Editar lugar»)
 - **Migraciones relacionadas:** `supabase/migrations/0006_venues.sql`,
   `supabase/migrations/0019_venue_gps.sql` (revertida por `0021`),
@@ -294,6 +294,22 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 
 ## 8. Changelog
 
+- 2026-11-05: la migración `0050` se aplicó a la base viva por el SQL editor de Supabase (el
+  servidor pide una confirmación que no le llega al usuario, igual que con la `0046`) y se
+  verificó en vivo, solo lectura: las columnas `lat`/`lng` en `venues` y en `event_weather`
+  (`double precision`, nulables); `update_venue` y `set_venue_coordinates` como `security
+  definer`, con `search_path = public`, sin `EXECUTE` para `anon` y con él para
+  `authenticated`; las policies de `venues` quedaron en `INSERT` y `SELECT` (ya no hay
+  `UPDATE`); y las cuatro restricciones (`venues_location_pair`, `venues_location_range`,
+  `event_weather_location_pair`, `event_weather_location_range`) con la definición del
+  archivo. Las tres sedes (`Fercho's`, `Javi's`, `Nico's`) quedaron con la ubicación en nulo y
+  la fila vieja de `event_weather` con `lat`/`lng` nulos: se vuelve a pedir al abrir el evento.
+  El linter de seguridad suma dos avisos `authenticated_security_definer_function_executable`
+  (las dos funciones nuevas, a propósito: las llama la sesión de cada persona, igual que
+  `update_expense` y `event_lock_state`) y ninguno de `anon`. La migración no figura en el
+  registro de migraciones de Supabase por haberse corrido por el SQL editor. Queda ver en
+  producción que los links cortos de «Javi's» y «Nico's» se resuelvan (`venues.lat`/`lng`
+  completos después de abrir un evento en esas sedes).
 - 2026-11-05: **pedido del usuario** («el clima … debe ser siempre el del
   día/horario del evento y relativo a la ubicación de la sede» y «establecida
   una sede no se permite editarla para, por ejemplo, cambiarle el nombre o el
