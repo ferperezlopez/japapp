@@ -7,6 +7,11 @@ import { guardEdit } from "@/lib/eventos/lock";
 import { DRINK_KEYS } from "@/lib/calculators/bebidas";
 import { hasAnyAmount, parseDrinksForm } from "@/lib/eventos/drinks";
 import { parseMenu } from "@/lib/eventos/menu";
+import {
+  resolveVenueCoordinates,
+  venueLocationStatus,
+  type VenueLocationStatus,
+} from "@/lib/eventos/venueLocation";
 import { sendPushToUsers } from "@/lib/push/send";
 import { maybeNotifyQuorum } from "@/lib/push/quorum";
 import { syncEventMediaToGooglePhotos } from "@/lib/googlePhotos/sync";
@@ -69,12 +74,17 @@ async function resolveVenueLocation(
 
   if (venueSelection === "__new__") {
     if (!newVenueName) return null;
+    // La ubicación para el clima (spec 024) se saca del link al guardar la sede. Si no se
+    // pudo leer, la sede se crea igual (el link sirve para «Cómo llegar») y se puede
+    // completar después con «Editar lugar»; sin ubicación no se mandan las columnas.
+    const coordinates = await resolveVenueCoordinates(newVenueAddress);
     await supabase.from("venues").upsert(
       {
         name: newVenueName,
         created_by: userId,
         host_user_id: newVenueHostUserId || null,
         address: newVenueAddress || null,
+        ...(coordinates ? { lat: coordinates.lat, lng: coordinates.lng } : {}),
       },
       { onConflict: "name", ignoreDuplicates: true },
     );
@@ -82,6 +92,61 @@ async function resolveVenueLocation(
   }
 
   return venueSelection || null;
+}
+
+// Editar una sede ya guardada (spec 007): nombre, link de GPS y de quién es la casa. Cualquier
+// logueado puede (son datos compartidos del grupo). Va por la función update_venue (0050):
+// un solo camino para modificar una sede, que además renombra la sede en los eventos que la
+// nombraban por texto, también en los cerrados. La ubicación para el clima se vuelve a leer del
+// link solo si cambió el link o todavía no la tenía; si no se puede leer se guarda igual y se
+// avisa, para que se pegue el link largo o las coordenadas.
+export async function updateVenue(
+  venueId: string,
+  formData: FormData,
+): Promise<{ error: string } | { ok: true; location: VenueLocationStatus }> {
+  const name = String(formData.get("name") ?? "").trim();
+  const address = String(formData.get("address") ?? "").trim() || null;
+  const hostUserId = String(formData.get("hostUserId") ?? "").trim() || null;
+
+  if (!name) return { error: "Poné un nombre para el lugar." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const { data: current } = await supabase
+    .from("venues")
+    .select("address, lat, lng")
+    .eq("id", venueId)
+    .maybeSingle();
+  if (!current) return { error: "No se encontró ese lugar." };
+
+  const sameAddress = (current.address ?? null) === address;
+  const coordinates =
+    sameAddress && typeof current.lat === "number" && typeof current.lng === "number"
+      ? { lat: current.lat, lng: current.lng }
+      : await resolveVenueCoordinates(address);
+
+  const { error } = await supabase.rpc("update_venue", {
+    p_venue_id: venueId,
+    p_name: name,
+    p_address: address,
+    p_host_user_id: hostUserId,
+    p_lat: coordinates?.lat ?? null,
+    p_lng: coordinates?.lng ?? null,
+  });
+  if (error) {
+    if (error.code === "23505") return { error: "Ya hay un lugar con ese nombre." };
+    if (error.code === "23503") return { error: "No se encontró a esa persona." };
+    return { error: error.message };
+  }
+
+  // Los eventos que usaban la sede (en la lista y en su página) la ven con lo nuevo.
+  revalidatePath("/eventos", "layout");
+  revalidatePath("/");
+  return { ok: true, location: venueLocationStatus(address, coordinates) };
 }
 
 export async function createEvent(formData: FormData) {

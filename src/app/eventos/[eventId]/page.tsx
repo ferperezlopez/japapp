@@ -7,6 +7,7 @@ import { AttendanceSummary } from "@/components/eventos/AttendanceSummary";
 import { DeleteEventButton } from "./DeleteEventButton";
 import { DrinksSection } from "./DrinksSection";
 import { EditEventForm } from "./EditEventForm";
+import { EditVenueForm } from "./EditVenueForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
 import { FutbolTeamsSection } from "./FutbolTeamsSection";
 import { UploadPhotoForm } from "./UploadPhotoForm";
@@ -23,7 +24,7 @@ import { canEdit, getEventLock } from "@/lib/eventos/lock";
 import { drinksFromRows } from "@/lib/eventos/drinks";
 import { menuIcon } from "@/lib/eventos/menu";
 import { getEventWeather, isWeatherFrozen } from "@/lib/clima/refresh";
-import { WeatherLine } from "@/components/eventos/WeatherLine";
+import { WeatherLine, WeatherNeedsLocation } from "@/components/eventos/WeatherLine";
 import { LockBanner } from "@/components/eventos/LockBanner";
 import { WhatsAppShareButton } from "@/components/WhatsAppShareButton";
 
@@ -359,11 +360,11 @@ export default async function EventoPage({
       .select("user_id, status, kind, profiles(name, email, avatar_url)")
       .eq("event_id", eventId),
     supabase.from("profiles").select("id, name, email, avatar_url").order("name"),
+    // `*`: con la ubicación de la sede (lat/lng, 0050) pero sin que la página dependa de que
+    // esas columnas ya existan.
     supabase
       .from("venues")
-      .select(
-        "id, name, host_user_id, address, profiles!venues_host_user_id_fkey(name, email)",
-      )
+      .select("*, profiles!venues_host_user_id_fkey(name, email)")
       .order("name"),
     supabase.from("guests").select("id, name").order("name"),
     supabase
@@ -381,6 +382,8 @@ export default async function EventoPage({
   // (se cierra a las 24 h). "settlement": resultado y plata (se cierra al saldar).
   const canEditParticipation = canEdit(lock, "participation");
   const canEditSettlement = canEdit(lock, "settlement");
+  // La sede del evento (los eventos la nombran por texto): de ahí sale el clima.
+  const eventVenue = venues?.find((v) => v.name === event.location);
   const [
     { data: taskRows },
     { data: insumoItems },
@@ -397,10 +400,14 @@ export default async function EventoPage({
       // Bebidas del evento (0047, spec 023). Si la consulta falla (por ejemplo
       // la tabla todavía no existe), la tarjeta no se muestra.
       supabase.from("event_drinks").select("drink, bought, consumed").eq("event_id", eventId),
-      // Clima del evento (0048, spec 024): el último pronóstico guardado; si falta o
-      // está viejo y el evento no empezó, lo pide a Open-Meteo. Nunca tira: sin dato,
-      // no se muestra.
-      getEventWeather(supabase, { id: eventId, event_date: event.event_date }),
+      // Clima del evento (0048 y 0050, spec 024): el pronóstico de la hora del evento en el
+      // lugar de la sede; si falta, está viejo o es de otro lugar y el evento no empezó, lo pide
+      // a Open-Meteo. Nunca tira: sin dato (o sin saber dónde queda la sede), no se muestra.
+      getEventWeather(
+        supabase,
+        { id: eventId, event_date: event.event_date },
+        { venue: eventVenue ?? null },
+      ),
       // Menú del evento (0049, spec 025), en una consulta aparte: si la columna
       // todavía no existe, falla esta sola y la página sigue andando.
       supabase.from("events").select("menu").eq("id", eventId).maybeSingle(),
@@ -429,7 +436,6 @@ export default async function EventoPage({
   const reservaCanchaAssignedTo =
     assigneesByTask.get("reserva_cancha")?.[0]?.userId ?? null;
 
-  const eventVenue = venues?.find((v) => v.name === event.location);
   const hostName = eventVenue?.profiles?.name ?? eventVenue?.profiles?.email ?? null;
 
   const allEventGuests: (EventGuest & { kind: string })[] = (
@@ -660,7 +666,26 @@ export default async function EventoPage({
           </>
         )}
       </div>
-      {weather && <WeatherLine snapshot={weather} frozen={weatherFrozen} nowMs={nowMs} />}
+      {weather.snapshot && (
+        <WeatherLine
+          snapshot={weather.snapshot}
+          venueName={event.location ?? ""}
+          frozen={weatherFrozen}
+          nowMs={nowMs}
+        />
+      )}
+      {weather.needsVenueLocation && <WeatherNeedsLocation />}
+      {eventVenue && (
+        <EditVenueForm
+          venue={{
+            id: eventVenue.id,
+            name: eventVenue.name,
+            address: eventVenue.address,
+            host_user_id: eventVenue.host_user_id,
+          }}
+          members={members}
+        />
+      )}
       {event.description && (
         <p className="mt-2 text-sm text-foreground/80">
           {event.description}

@@ -134,9 +134,11 @@ export function EventFormFields({
                 className="mt-1.5 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
               />
               <p className="mt-1 text-xs text-foreground/40">
-                Para navegar directo: pegá la dirección (ej. &quot;Av. Cabildo
-                2394, CABA&quot;) o el link que da &quot;Compartir
-                ubicación&quot; en Google Maps.
+                Para navegar directo y para el clima: pegá el link que da
+                &quot;Compartir ubicación&quot; en Google Maps o las coordenadas
+                (ej. -34.60, -58.38). Una dirección escrita (ej. &quot;Av.
+                Cabildo 2394, CABA&quot;) sirve para navegar, pero no para el
+                clima.
               </p>
             </>
           )}

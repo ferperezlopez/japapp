@@ -10,6 +10,8 @@ const full: WeatherSnapshot = {
   windKmh: 12.4,
   weatherCode: 1,
   fetchedAt: "2026-11-05T10:00:00.000Z",
+  lat: -34.5612,
+  lng: -58.4564,
 };
 
 describe("describeSnapshot", () => {

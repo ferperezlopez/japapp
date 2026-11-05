@@ -2,24 +2,35 @@ import { describe, expect, it, vi } from "vitest";
 import { forecastJson, okResponse } from "./fixtures";
 import { buildForecastUrl, eventHourLocal, fetchForecast, parseForecast } from "./openMeteo";
 
+// La ubicación de la sede (Javi's, en estos tests).
+const SEDE = { lat: -34.5612, lng: -58.4564 };
+
 describe("buildForecastUrl", () => {
-  it("pide las variables por hora, la zona de la ciudad y 16 días", () => {
-    const url = new URL(buildForecastUrl());
+  it("pide las variables por hora, 16 días y la zona del lugar", () => {
+    const url = new URL(buildForecastUrl(SEDE));
     expect(url.origin).toBe("https://api.open-meteo.com");
     expect(url.pathname).toBe("/v1/forecast");
-    expect(url.searchParams.get("latitude")).toBe("-34.61");
-    expect(url.searchParams.get("longitude")).toBe("-58.38");
     expect(url.searchParams.get("hourly")).toBe(
       "temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m",
     );
-    expect(url.searchParams.get("timezone")).toBe("America/Argentina/Buenos_Aires");
+    expect(url.searchParams.get("timezone")).toBe("auto");
     expect(url.searchParams.get("forecast_days")).toBe("16");
     expect(url.searchParams.get("wind_speed_unit")).toBe("kmh");
   });
 
+  it("pide la ubicación que se le da, no una fija", () => {
+    const url = new URL(buildForecastUrl(SEDE));
+    expect(url.searchParams.get("latitude")).toBe("-34.5612");
+    expect(url.searchParams.get("longitude")).toBe("-58.4564");
+
+    const otra = new URL(buildForecastUrl({ lat: -31.4201, lng: -64.1888 }));
+    expect(otra.searchParams.get("latitude")).toBe("-31.4201");
+    expect(otra.searchParams.get("longitude")).toBe("-64.1888");
+  });
+
   it("acepta otra URL base (un servidor falso en las pruebas), con o sin barra final", () => {
-    expect(buildForecastUrl("http://localhost:9999/")).toMatch(/^http:\/\/localhost:9999\/v1\/forecast\?/);
-    expect(buildForecastUrl("http://localhost:9999")).toMatch(/^http:\/\/localhost:9999\/v1\/forecast\?/);
+    expect(buildForecastUrl(SEDE, "http://localhost:9999/")).toMatch(/^http:\/\/localhost:9999\/v1\/forecast\?/);
+    expect(buildForecastUrl(SEDE, "http://localhost:9999")).toMatch(/^http:\/\/localhost:9999\/v1\/forecast\?/);
   });
 });
 
@@ -103,7 +114,7 @@ describe("fetchForecast", () => {
 
   it("pide el pronóstico sin cachear y devuelve la hora del evento", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(okResponse(json));
-    const result = await fetchForecast(EVENT_DATE, { fetchImpl, baseUrl: "http://fake" });
+    const result = await fetchForecast(EVENT_DATE, SEDE, { fetchImpl, baseUrl: "http://fake" });
 
     expect(result?.forecastFor).toBe("2026-11-05T19:00");
     expect(result?.temperatureC).toBe(29);
@@ -114,24 +125,34 @@ describe("fetchForecast", () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("pide el pronóstico de la ubicación que se le da", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse(json));
+    await fetchForecast(EVENT_DATE, { lat: -31.4201, lng: -64.1888 }, { fetchImpl, baseUrl: "http://fake" });
+    const [url] = fetchImpl.mock.calls[0] as [string];
+    const params = new URL(url).searchParams;
+    expect(params.get("latitude")).toBe("-31.4201");
+    expect(params.get("longitude")).toBe("-64.1888");
+    expect(params.get("timezone")).toBe("auto");
+  });
+
   it("devuelve null si la API responde con error", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response("boom", { status: 500 }));
-    expect(await fetchForecast(EVENT_DATE, { fetchImpl })).toBeNull();
+    expect(await fetchForecast(EVENT_DATE, SEDE, { fetchImpl })).toBeNull();
   });
 
   it("un error de la API se descarta aunque el cuerpo traiga datos que sirvan", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(json), { status: 503 }));
-    expect(await fetchForecast(EVENT_DATE, { fetchImpl })).toBeNull();
+    expect(await fetchForecast(EVENT_DATE, SEDE, { fetchImpl })).toBeNull();
   });
 
   it("devuelve null si la red falla", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
-    expect(await fetchForecast(EVENT_DATE, { fetchImpl })).toBeNull();
+    expect(await fetchForecast(EVENT_DATE, SEDE, { fetchImpl })).toBeNull();
   });
 
   it("devuelve null si la respuesta no es JSON", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response("<html>", { status: 200 }));
-    expect(await fetchForecast(EVENT_DATE, { fetchImpl })).toBeNull();
+    expect(await fetchForecast(EVENT_DATE, SEDE, { fetchImpl })).toBeNull();
   });
 
   it("devuelve null si la API tarda más del tiempo permitido", async () => {
@@ -141,11 +162,11 @@ describe("fetchForecast", () => {
           init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
         }),
     );
-    expect(await fetchForecast(EVENT_DATE, { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 20 })).toBeNull();
+    expect(await fetchForecast(EVENT_DATE, SEDE, { fetchImpl: fetchImpl as unknown as typeof fetch, timeoutMs: 20 })).toBeNull();
   });
 
   it("devuelve null si la respuesta no trae la hora del evento", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(okResponse(forecastJson(["2026-11-01"])));
-    expect(await fetchForecast(EVENT_DATE, { fetchImpl })).toBeNull();
+    expect(await fetchForecast(EVENT_DATE, SEDE, { fetchImpl })).toBeNull();
   });
 });
