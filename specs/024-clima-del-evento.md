@@ -1,6 +1,6 @@
 # 024 - Clima del evento
 
-- **Estado:** Implemented (migración `0048` aplicada a la base viva el 2026-11-02 y verificada; la `0050`, que lo hace depender de la sede, está escrita y verificada en una réplica local y falta aplicarla a la base viva: hasta entonces la pantalla no muestra clima. La primera llamada real a Open-Meteo ocurre en producción, porque la API no se alcanza desde el entorno de desarrollo)
+- **Estado:** Implemented (migración `0048` aplicada a la base viva el 2026-11-02 y la `0050`, que lo hace depender de la sede, el 2026-11-05; las dos verificadas. La primera llamada real a Open-Meteo y la lectura de un link corto de Google ocurren en producción, porque el entorno de desarrollo no llega a ninguno)
 - **Rutas:** `/eventos/[eventId]`
 - **Migraciones relacionadas:** `supabase/migrations/0048_event_weather.sql`,
   `supabase/migrations/0050_venue_location_and_edit.sql` (ubicación de la sede)
@@ -177,6 +177,13 @@ falso.
 
 ## 8. Changelog
 
+- 2026-11-05: la migración `0050` se aplicó a la base viva y se verificó en vivo, solo lectura
+  (detalle en `specs/007-lugares-de-evento.md`): `event_weather.lat`/`lng` con sus dos
+  restricciones y la fila vieja del evento del 9/11 con la ubicación en nulo (se vuelve a pedir
+  al abrir el evento, ahora para su sede). Entre el merge del código y la aplicación de la
+  migración, la lectura de `event_weather` pedía columnas que todavía no existían, así que la
+  pantalla no mostraba clima; es el comportamiento previsto cuando falta la migración (nunca
+  rompe la pantalla) y se arregló solo al aplicarla.
 - 2026-11-05: **el clima pasa a ser el de la sede** (pedido del usuario: «el clima que se
   muestra y actualiza debe ser siempre el del día/horario del evento y relativo a la
   ubicación de la sede»). Las sedes guardan su ubicación (spec 007, migración `0050`),
