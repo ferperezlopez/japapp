@@ -1,4 +1,5 @@
-import { EVENT_WEATHER_LOCATION, FORECAST_HORIZON_DAYS } from "./location";
+import type { Coordinates } from "@/lib/eventos/venueLocation";
+import { FORECAST_HORIZON_DAYS } from "./clock";
 import type { ForecastValues } from "./types";
 
 // Cliente mínimo del pronóstico por hora de Open-Meteo (gratis, sin clave).
@@ -17,13 +18,20 @@ export const HOURLY_VARIABLES = [
   "wind_speed_10m",
 ] as const;
 
-export function buildForecastUrl(baseUrl: string = DEFAULT_BASE_URL): string {
-  const { latitude, longitude, timezone } = EVENT_WEATHER_LOCATION;
+/**
+ * La URL del pronóstico por hora para una ubicación (la de la sede del evento). Con
+ * `timezone=auto` las horas de la respuesta son las de pared del lugar, que es en lo que
+ * está la hora del evento: así «las 19:00» es siempre las 19:00 de ahí.
+ */
+export function buildForecastUrl(
+  { lat, lng }: Coordinates,
+  baseUrl: string = DEFAULT_BASE_URL,
+): string {
   const params = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
+    latitude: String(lat),
+    longitude: String(lng),
     hourly: HOURLY_VARIABLES.join(","),
-    timezone,
+    timezone: "auto",
     forecast_days: String(FORECAST_HORIZON_DAYS),
     wind_speed_unit: "kmh",
   });
@@ -87,12 +95,13 @@ export interface FetchForecastOptions {
 }
 
 /**
- * Pide el pronóstico y devuelve los valores para la hora del evento. Devuelve null
- * si la API no responde bien, tarda demasiado o no trae esa hora: el clima es un
+ * Pide el pronóstico del lugar y devuelve los valores para la hora del evento. Devuelve
+ * null si la API no responde bien, tarda demasiado o no trae esa hora: el clima es un
  * agregado, nunca tiene que romper la pantalla del evento.
  */
 export async function fetchForecast(
   eventDate: string,
+  coordinates: Coordinates,
   {
     fetchImpl = fetch,
     baseUrl = process.env.OPEN_METEO_URL || DEFAULT_BASE_URL,
@@ -100,7 +109,7 @@ export async function fetchForecast(
   }: FetchForecastOptions = {},
 ): Promise<ForecastValues | null> {
   try {
-    const response = await fetchImpl(buildForecastUrl(baseUrl), {
+    const response = await fetchImpl(buildForecastUrl(coordinates, baseUrl), {
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
     });

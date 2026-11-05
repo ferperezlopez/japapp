@@ -3,7 +3,7 @@
 - **Estado:** Implemented (migraciones `0044` y `0045` aplicadas a la base viva el 2026-11-01; el script de verificación dio 80/80 en una réplica local y su corrida completa contra la base viva sigue pendiente, ver el changelog)
 - **Rutas:** `/eventos/[eventId]`, `/gastos/[groupId]`
 - **Migraciones relacionadas:** `supabase/migrations/0044_lock_closed_events.sql`, `supabase/migrations/0045_event_closes_at_search_path.sql`
-- **Última actualización:** 2026-11-01
+- **Última actualización:** 2026-11-05
 
 ## 1. Resumen
 
@@ -97,6 +97,11 @@ Lo que el SQL no explica por sí solo:
   pago solo lo borra quien lo cargó y cargar exige ser miembro del grupo; sin esto
   un gasto mal cargado por otra persona no lo podría corregir ni un admin. Aplican
   también a eventos abiertos.
+- Una excepción de texto: renombrar un lugar (`public.update_venue`, `0050`, `security
+  definer`; ver `specs/007-lugares-de-evento.md`) actualiza `events.location` también en
+  los eventos cerrados o saldados que usaban ese lugar. Es solo el nombre de la sede,
+  que el evento guarda como texto de referencia: no cambia nada de su contenido
+  (asistencia, gastos, tareas) y la función corre fuera de estas policies a propósito.
 
 ## 4. Diseño / flujo
 
@@ -210,6 +215,11 @@ viva todavía no se corrió completo (ver el changelog del 2026-11-01).
   y no «Próximo evento»). Ver también `specs/003-eventos.md`, `specs/002-gastos.md` y
   `specs/016-admin.md`.
 - 2026-11-01: script de verificación `supabase/verify/0044_lock_closed_events.sql`.
+- 2026-11-05: renombrar un lugar (`update_venue`, `0050`) actualiza el texto
+  `events.location` de los eventos que lo usaban, también los cerrados o saldados (ver
+  «Modelo de datos»). Verificado en `supabase/verify/0050_venue_location_and_edit.sql`
+  (J24: el evento cerrado queda con el nombre nuevo; J25: el contraste, que quien lo creó no
+  puede cambiarle el lugar a mano).
 - 2026-11-01: **migraciones aplicadas a la base viva**: la `0044` (`lock_closed_events`) y
   la `0045_event_closes_at_search_path.sql`, que le fija el `search_path` a
   `private.event_closes_at` (era el único aviso `function_search_path_mutable` del

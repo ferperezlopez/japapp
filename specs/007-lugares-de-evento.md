@@ -1,12 +1,13 @@
 # 007 - Lugares de evento (venues) + día de semana visible
 
-- **Estado:** Implemented
-- **Rutas:** `/eventos` (formulario de alta)
+- **Estado:** Implemented (la migración `0050` está escrita y verificada en una réplica local; falta aplicarla a la base viva: hasta entonces no andan la edición de lugares ni la ubicación para el clima, el resto sí)
+- **Rutas:** `/eventos` (formulario de alta), `/eventos/[eventId]` («✏️ Editar lugar»)
 - **Migraciones relacionadas:** `supabase/migrations/0006_venues.sql`,
   `supabase/migrations/0019_venue_gps.sql` (revertida por `0021`),
   `supabase/migrations/0021_venue_address.sql`,
-  `supabase/migrations/0022_venues_update_policy.sql`
-- **Última actualización:** 2026-09-17
+  `supabase/migrations/0022_venues_update_policy.sql` (su policy de `UPDATE` la saca la `0050`),
+  `supabase/migrations/0050_venue_location_and_edit.sql`
+- **Última actualización:** 2026-11-05
 
 ## 1. Resumen
 
@@ -35,13 +36,17 @@ muestra.
   Maps hacia esa dirección directamente en el dispositivo de quien lo
   toca (no un mapa para mirar, dispara la navegación). Fecha, hora y
   lugar tienen cada uno su propio icono (calendario/reloj/pin).
-- ~~Editar un lugar ya guardado desde un botón "✏️ Editar lugar" en la
-  página del evento~~ — sacado (ver changelog 2026-09-18): quedó
-  redundante con poder elegir qué `venue` usa un evento al editarlo
-  (`<EditEventForm>`), y era la única forma de tocar nombre/dirección/
-  dueño de un `venue` ya guardado. Si hace falta corregir esos datos
-  hoy, se hace directo en la base — necesidad rarísima en un grupo de
-  amigos cerrado, no justifica mantener la UI.
+- Editar un lugar ya guardado desde «✏️ Editar lugar» en la página del
+  evento (cualquier logueado): nombre, dirección o link de Google Maps
+  (GPS) y de quién es la casa. Si cambia el nombre, se renombra también
+  en los eventos que lo usaban. Se había sacado el 2026-09-18 y volvió el
+  2026-11-05 (ver changelog): sin él no había cómo corregir un nombre, ni
+  cargarle el link a un lugar creado sin dirección, y el clima del evento
+  (spec 024) depende de ese link.
+- La ubicación del lugar (`venues.lat`/`lng`, para el clima), que se saca
+  del link de Google Maps (largo o corto) o de coordenadas tipeadas
+  («-34.60, -58.38») al guardar el lugar, nuevo o editado. Los lugares
+  anteriores a la `0050` la completan solos la primera vez que hace falta.
 
 ### No incluye (por ahora)
 
@@ -49,9 +54,11 @@ muestra.
   probó con Leaflet + OpenStreetMap y se sacó — ver changelog): el
   usuario no necesita ver ni marcar un mapa, solo registrar la dirección
   como texto para que la navegación se dispare sola al tocarla.
-- Geocodificar o validar la dirección tipeada — es texto libre tal cual
-  lo escribe quien crea o edita el lugar; Google Maps resuelve
-  direcciones de texto sin necesitar coordenadas ni una API key.
+- Geocodificar una dirección escrita a mano («Av. Cabildo 2394, CABA»): es
+  texto libre tal cual lo escribe quien crea o edita el lugar; Google Maps
+  la resuelve al navegar, sin coordenadas ni API key. Esa dirección **no**
+  sirve para el clima: hace falta el link de Google Maps o las coordenadas,
+  y la app avisa cuando no pudo sacar la ubicación.
 - Borrar un lugar de la lista (solo se puede editar, no eliminar).
 - Autocompletar o normalizar nombres parecidos ("Casa de Fer" vs "casa de
   fer" quedan como dos lugares distintos: el `unique` de `venues.name` es
@@ -62,9 +69,10 @@ muestra.
 
 ## 3. Modelo de datos
 
-Ver `supabase/migrations/0006_venues.sql`, `0021_venue_address.sql` y
-`0022_venues_update_policy.sql` para el detalle completo (`0019_venue_gps.sql`
-agregó `lat`/`lng`, que `0021` borró — ver changelog).
+Ver `supabase/migrations/0006_venues.sql`, `0021_venue_address.sql`,
+`0022_venues_update_policy.sql` y `0050_venue_location_and_edit.sql` para el
+detalle completo (`0019_venue_gps.sql` agregó `lat`/`lng`, que `0021` borró y
+`0050` vuelve a agregar con otro propósito — ver changelog).
 
 Puntos que el SQL no explica por sí solo:
 
@@ -73,7 +81,8 @@ Puntos que el SQL no explica por sí solo:
   `<select>`, no una relación normalizada — se decidió así para no tener
   que tocar ningún lugar que ya lee `event.location` (el mensaje de
   WhatsApp, la card del listado, etc.), y porque no hay necesidad real de
-  referencia hoy (no hay filtrar-por-lugar ni editar-lugar-y-que-se-actualicen-los-eventos-viejos).
+  referencia hoy (no hay filtrar-por-lugar; el renombrado de un lugar lo propaga
+  `update_venue` por texto, ver más abajo).
 - `venues.name` es `unique`: el upsert en `createEvent()` usa
   `onConflict: "name", ignoreDuplicates: true`, así que cargar un lugar que
   ya existe (con el mismo texto exacto) no falla ni duplica fila, solo no
@@ -85,15 +94,31 @@ Puntos que el SQL no explica por sí solo:
   formato: es la dirección tal cual la tipeó quien creó el lugar, y
   Google Maps la resuelve como texto libre al armar el link de
   navegación (sin necesitar coordenadas).
-- `0022_venues_update_policy.sql` sumó en su momento la policy de
-  `update` (`using (true) with check (true)`) para la action
-  `updateVenue`, que se sacó junto con la UI (ver changelog
-  2026-09-18) — la policy queda en la base sin usarse desde código,
-  no se revirtió por ser aditiva y sin costo. Sigue sin haber policy
-  de `delete` (no se puede borrar un lugar).
-- `events.location` es una copia de texto, no una FK — dato que sigue
-  siendo relevante si en el futuro se agrega otra forma de renombrar un
-  `venue`, para no dejar eventos "huérfanos" por el cambio de nombre.
+- `venues.lat` / `venues.lng` (`0050`) son la ubicación del lugar, solo para
+  el clima del evento (spec 024): `double precision`, las dos nulas o las dos
+  cargadas (`venues_location_pair`), dentro de rango y nunca (0, 0)
+  (`venues_location_range`). No se muestran como mapa ni se piden al
+  usuario: salen del link o de las coordenadas tipeadas en `address`. Las
+  ven todos los logueados, igual que el link que ya veían.
+- La policy de `UPDATE` de la `0022` (`using (true) with check (true)`) la
+  saca la `0050`: modificar un lugar solo se puede con
+  `public.update_venue(...)`, una función `security definer` (sin acceso de
+  `anon`, sesión obligatoria) que actualiza nombre, link, casa y ubicación y,
+  **si cambió el nombre, renombra `events.location` en todos los eventos que
+  lo usaban**, también los cerrados o saldados (las policies de la `0044` no
+  dejan tocarlos de otra forma; es solo texto de referencia). Todo en una
+  transacción, con candado de fila contra dos ediciones simultáneas; rechaza
+  nombre vacío (`22023`), repetido (`23505`), lugar inexistente (`P0002`) y una
+  ubicación con solo latitud o solo longitud. Cualquier logueado puede editar
+  (mismo modelo de confianza que la `0022`). Un solo camino evita que una
+  llamada directa a la API renombre un lugar y deje eventos "huérfanos". El
+  alta (`INSERT`, también el `upsert … ignoreDuplicates`) no cambia. Sigue sin
+  haber policy de `delete` (no se puede borrar un lugar).
+- `public.set_venue_coordinates(...)` (`0050`) es la salida para los lugares
+  que ya tenían link y no coordenadas: solo escribe si `lat` y `lng` están
+  nulas (nunca pisa una ubicación cargada). La usa el cálculo del clima.
+- `events.location` sigue siendo una copia de texto, no una FK: por eso
+  renombrar un lugar necesita la propagación de `update_venue`.
 
 ## 4. Diseño / flujo
 
@@ -115,9 +140,12 @@ Puntos que el SQL no explica por sí solo:
 1. Al elegir "+ Nuevo lugar…", además del nombre y "¿de quién es la
    casa?" aparece un `<input name="newVenueAddress">` de texto libre
    ("Dirección o link de Google Maps (opcional)"), con una aclaración
-   abajo de qué formatos sirven (ver punto 4).
-2. `resolveVenueLocation` (`actions.ts`) lee ese campo y lo suma al
-   `upsert` de `venues` — sin cambios en `createEvent`/`updateEvent`,
+   abajo de qué formatos sirven (ver punto 4) y de que el clima sale del
+   link o de las coordenadas, no de una dirección escrita.
+2. `resolveVenueLocation` (`actions.ts`) lee ese campo, saca del link la
+   ubicación (ver «Ubicación del lugar») y lo suma al `upsert` de `venues`
+   —`lat`/`lng` solo si se pudo leer, para que el alta siga andando aunque
+   la `0050` no esté aplicada— sin cambios en `createEvent`/`updateEvent`,
    que ya llaman a esa función sin conocer sus detalles internos.
 3. En `/eventos/[eventId]`, la fecha, hora y lugar del evento se
    muestran cada uno con su propio ícono (calendario/reloj/pin,
@@ -149,6 +177,46 @@ En el celular de quien toca "Cómo llegar", cualquiera de los dos casos
 abre la app de mapas instalada (deep link nativo de `google.com/maps`
 y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 
+**Editar un lugar:**
+1. En `/eventos/[eventId]`, si el evento tiene un lugar guardado, debajo del
+   encabezado aparece «✏️ Editar lugar» (`EditVenueForm`, cualquier logueado,
+   también en eventos cerrados: son datos compartidos del grupo, no del
+   evento). Abre un formulario con nombre, «Dirección o link de Google Maps
+   (GPS)» y «¿De quién es la casa?», con lo que tiene hoy el lugar.
+2. `updateVenue(venueId, formData)` (`actions.ts`) valida el nombre y la
+   sesión, lee la dirección y la ubicación actuales del lugar, resuelve la
+   ubicación nueva **solo si cambió el link o todavía no tenía** (si no,
+   conserva la que tiene) y llama a `update_venue`. Traduce `23505` a «Ya hay
+   un lugar con ese nombre.» y `23503` a «No se encontró a esa persona.», y
+   revalida `/eventos` (layout) y `/`.
+3. Devuelve si se pudo ubicar el lugar y el formulario lo dice: «Ubicación
+   detectada: el clima va a ser el de esta sede.»; «Lugar guardado, pero no
+   pude sacar la ubicación de lo que cargaste, así que el clima no se va a
+   mostrar. Probá con el link de «Compartir ubicación» de Google Maps (el
+   largo, si el corto no anda) o pegá las coordenadas (ej. -34.60, -58.38).»;
+   o, sin link, que sin el link no hay clima.
+
+**Ubicación del lugar** (`src/lib/eventos/venueLocation.ts`, con test):
+1. `parseCoordinates(texto)`, sin red: coordenadas tipeadas («lat, lng»),
+   `!3d…!4d…` (el punto del lugar), `/place|search|dir/lat,lng`,
+   `q=`/`ll=`/`query=`/`center=`/`destination=` y `@lat,lng`, en ese orden de
+   prioridad. Rechaza fuera de rango y (0, 0).
+2. `resolveVenueCoordinates(address)`: primero `parseCoordinates`; si es un
+   link corto de Google (`maps.app.goo.gl`, `goo.gl`), sigue las
+   redirecciones **a mano** (máximo 4, un único tope de 2,5 s para todas,
+   solo `https`, sin usuario ni puerto y **solo hosts de una lista fija de
+   Google**: el texto lo escribe un usuario y lo pide el servidor, sin esa
+   lista sería un SSRF), buscando coordenadas en cada `Location` y, como
+   último recurso, en los primeros 200 KB de la página final. Nunca tira: sin
+   poder resolverlo devuelve `null`. Una dirección escrita a mano no se
+   geocodifica.
+3. Se resuelve al guardar un lugar (alta desde el formulario del evento y
+   edición). Para los anteriores a la `0050` (`ensureVenueCoordinates`,
+   `src/lib/eventos/venueCoordinates.ts`), de forma perezosa al calcular el
+   clima de un evento que todavía no empezó: se lee el link, se guarda con
+   `set_venue_coordinates` y no se vuelve a leer; si no se puede, no se
+   reintenta por una hora (por lugar y link, en la memoria del proceso).
+
 **Día de la semana:**
 1. El input `datetime-local` del formulario de alta pasa a ser controlado
    (`value`/`onChange` con `useState`), solo para poder leer su valor y
@@ -174,14 +242,32 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 - [x] Al elegir "+ Nuevo lugar…", aparece un campo de dirección
       opcional; guardar el evento persiste esa dirección en `venues`.
 - [x] Elegir un lugar existente de la lista no muestra el campo de
-      dirección (no se puede agregar/editar la dirección de un lugar ya
-      guardado).
+      dirección en el formulario del evento (la dirección de un lugar ya
+      guardado se corrige con «✏️ Editar lugar»).
 - [x] Si el lugar del evento tiene dirección cargada, la página del
       evento muestra "🧭 Cómo llegar" con el link de navegación de
       Google Maps hacia esa dirección; si no tiene, no aparece nada.
-- [x] ~~Cualquier logueado puede editar nombre/dirección/dueño de un
-      lugar ya guardado desde "✏️ Editar lugar"~~ — sacado, ver
-      changelog 2026-09-18.
+- [x] Cualquier logueado puede editar nombre, link y casa de un lugar ya
+      guardado desde «✏️ Editar lugar» (`src/app/eventos/actions.test.ts`,
+      `supabase/verify/0050_venue_location_and_edit.sql`).
+- [x] Renombrar un lugar renombra también los eventos que lo usaban —incluidos
+      los cerrados— y no toca los de otros lugares; cambiar solo el link no
+      renombra nada (verify `0050`, J21–J29).
+- [x] Un nombre repetido o vacío se rechaza con un mensaje claro y el lugar no
+      cambia; no se puede modificar un lugar con un `UPDATE` directo (verify
+      `0050`, J8–J19).
+- [x] Al guardar un lugar con un link de Google Maps (o coordenadas) queda su
+      ubicación; con una dirección escrita o sin link el lugar se guarda igual y
+      el formulario avisa que no habrá clima (`venueLocation.test.ts`,
+      `actions.test.ts`).
+- [x] Cambiar el link de un lugar vuelve a leer la ubicación; cambiar solo el
+      nombre o la casa conserva la que tenía.
+- [x] Un lugar anterior a la `0050` con link y sin ubicación la completa solo la
+      primera vez que hace falta, sin pisar una ubicación cargada
+      (`venueCoordinates.test.ts`, verify `0050`, J32–J38).
+- [x] El servidor solo sale a buscar un link corto hacia una lista fija de hosts de
+      Google: cualquier otro host, un `http`, o un link con usuario o puerto, no se
+      pide (`venueLocation.test.ts`).
 
 ## 6. Decisiones y tradeoffs
 
@@ -191,18 +277,41 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 | Día de la semana calculado en el cliente, mostrado como texto auxiliar | Intentar am `<input type="date">` custom que muestre el día en el propio calendario | El calendario del `datetime-local` es UI nativa del browser/SO, no manipulable desde CSS/JS; mostrar el dato calculado al lado es la única vía sin reemplazar el input nativo por un date-picker propio (fuera de alcance de este pedido puntual). |
 | Dirección de texto + link "Directions" de Google Maps (sin API key) | (a) Mapa Leaflet + OpenStreetMap con pin de coordenadas (probado, revertido); (b) Google Maps JavaScript API embebido | El usuario probó el mapa Leaflet y no lo necesitaba: solo quería registrar la dirección para que cualquier participante la toque y el dispositivo dispare la navegación — un mapa para mirar no resuelve eso. El link `google.com/maps/dir/?api=1&destination=...` hace exactamente eso sin necesitar coordenadas, sin API key y sin ninguna librería de mapas (se sacó `leaflet`/`react-leaflet`, quedó cero dependencias de UI externas de nuevo). Se descartó la opción (b) porque exige una API key con facturación que el usuario tendría que crear y mantener, y además el usuario aclaró que no necesita ver un mapa embebido en la app. |
 | Cualquier logueado puede editar cualquier lugar (nombre, dirección, dueño) | Restringir a quien lo creó (`created_by`) | Pedido explícito del usuario, mismo criterio de confianza total que `event_tasks`/`futbol_stats`: no hay necesidad real de restringir esto dentro de un grupo de amigos. |
-| Cambio de nombre cascadea a `events.location` en la misma action | (a) Bloquear el cambio de nombre si hay eventos que lo usan; (b) agregar `venue_id` como FK real en `events` | (a) frustraría el pedido del usuario sin necesidad; (b) es un cambio de modelo más grande de lo pedido (afectaría el mensaje de WhatsApp, la card del listado, etc., que hoy leen `event.location` como texto). La cascada de texto resuelve el caso real (mantener la dirección/dueño accesibles) sin normalizar el modelo entero. |
+| Cambio de nombre cascadea a `events.location` dentro de `update_venue` (una función de la base, una transacción) | (a) Bloquear el cambio de nombre si hay eventos que lo usan; (b) agregar `venue_id` como FK real en `events`; (c) cascada desde la action con dos llamadas | (a) frustraría el pedido del usuario sin necesidad; (b) es un cambio de modelo más grande de lo pedido (afectaría el mensaje de WhatsApp, la card del listado, etc., que hoy leen `event.location` como texto); (c) las policies de la `0044` no dejan a un logueado común tocar un evento cerrado, así que la cascada desde la app dejaría el nombre viejo en esos eventos (y el clima y «Cómo llegar» perderían la sede). La función es `security definer` y atómica. |
+| Un solo camino para modificar un lugar: la función, sin policy de `UPDATE` | Dejar la policy de la `0022` además de la función | Con la policy, una llamada directa a la API podría renombrar un lugar sin propagar el cambio y dejar eventos "huérfanos" (sin lugar, sin clima). El alta no cambia. |
+| La ubicación se saca del link de Google Maps (parseo sin red + seguir el link corto) o de coordenadas tipeadas | Geocodificar la dirección escrita con una API (Google, Nominatim) | Exige una API key con facturación o un servicio externo con límites de uso; el grupo ya pega links de «Compartir ubicación» (ver la decisión de `address`) y esos traen las coordenadas. La dirección escrita sigue sirviendo para navegar. |
+| El link corto se sigue a mano, hasta 4 saltos, 2,5 s en total y solo hacia hosts de Google de una lista fija | Dejar que `fetch` siga cualquier redirección | El texto lo escribe un usuario y lo pide el servidor: sin la lista fija se podría usar para que el servidor pida direcciones internas (SSRF). |
 | `venues.address` acepta texto plano O un link de Google Maps, detectado por si empieza con `http(s)://` | Exigir un único formato (solo texto, o solo link) | En la práctica, la forma más natural de "conseguir una dirección" desde el celular es compartir la ubicación desde la app de Maps, que da un link corto, no texto plano — bloquear ese caso hubiera dejado a la mayoría de los usuarios sin poder cargar nada útil. Aceptar los dos formatos cubre a quien tipea una dirección a mano y a quien comparte un pin. |
 
 ## 7. Futuro / fuera de alcance
 
 - Borrar lugares de la lista (solo se pueden editar).
 - Normalización de nombres para evitar duplicados casi-iguales.
-- Un `venue_id` normalizado en `events` (hoy sigue siendo texto libre
-  con cascada manual al renombrar, ver sección 6).
+- Un `venue_id` normalizado en `events` (hoy sigue siendo texto libre,
+  con la cascada de `update_venue` al renombrar, ver sección 6).
+- Elegir la ubicación en un mapa o geocodificar direcciones escritas (hoy el
+  clima necesita el link de Google Maps o las coordenadas).
 
 ## 8. Changelog
 
+- 2026-11-05: **pedido del usuario** («el clima … debe ser siempre el del
+  día/horario del evento y relativo a la ubicación de la sede» y «establecida
+  una sede no se permite editarla para, por ejemplo, cambiarle el nombre o el
+  link de GPS»). Volvió «✏️ Editar lugar» (nombre, link de GPS y de quién es la
+  casa), ahora por `update_venue` (`0050`), que renombra también
+  `events.location` en los eventos que lo usaban y es el único camino para
+  modificar un lugar (se sacó la policy de `UPDATE` de la `0022`); los lugares
+  guardan su ubicación (`venues.lat`/`lng`), leída del link de Google Maps
+  (`venueLocation.ts`) al crearlos o editarlos y, para los anteriores, la
+  primera vez que hace falta (`set_venue_coordinates`). La ubicación alimenta el
+  clima del evento (spec 024). El motivo de haberlo sacado el 2026-09-18 (poder
+  elegir otro `venue` desde «Editar evento») no cubría corregir un nombre ni
+  cargarle el link a un lugar creado sin dirección, que era el caso del evento
+  del 9/11 («Fercho's»). Verificado en una réplica local de Postgres (49
+  verificaciones y una pasada de mutación sobre la migración), con tests y en el
+  navegador; no se pudo probar contra un link corto real de Google (el entorno de
+  desarrollo no llega a Google): si no se resuelve en producción, el clima no se
+  muestra y se puede pegar el link largo o las coordenadas.
 - 2026-09-17: **bug reportado por el usuario** (con captura: "No se
   encuentra una ruta para llegar a ese destino") — había pegado un link
   de "Compartir ubicación" de Google Maps en el campo de dirección; el
