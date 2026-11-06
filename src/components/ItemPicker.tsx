@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { updateInsumoItemIcon } from "@/app/eventos/actions";
 import { Spinner } from "@/components/ui/Spinner";
 import {
+  capitalizeFirst,
   findSimilarItem,
   matchesQuery,
   normalize,
@@ -28,6 +29,11 @@ export type PickerItem = {
 // specs/002-gastos.md); si además se parece bastante a uno ya cargado
 // (findSimilarItem, mismo umbral que find_similar_profile_names), se
 // sugiere usar ese en vez de duplicar — no bloqueante.
+//
+// `capitalizeNames` (el catálogo de insumos de las tareas): los insumos siempre empiezan con
+// mayúscula. Lo que se crea ya se muestra como va a quedar en la opción «Crear» (y el teclado del
+// celular arranca la palabra en mayúscula), y un insumo viejo cargado en minúscula se ve igual con
+// mayúscula. En Gastos, donde lo tipeado no crea nada en el catálogo, no se usa.
 export function ItemPicker({
   items,
   value,
@@ -37,6 +43,7 @@ export function ItemPicker({
   isAdmin = false,
   createLabel = (text: string) => `+ Crear "${text}"`,
   placeholder = "Buscar o cargar qué vas a comprar…",
+  capitalizeNames = false,
 }: {
   items: PickerItem[];
   value: string;
@@ -46,9 +53,11 @@ export function ItemPicker({
   isAdmin?: boolean;
   createLabel?: (text: string) => string;
   placeholder?: string;
+  capitalizeNames?: boolean;
 }) {
+  const shown = (name: string) => (capitalizeNames ? capitalizeFirst(name) : name);
   const selectedName = items.find((it) => it.id === value)?.name ?? null;
-  const [query, setQuery] = useState(selectedName ?? newName);
+  const [query, setQuery] = useState(selectedName ? shown(selectedName) : newName);
   const [open, setOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [iconDraft, setIconDraft] = useState("");
@@ -65,11 +74,12 @@ export function ItemPicker({
   function selectExisting(item: PickerItem) {
     onChange(item.id);
     onNewNameChange("");
-    setQuery(item.name);
+    setQuery(shown(item.name));
     setOpen(false);
   }
 
-  function selectNew(name: string) {
+  function selectNew(text: string) {
+    const name = shown(text);
     onChange(NEW_ITEM_VALUE);
     onNewNameChange(name);
     setQuery(name);
@@ -102,6 +112,7 @@ export function ItemPicker({
           }, 150);
         }}
         placeholder={placeholder}
+        autoCapitalize={capitalizeNames ? "sentences" : undefined}
         className="w-full min-w-48 rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
       />
       {open && (
@@ -116,7 +127,7 @@ export function ItemPicker({
                   className="flex flex-1 items-center gap-1.5 px-3 py-1.5 text-left text-sm hover:bg-surface"
                 >
                   {icon && <span aria-hidden="true">{icon}</span>}
-                  {it.name}
+                  {shown(it.name)}
                 </button>
                 {isAdmin &&
                   (editingItemId === it.id ? (
@@ -162,7 +173,7 @@ export function ItemPicker({
                 onMouseDown={() => selectNew(trimmedQuery)}
                 className="w-full px-3 py-1.5 text-left text-sm font-medium text-eventos hover:bg-surface"
               >
-                {createLabel(trimmedQuery)}
+                {createLabel(shown(trimmedQuery))}
               </button>
             </li>
           )}
