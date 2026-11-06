@@ -8,6 +8,7 @@ import {
   normalizeMenu,
   type MenuSuggestion,
 } from "@/lib/eventos/menu";
+import { EDIT_VENUE_VALUE, NEW_VENUE_VALUE } from "@/lib/eventos/venueSelection";
 
 const weekdayFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "long",
@@ -15,14 +16,22 @@ const weekdayFormatter = new Intl.DateTimeFormat("es-AR", {
   month: "long",
 });
 
-export const NEW_VENUE_VALUE = "__new__";
+/** Un lugar de la lista. La dirección y la casa solo hacen falta para poder editarlo. */
+export interface VenueOption {
+  id: string;
+  name: string;
+  address?: string | null;
+  host_user_id?: string | null;
+}
 
 // Campos compartidos por el alta y la edición de un evento: nombre,
 // fecha/hora (con el día de la semana calculado, porque el picker nativo
-// no lo muestra), lugar (select de venues + opción de cargar uno nuevo) y
-// notas. Cada formulario que lo usa se ocupa de su propio <form>/action.
+// no lo muestra), lugar (select de venues + opciones de cargar uno nuevo y, al
+// editar un evento, de corregir el elegido) y notas. Cada formulario que lo usa
+// se ocupa de su propio <form>/action.
 export function EventFormFields({
   venues,
+  allowEditVenue = false,
   members,
   defaultName = "",
   defaultEventDate = "",
@@ -34,7 +43,9 @@ export function EventFormFields({
   defaultMenu = "",
   menuSuggestions = [],
 }: {
-  venues: { id: string; name: string }[];
+  venues: VenueOption[];
+  /** Suma «Editar “X”…» a la lista de lugares (solo al editar un evento). */
+  allowEditVenue?: boolean;
   members: { id: string; name: string | null; email: string }[];
   defaultName?: string;
   defaultEventDate?: string;
@@ -49,6 +60,10 @@ export function EventFormFields({
 }) {
   const [eventDateValue, setEventDateValue] = useState(defaultEventDate);
   const [venueSelection, setVenueSelection] = useState(defaultVenueValue);
+  // «Editar “X”…»: X es el lugar que estaba elegido (venueSelection sigue siendo X mientras se edita).
+  const [editingVenue, setEditingVenue] = useState(false);
+  const venueToEdit = allowEditVenue ? venues.find((v) => v.name === venueSelection) : undefined;
+  const editing = editingVenue && venueToEdit !== undefined;
   const [menu, setMenu] = useState(defaultMenu);
 
   return (
@@ -93,8 +108,15 @@ export function EventFormFields({
           </label>
           <select
             name="venue"
-            value={venueSelection}
-            onChange={(e) => setVenueSelection(e.target.value)}
+            value={editing ? EDIT_VENUE_VALUE : venueSelection}
+            onChange={(e) => {
+              if (e.target.value === EDIT_VENUE_VALUE) {
+                setEditingVenue(true);
+                return;
+              }
+              setEditingVenue(false);
+              setVenueSelection(e.target.value);
+            }}
             className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
           >
             <option value="">Sin lugar</option>
@@ -104,7 +126,66 @@ export function EventFormFields({
               </option>
             ))}
             <option value={NEW_VENUE_VALUE}>+ Nuevo lugar…</option>
+            {venueToEdit && (
+              <option value={EDIT_VENUE_VALUE}>Editar «{venueToEdit.name}»…</option>
+            )}
           </select>
+          {editing && venueToEdit && (
+            <div key={venueToEdit.id} className="mt-1.5 space-y-1.5">
+              <input type="hidden" name="editVenueId" value={venueToEdit.id} />
+              <div>
+                <label className="block text-xs font-medium text-foreground/50">
+                  Nombre del lugar
+                </label>
+                <input
+                  type="text"
+                  name="editVenueName"
+                  defaultValue={venueToEdit.name}
+                  required
+                  className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-foreground/40">
+                  Si lo cambiás, se cambia también en los otros eventos que usan este lugar.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground/50">
+                  ¿De quién es la casa? (opcional)
+                </label>
+                <select
+                  name="editVenueHostUserId"
+                  defaultValue={venueToEdit.host_user_id ?? ""}
+                  className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Sin especificar</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name ?? member.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground/50">
+                  Dirección o link de Google Maps (opcional)
+                </label>
+                <input
+                  type="text"
+                  name="editVenueAddress"
+                  defaultValue={venueToEdit.address ?? ""}
+                  placeholder="Link de «Compartir ubicación», dirección o coordenadas"
+                  className="mt-1 w-full rounded-lg border border-surface-border bg-background px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-foreground/40">
+                  Para navegar directo y para el clima: pegá el link que da
+                  &quot;Compartir ubicación&quot; en Google Maps o las coordenadas
+                  (ej. -34.60, -58.38). Una dirección escrita (ej. &quot;Av.
+                  Cabildo 2394, CABA&quot;) sirve para navegar, pero no para el
+                  clima.
+                </p>
+              </div>
+            </div>
+          )}
           {venueSelection === NEW_VENUE_VALUE && (
             <>
               <input

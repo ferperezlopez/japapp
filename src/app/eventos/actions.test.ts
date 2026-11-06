@@ -50,9 +50,10 @@ import {
   setRsvp,
   setReservaCanchaAssignee,
   updateEvent,
-  updateVenue,
+  updateTaskQuantity,
   upsertFutbolStats,
 } from "./actions";
+import { sendPushToUsers } from "@/lib/push/send";
 
 type Call = [method: string, ...args: unknown[]];
 
@@ -412,218 +413,108 @@ const VENUE_ID = "6a4f2f0e-2f4f-4ad7-8d63-0f5b9c0d1e11";
 const LINK = "https://maps.app.goo.gl/g45UqHpc6iVv8Ng67";
 const JAVIS = { lat: -34.5612, lng: -58.4564 };
 
-function venueForm(fields: Record<string, string> = {}) {
-  const data = new FormData();
-  const all: Record<string, string> = {
-    name: "Javi's",
-    address: LINK,
-    hostUserId: "user-2",
-    ...fields,
-  };
-  for (const [key, value] of Object.entries(all)) data.set(key, value);
-  return data;
-}
+// Al editar un evento, «Editar “X”…» en la lista de lugares corrige el lugar (la lógica del
+// cambio está en src/lib/eventos/venueEdit.test.ts) y el evento queda en él.
+describe("updateEvent corrigiendo un lugar", () => {
+  const edicion = (fields: Record<string, string> = {}) =>
+    form({
+      venue: "__edit__",
+      editVenueId: VENUE_ID,
+      editVenueName: "Fercho's",
+      editVenueAddress: LINK,
+      editVenueHostUserId: "user-2",
+      ...fields,
+    });
 
-/** Los argumentos con los que se llamó a update_venue. */
-const updateVenueArgs = () => {
-  const [[name, args]] = mocks.rpc.mock.calls as [[string, Record<string, unknown>]];
-  expect(name).toBe("update_venue");
-  return args;
-};
+  /** Cada tabla contesta lo suyo: el lugar tal como está hoy y el evento que se actualiza. */
+  function respondByTable() {
+    mocks.from.mockImplementation((table: string) => {
+      tables.push(table);
+      const result =
+        table === "venues"
+          ? { data: { address: null, lat: null, lng: null }, error: null }
+          : { data: [{ id: EVENT_ID }], error: null };
+      return fakeQuery(result, calls);
+    });
+  }
 
-describe("updateVenue", () => {
   beforeEach(() => {
-    // La sede tal como está guardada ahora: con su link y con su ubicación.
-    respondWith({ data: { address: LINK, lat: JAVIS.lat, lng: JAVIS.lng }, error: null });
+    respondByTable();
+    mocks.resolveVenueCoordinates.mockResolvedValue(JAVIS);
   });
 
-  it("pide un nombre antes de tocar nada", async () => {
-    expect(await updateVenue(VENUE_ID, venueForm({ name: "   " }))).toEqual({
-      error: "Poné un nombre para el lugar.",
-    });
-    expect(mocks.getUser).not.toHaveBeenCalled();
-    expect(mocks.from).not.toHaveBeenCalled();
-    expect(mocks.rpc).not.toHaveBeenCalled();
-  });
-
-  it("sin sesión no toca la base ni lee ningún link", async () => {
-    mocks.getUser.mockResolvedValue({ data: { user: null } });
-    expect(await updateVenue(VENUE_ID, venueForm())).toEqual({ error: "No estás logueado." });
-    expect(mocks.from).not.toHaveBeenCalled();
-    expect(mocks.rpc).not.toHaveBeenCalled();
-    expect(mocks.resolveVenueCoordinates).not.toHaveBeenCalled();
-  });
-
-  it("si la sede ya no existe lo avisa y no llama a la función ni revalida", async () => {
-    respondWith({ data: null, error: null });
-    expect(await updateVenue(VENUE_ID, venueForm())).toEqual({ error: "No se encontró ese lugar." });
-    expect(mocks.rpc).not.toHaveBeenCalled();
-    expect(mocks.revalidatePath).not.toHaveBeenCalled();
-  });
-
-  it("guarda por la función update_venue y nunca con un UPDATE directo sobre venues", async () => {
-    expect(await updateVenue(VENUE_ID, venueForm({ name: "  Javi's (nuevo)  " }))).toEqual({
+  it("corrige el lugar por update_venue y deja el evento en él", async () => {
+    expect(await updateEvent(EVENT_ID, edicion({ editVenueName: "  Casa de Fercho  " }))).toEqual({
       ok: true,
-      location: "found",
+      venueLocation: "found",
     });
-
-    // Solo lee la sede actual para saber si el link cambió.
-    expect(tables).toEqual(["venues"]);
-    expect(callsTo("select")).toEqual([["select", "address, lat, lng"]]);
-    expect(callsTo("eq")).toEqual([["eq", "id", VENUE_ID]]);
-    expect(callsTo("update")).toEqual([]);
 
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
-    expect(updateVenueArgs()).toEqual({
+    expect(mocks.rpc).toHaveBeenCalledWith("update_venue", {
       p_venue_id: VENUE_ID,
-      p_name: "Javi's (nuevo)",
+      p_name: "Casa de Fercho",
       p_address: LINK,
       p_host_user_id: "user-2",
       p_lat: JAVIS.lat,
       p_lng: JAVIS.lng,
     });
+    // El evento queda con el nombre con el que quedó el lugar, no con «__edit__».
+    const [[, payload]] = callsTo("update") as [[string, Record<string, unknown>]];
+    expect(payload.location).toBe("Casa de Fercho");
+    expect(tables).toEqual(["venues", "events"]);
   });
 
-  it("revalida la lista y las páginas de los eventos, que muestran el nombre y el clima de la sede", async () => {
-    await updateVenue(VENUE_ID, venueForm());
-    expect(mocks.revalidatePath.mock.calls).toEqual([["/eventos", "layout"], ["/"]]);
+  it("revalida también los demás eventos, que ven el lugar con lo nuevo", async () => {
+    await updateEvent(EVENT_ID, edicion());
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      [`/eventos/${EVENT_ID}`],
+      ["/eventos"],
+      ["/"],
+      ["/eventos", "layout"],
+    ]);
   });
 
-  it("sin «de quién es la casa» guarda la sede sin anfitrión", async () => {
-    await updateVenue(VENUE_ID, venueForm({ hostUserId: "" }));
-    expect(updateVenueArgs()).toMatchObject({ p_host_user_id: null });
+  it("si no se pudo sacar la ubicación del link, el evento se guarda igual y se avisa", async () => {
+    mocks.resolveVenueCoordinates.mockResolvedValue(null);
+    expect(await updateEvent(EVENT_ID, edicion())).toEqual({ ok: true, venueLocation: "missing" });
+    expect(callsTo("update")).toHaveLength(1);
   });
 
-  describe("la ubicación (para el clima)", () => {
-    it("si el link no cambió y la sede ya tiene ubicación, no lo vuelve a leer y la conserva", async () => {
-      expect(await updateVenue(VENUE_ID, venueForm({ name: "Otro nombre" }))).toEqual({
-        ok: true,
-        location: "found",
-      });
-      expect(mocks.resolveVenueCoordinates).not.toHaveBeenCalled();
-      expect(updateVenueArgs()).toMatchObject({ p_lat: JAVIS.lat, p_lng: JAVIS.lng });
+  it("un nombre vacío se rechaza y el evento no se toca", async () => {
+    expect(await updateEvent(EVENT_ID, edicion({ editVenueName: "  " }))).toEqual({
+      error: "Poné un nombre para el lugar.",
     });
-
-    it("espacios alrededor del link no cuentan como un link distinto", async () => {
-      await updateVenue(VENUE_ID, venueForm({ address: `  ${LINK}  ` }));
-      expect(mocks.resolveVenueCoordinates).not.toHaveBeenCalled();
-      expect(updateVenueArgs()).toMatchObject({ p_address: LINK, p_lat: JAVIS.lat });
-    });
-
-    it("si el link cambió, lee la ubicación del nuevo y guarda esa", async () => {
-      const otro = "https://maps.app.goo.gl/otroLugar";
-      mocks.resolveVenueCoordinates.mockResolvedValue({ lat: -32.9468, lng: -60.6393 });
-      expect(await updateVenue(VENUE_ID, venueForm({ address: otro }))).toEqual({
-        ok: true,
-        location: "found",
-      });
-      expect(mocks.resolveVenueCoordinates).toHaveBeenCalledTimes(1);
-      expect(mocks.resolveVenueCoordinates).toHaveBeenCalledWith(otro);
-      expect(updateVenueArgs()).toMatchObject({
-        p_address: otro,
-        p_lat: -32.9468,
-        p_lng: -60.6393,
-      });
-    });
-
-    it("si el link nuevo no se puede leer, la sede queda sin ubicación (nunca con la de antes) y se avisa", async () => {
-      mocks.resolveVenueCoordinates.mockResolvedValue(null);
-      expect(await updateVenue(VENUE_ID, venueForm({ address: "https://maps.app.goo.gl/roto" }))).toEqual({
-        ok: true,
-        location: "missing",
-      });
-      expect(updateVenueArgs()).toMatchObject({ p_lat: null, p_lng: null });
-    });
-
-    it("una dirección escrita (sin link ni coordenadas) se guarda para navegar, pero se avisa que no sirve para el clima", async () => {
-      expect(await updateVenue(VENUE_ID, venueForm({ address: "Av. Cabildo 2394, CABA" }))).toEqual({
-        ok: true,
-        location: "missing",
-      });
-      expect(updateVenueArgs()).toMatchObject({
-        p_address: "Av. Cabildo 2394, CABA",
-        p_lat: null,
-        p_lng: null,
-      });
-    });
-
-    it("una sede con link pero sin ubicación (de antes de la 0050) la intenta leer aunque el link no cambie", async () => {
-      respondWith({ data: { address: LINK, lat: null, lng: null }, error: null });
-      mocks.resolveVenueCoordinates.mockResolvedValue(JAVIS);
-      expect(await updateVenue(VENUE_ID, venueForm())).toEqual({ ok: true, location: "found" });
-      expect(mocks.resolveVenueCoordinates).toHaveBeenCalledWith(LINK);
-      expect(updateVenueArgs()).toMatchObject({ p_lat: JAVIS.lat, p_lng: JAVIS.lng });
-    });
-
-    it.each([
-      ["la latitud", { lat: JAVIS.lat, lng: null }],
-      ["la longitud", { lat: null, lng: JAVIS.lng }],
-    ])("si la sede guarda solo %s (la base no lo permite, pero por las dudas) lee el link de nuevo", async (_name, columns) => {
-      respondWith({ data: { address: LINK, ...columns }, error: null });
-      mocks.resolveVenueCoordinates.mockResolvedValue(JAVIS);
-      expect(await updateVenue(VENUE_ID, venueForm())).toEqual({ ok: true, location: "found" });
-      expect(mocks.resolveVenueCoordinates).toHaveBeenCalledWith(LINK);
-      expect(updateVenueArgs()).toMatchObject({ p_lat: JAVIS.lat, p_lng: JAVIS.lng });
-    });
-
-    it("una sede sin link a la que se le carga uno queda ubicada (el caso de un lugar creado sin GPS)", async () => {
-      respondWith({ data: { address: null, lat: null, lng: null }, error: null });
-      mocks.resolveVenueCoordinates.mockResolvedValue(JAVIS);
-      expect(await updateVenue(VENUE_ID, venueForm({ name: "Fercho's" }))).toEqual({
-        ok: true,
-        location: "found",
-      });
-      expect(updateVenueArgs()).toMatchObject({
-        p_name: "Fercho's",
-        p_address: LINK,
-        p_lat: JAVIS.lat,
-        p_lng: JAVIS.lng,
-      });
-    });
-
-    it("coordenadas tipeadas en el campo sirven como ubicación", async () => {
-      mocks.resolveVenueCoordinates.mockResolvedValue({ lat: -34.6, lng: -58.38 });
-      expect(await updateVenue(VENUE_ID, venueForm({ address: "-34.60, -58.38" }))).toEqual({
-        ok: true,
-        location: "found",
-      });
-      expect(updateVenueArgs()).toMatchObject({
-        p_address: "-34.60, -58.38",
-        p_lat: -34.6,
-        p_lng: -58.38,
-      });
-    });
-
-    it("si se borra el link la sede queda sin ubicación y no hay nada que avisar", async () => {
-      expect(await updateVenue(VENUE_ID, venueForm({ address: "  " }))).toEqual({
-        ok: true,
-        location: "none",
-      });
-      expect(updateVenueArgs()).toMatchObject({ p_address: null, p_lat: null, p_lng: null });
-    });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(callsTo("update")).toEqual([]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
-  describe("cuando la base rechaza el cambio", () => {
-    it("un nombre repetido se explica y no se revalida", async () => {
-      mocks.rpc.mockResolvedValue({ error: { code: "23505", message: "duplicate key value" } });
-      expect(await updateVenue(VENUE_ID, venueForm())).toEqual({
-        error: "Ya hay un lugar con ese nombre.",
-      });
-      expect(mocks.revalidatePath).not.toHaveBeenCalled();
-    });
+  it("si la base rechaza el cambio del lugar, contesta el error y el evento no se toca", async () => {
+    mocks.rpc.mockResolvedValue({ error: { code: "23505", message: "duplicate key" } });
+    expect(await updateEvent(EVENT_ID, edicion())).toEqual({ error: "Ya hay un lugar con ese nombre." });
+    expect(callsTo("update")).toEqual([]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
 
-    it("una persona que no existe se explica", async () => {
-      mocks.rpc.mockResolvedValue({ error: { code: "23503", message: "foreign key" } });
-      expect(await updateVenue(VENUE_ID, venueForm())).toEqual({
-        error: "No se encontró a esa persona.",
-      });
-    });
+  it("un evento cerrado no deja corregir el lugar", async () => {
+    mocks.guardEdit.mockResolvedValue(CLOSED);
+    expect(await updateEvent(EVENT_ID, edicion())).toEqual({ error: CLOSED });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.resolveVenueCoordinates).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
 
-    it("cualquier otro error se pasa tal cual y no se revalida", async () => {
-      mocks.rpc.mockResolvedValue({ error: { code: "XX000", message: "fallo de la base" } });
-      expect(await updateVenue(VENUE_ID, venueForm())).toEqual({ error: "fallo de la base" });
-      expect(mocks.revalidatePath).not.toHaveBeenCalled();
-    });
+  it("sin corregir nada (un lugar de la lista) no llama a update_venue ni lee ningún link", async () => {
+    expect(await updateEvent(EVENT_ID, form({ venue: "Casa de Pablo" }))).toEqual({ ok: true });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.resolveVenueCoordinates).not.toHaveBeenCalled();
+  });
+
+  it("al crear un evento la opción de corregir no existe: se ignora y no queda «__edit__» como lugar", async () => {
+    await createEvent(edicion());
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    const [[, payload]] = callsTo("insert") as [[string, Record<string, unknown>]];
+    expect(payload.location).toBeNull();
   });
 });
 
@@ -692,5 +583,295 @@ describe("el alta de un lugar nuevo desde un evento", () => {
     await createEvent(form({ venue: "Casa de Pablo" }));
     expect(mocks.resolveVenueCoordinates).not.toHaveBeenCalled();
     expect(callsTo("upsert")).toEqual([]);
+  });
+});
+
+// Una respuesta por consulta (según la tabla y los métodos que se le encadenaron), para las acciones
+// que hacen varias consultas distintas sobre la misma tabla.
+function respondByQuery(resolve: (table: string, methods: string[]) => unknown) {
+  mocks.from.mockImplementation((table: string) => {
+    tables.push(table);
+    const methods: string[] = [];
+    const query: object = new Proxy(
+      {},
+      {
+        get(_target, method) {
+          if (method === "then") {
+            return (done: (value: unknown) => void) => done(resolve(table, methods));
+          }
+          return (...args: unknown[]) => {
+            methods.push(String(method));
+            calls.push([String(method), ...args]);
+            return query;
+          };
+        },
+      },
+    );
+    return query;
+  });
+}
+
+interface TasksDb {
+  /** La asignación que ya existe (misma persona y mismo insumo), si la hay. */
+  existing?: { id: string } | null;
+  /** El id con el que queda un insumo nuevo del catálogo. */
+  newItemId?: string;
+  /** Lo que contesta el UPDATE (`select("id")` de las filas que tocó). */
+  updated?: unknown[] | null;
+  updateError?: { message: string } | null;
+  insertError?: { message: string } | null;
+}
+
+function tasksDb({
+  existing = null,
+  newItemId = "item-new",
+  updated = [{ id: "task-9" }],
+  updateError = null,
+  insertError = null,
+}: TasksDb = {}) {
+  respondByQuery((table, methods) => {
+    if (table === "insumo_items") return { data: { id: newItemId }, error: null };
+    if (table === "event_tasks" && methods.includes("maybeSingle")) return { data: existing, error: null };
+    if (table === "event_tasks" && methods.includes("update")) return { data: updated, error: updateError };
+    if (table === "event_tasks" && methods.includes("insert")) return { data: null, error: insertError };
+    return { data: null, error: null };
+  });
+}
+
+const insertedTask = () => callsTo("insert")[0]?.[1] as Record<string, unknown> | undefined;
+const updatedTask = () => callsTo("update")[0]?.[1] as Record<string, unknown> | undefined;
+
+describe("addTaskAssignee", () => {
+  it("un insumo nuevo se crea en el catálogo con la primera letra en mayúscula", async () => {
+    tasksDb();
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { newItemName: "  servilletas " }),
+    ).toEqual({ ok: true });
+
+    expect(callsTo("upsert")).toEqual([
+      ["upsert", { name: "Servilletas", created_by: "user-1" }, { onConflict: "name" }],
+    ]);
+    expect(insertedTask()).toEqual({
+      event_id: EVENT_ID,
+      task_type: "compra_insumos",
+      assigned_to: "user-2",
+      item_id: "item-new",
+      updated_by: "user-1",
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/eventos/${EVENT_ID}`);
+  });
+
+  it("solo cambia la primera letra: lo demás queda como se escribió", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { newItemName: "coca COLA" });
+    expect(callsTo("upsert")[0][1]).toMatchObject({ name: "Coca COLA" });
+  });
+
+  it("un insumo ya cargado se asigna sin crear nada en el catálogo", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" });
+    expect(callsTo("upsert")).toEqual([]);
+    expect(tables).not.toContain("insumo_items");
+    expect(insertedTask()).toMatchObject({ item_id: "item-7" });
+  });
+
+  it.each([
+    ["sin insumo", undefined],
+    ["con un nombre vacío", { newItemName: "" }],
+    ["con un nombre de solo espacios", { newItemName: "   " }],
+  ])("%s pide elegir o cargar qué se va a comprar y no escribe nada", async (_name, item) => {
+    tasksDb();
+    expect(await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", item)).toEqual({
+      error: "Elegí o cargá qué vas a comprar.",
+    });
+    expect(callsTo("upsert")).toEqual([]);
+    expect(callsTo("insert")).toEqual([]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("guarda la cantidad recortada junto con la asignación", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "  3   kg ");
+    expect(insertedTask()).toMatchObject({ item_id: "item-7", quantity: "3 kg" });
+  });
+
+  it.each([
+    ["no se tipea", undefined],
+    ["está vacía", ""],
+    ["es de solo espacios", "   "],
+  ])("si la cantidad %s no se manda la columna (anda también sin la migración 0051)", async (_name, quantity) => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, quantity);
+    expect(insertedTask()).toBeDefined();
+    expect(Object.keys(insertedTask() ?? {})).not.toContain("quantity");
+  });
+
+  it("una cantidad muy larga se rechaza antes de crear el insumo nuevo", async () => {
+    tasksDb();
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { newItemName: "pan" }, "x".repeat(41)),
+    ).toEqual({ error: "La cantidad es muy larga (máximo 40 caracteres)." });
+    expect(callsTo("upsert")).toEqual([]);
+    expect(callsTo("insert")).toEqual([]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("una cantidad de exactamente 40 caracteres se acepta", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "x".repeat(40));
+    expect(insertedTask()).toMatchObject({ quantity: "x".repeat(40) });
+  });
+
+  it.each(["lavado_platos", "orden_sede"] as const)(
+    "en %s no hay cantidad: se ignora aunque llegue",
+    async (taskType) => {
+      tasksDb();
+      expect(
+        await addTaskAssignee(EVENT_ID, taskType, "user-2", undefined, "x".repeat(99)),
+      ).toEqual({ ok: true });
+      expect(Object.keys(insertedTask() ?? {})).not.toContain("quantity");
+      expect(insertedTask()).toMatchObject({ task_type: taskType, item_id: null });
+    },
+  );
+
+  it("avisa a quien recibe la tarea, salvo que se la asigne a sí mismo", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "2 kg");
+    expect(sendPushToUsers).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendPushToUsers).mock.calls[0][1]).toEqual(["user-2"]);
+
+    vi.mocked(sendPushToUsers).mockClear();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-1", { existingItemId: "item-7" }, "2 kg");
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+  });
+
+  it("si esa persona ya tenía ese insumo y no se tipea cantidad, no hace nada (como antes)", async () => {
+    tasksDb({ existing: { id: "task-9" } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }),
+    ).toEqual({ ok: true });
+    expect(callsTo("insert")).toEqual([]);
+    expect(callsTo("update")).toEqual([]);
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+  });
+
+  it("si ya lo tenía y se tipea una cantidad, la actualiza en esa asignación (sin duplicar ni avisar otra vez)", async () => {
+    tasksDb({ existing: { id: "task-9" } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, " 4 kg "),
+    ).toEqual({ ok: true });
+
+    expect(callsTo("insert")).toEqual([]);
+    expect(updatedTask()).toEqual({
+      quantity: "4 kg",
+      updated_by: "user-1",
+      updated_at: expect.any(String),
+    });
+    expect(callsTo("eq")).toContainEqual(["eq", "id", "task-9"]);
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/eventos/${EVENT_ID}`);
+  });
+
+  it("si ya lo tenía y la cantidad no se pudo guardar (0 filas por permisos), lo avisa", async () => {
+    tasksDb({ existing: { id: "task-9" }, updated: [] });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "4 kg"),
+    ).toEqual({ error: "No se pudo guardar la cantidad: el insumo no existe o no tenés permiso." });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("si la base rechaza la actualización de la cantidad, devuelve su mensaje", async () => {
+    tasksDb({ existing: { id: "task-9" }, updateError: { message: "boom" } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "4 kg"),
+    ).toEqual({ error: "boom" });
+  });
+
+  it("si la base rechaza el alta, devuelve su mensaje y no avisa a nadie", async () => {
+    tasksDb({ insertError: { message: "no se pudo" } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }),
+    ).toEqual({ error: "no se pudo" });
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("sin sesión no toca la base", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "2 kg"),
+    ).toEqual({ error: "No estás logueado." });
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateTaskQuantity", () => {
+  it("guarda la cantidad recortada y deja quién la corrigió", async () => {
+    tasksDb();
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "  3   kg ")).toEqual({ ok: true });
+
+    expect(tables).toEqual(["event_tasks"]);
+    expect(updatedTask()).toEqual({
+      quantity: "3 kg",
+      updated_by: "user-1",
+      updated_at: expect.any(String),
+    });
+    expect(callsTo("eq")).toEqual([
+      ["eq", "id", "task-1"],
+      ["eq", "event_id", EVENT_ID],
+    ]);
+    expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, "participation");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/eventos/${EVENT_ID}`);
+  });
+
+  it.each(["", "   "])("una cantidad vacía (%j) la saca", async (quantity) => {
+    tasksDb();
+    expect(await updateTaskQuantity("task-1", EVENT_ID, quantity)).toEqual({ ok: true });
+    expect(updatedTask()).toMatchObject({ quantity: null });
+  });
+
+  it("una cantidad muy larga se rechaza y no toca la base", async () => {
+    tasksDb();
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "x".repeat(41))).toEqual({
+      error: "La cantidad es muy larga (máximo 40 caracteres).",
+    });
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("sin sesión no toca la base", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toEqual({
+      error: "No estás logueado.",
+    });
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.guardEdit).not.toHaveBeenCalled();
+  });
+
+  it("con el evento bloqueado devuelve el aviso y no escribe nada", async () => {
+    tasksDb();
+    mocks.guardEdit.mockResolvedValue(CLOSED);
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toEqual({ error: CLOSED });
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("si no tocó ninguna fila (la tarea ya no está o la base no deja) lo avisa en vez de dar por guardado", async () => {
+    tasksDb({ updated: [] });
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toEqual({
+      error: "No se pudo guardar la cantidad: el insumo no existe o no tenés permiso.",
+    });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("si la base no contesta filas (null) también lo avisa", async () => {
+    tasksDb({ updated: null });
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toHaveProperty("error");
+  });
+
+  it("si la base devuelve un error, devuelve su mensaje", async () => {
+    tasksDb({ updateError: { message: "boom" } });
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toEqual({ error: "boom" });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 });

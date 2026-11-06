@@ -1,43 +1,49 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { getModalHistory, type ModalHandle } from "@/lib/modalHistory";
 
-// Hace que el botón atrás (físico en Android o del navegador) cierre el
-// modal en vez de navegar hacia atrás en el historial de la app —
-// llamar sin condición dentro de cada componente de modal, que ya solo
-// existe en el árbol mientras está abierto (`{open && <Modal ... />}`).
-// Empuja una entrada de historial al montar y la consume al desmontar
-// (si el cierre vino de "atrás", el pop ya la consumió solo; si vino de
-// X/backdrop/Escape/guardar, el cleanup hace un `history.back()` para no
-// dejar una entrada fantasma). Con modales anidados cada instancia
-// empuja/consume la suya de forma normal (LIFO): atrás cierra primero el
-// que está más arriba.
+// Hace que el botón atrás (físico en Android o del navegador) cierre el modal en vez de navegar
+// hacia atrás en la página que está debajo. Hay que llamarlo en TODO componente de modal, sin
+// condición: el componente ya solo existe en el árbol mientras el modal está abierto
+// (`{open && <Modal ... />}`). Un test (useBackButtonClose.contract.test.ts) revisa que ningún
+// modal se olvide de hacerlo.
 //
-// OJO al probarlo: en `next dev` React StrictMode monta, desmonta y vuelve a
-// montar el efecto, y el `history.back()` del cleanup se come la entrada recién
-// empujada — el modal queda abierto pero «atrás» ya no lo cierra, navega. En
-// un build de producción (`next build` + `next start`, o un deploy de Vercel)
-// funciona como se describe acá.
+// Con varios modales abiertos a la vez, «atrás» cierra solo el que está al frente. Toda la lógica
+// del historial (pila de modales, un solo listener, operaciones en orden) vive en
+// src/lib/modalHistory.ts; esto es solo el pegamento con React.
+//
+// Devuelve `closeThen(action)` para los modales que navegan al cerrarse (un link del menú, un
+// aviso de la campanita): suelta la entrada de historial del modal, recién después lo cierra y hace
+// `action` (por ejemplo `router.push`). Así el historial queda [página, destino]. Hacer
+// `onClose()` + `router.push()` a la vez deja una entrada fantasma o, peor, hace que el retroceso
+// del modal se coma la navegación.
 export function useBackButtonClose(onClose: () => void) {
-  const closingProgrammatically = useRef(false);
+  // Siempre la última versión: la pila la llama cuando el usuario toca «atrás».
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  const handleRef = useRef<ModalHandle | null>(null);
 
   useEffect(() => {
-    window.history.pushState({ modal: true }, "");
-    const handlePopState = () => {
-      if (closingProgrammatically.current) {
-        closingProgrammatically.current = false;
-        return;
-      }
-      onClose();
-    };
-    window.addEventListener("popstate", handlePopState);
+    const handle = getModalHistory().register(() => onCloseRef.current());
+    handleRef.current = handle;
     return () => {
-      window.removeEventListener("popstate", handlePopState);
-      if (window.history.state?.modal) {
-        closingProgrammatically.current = true;
-        window.history.back();
-      }
+      handleRef.current = null;
+      handle.release();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- se ejecuta una sola vez al montar/desmontar el modal, no en cada render por una `onClose` nueva
   }, []);
+
+  const closeThen = useCallback((action: () => void) => {
+    const finish = () => {
+      onCloseRef.current();
+      action();
+    };
+    const handle = handleRef.current;
+    if (handle) handle.closeThen(finish);
+    else finish();
+  }, []);
+
+  return { closeThen };
 }

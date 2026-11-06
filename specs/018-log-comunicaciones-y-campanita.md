@@ -4,7 +4,7 @@
 - **Rutas:** `/comunicaciones` (extendida), `/notificaciones` (nueva)
 - **Migraciones relacionadas:** `supabase/migrations/0032_notifications.sql`,
   `supabase/migrations/0042_notification_recipients_deleted_at.sql`
-- **Última actualización:** 2026-10-18
+- **Última actualización:** 2026-11-06
 
 ## 1. Resumen
 
@@ -194,21 +194,31 @@ ve los destinatarios de todos. `id` es el del renglón del destinatario
 4. El contador del badge (`getMyUnreadNotificationCount`) tampoco cuenta
    los borrados.
 
-**Atrás (`NotificationsModal`, `src/lib/useBackButtonClose.ts`):**
+**Atrás (`NotificationsModal`, `src/lib/useBackButtonClose.ts`, `src/lib/modalHistory.ts`):**
 1. El modal es un componente aparte que solo existe mientras está abierto, y
    usa `useBackButtonClose`: al abrir empuja una entrada de historial; «atrás»
-   la consume y cierra el modal. Cerrar con X, fondo o Escape la consume con un
-   `history.back()` (cleanup del hook), así que no queda una entrada fantasma.
-2. Tocar un aviso cierra **y** navega, pero no a la vez: el `history.back()`
-   que hace el hook al desmontar se pisaría con el `router.push` en curso (el
-   mismo problema que documenta `GustySnakeGame`). Entonces primero se hace
-   `history.back()` (se suelta la entrada del modal) y recién cuando llega ese
-   `popstate` se navega. El historial queda `[página, destino]`. Un segundo
-   toque (o un X) mientras se espera ese `popstate` se ignora: sería un segundo
-   `back()` y sacaría de la página.
-3. En `next dev` el hook no se comporta así (React StrictMode monta, desmonta
-   y remonta el efecto y el `back()` del cleanup se come la entrada recién
-   empujada): probar con `next build` + `next start`, o en un deploy.
+   la consume y cierra el modal. Cerrar con X, fondo o Escape la suelta con un
+   retroceso del historial (cleanup del hook), así que no queda una entrada
+   fantasma.
+2. Tocar un aviso cierra **y** navega, pero no a la vez: se usa `closeThen`, que
+   primero suelta la entrada del modal (espera el `popstate` de ese retroceso) y
+   recién después hace el `router.push`. Si se hicieran a la vez, el retroceso se
+   pisaría con la navegación en curso. El historial queda `[página, destino]`. Un
+   segundo toque mientras tanto no hace nada.
+3. **Es la regla de TODOS los modales de la app**, no solo de la campanita: el
+   menú de secciones, editar gasto, marcar pagado, ver y armar equipos, editar
+   invitado e imagen ampliada. Toda la lógica del historial está en un único objeto
+   (`modalHistory.ts`: una pila de modales, un solo listener de `popstate` y las
+   operaciones sobre el historial de a una, esperando cada retroceso), y
+   `useBackButtonClose` es el pegamento con React. Eso da: con varios modales
+   abiertos, «atrás» cierra solo el de adelante (antes los cerraba a todos juntos);
+   cerrar un modal y abrir otro en el mismo render («Ver equipos» → «Editar
+   equipos») no pisa entradas; y funciona también con el doble montaje de React
+   StrictMode en `next dev`. Un modal que navega (menú, campanita) usa `closeThen`.
+4. Un modal nuevo no puede olvidarse de esto: `useBackButtonClose.contract.test.ts`
+   recorre el código y falla si un componente con `aria-modal` (o un overlay
+   `fixed inset-0`) no llama a `useBackButtonClose`. La única excepción es el juego
+   Gusty Snake, cuyo «atrás» pausa la partida con su propia guarda (spec 020).
 
 **Fallback de link (`sendPushToUsers`, `src/lib/push/send.ts`):**
 1. Si `payload.url` no viene (hoy solo pasa en `sendAdminPush` cuando
@@ -254,6 +264,14 @@ ve los destinatarios de todos. `id` es el del renglón del destinatario
 - [x] Tocar un aviso con la campanita abierta navega al destino y «atrás» vuelve
       a la página de origen, con el modal cerrado; un doble toque no retrocede
       de más.
+- [x] En todo modal de la app «atrás» cierra el modal que está al frente y deja en
+      la misma página; cerrar con X, fondo o Escape no deja una entrada de historial
+      de más; tocar una sección del menú navega y un solo «atrás» vuelve a la página
+      de origen (verificado en el navegador, build de producción).
+- [x] Con varios modales abiertos a la vez, «atrás» cierra solo el de adelante;
+      cerrar dos juntos retrocede una sola vez; reemplazar un modal por otro no pisa
+      entradas (`src/lib/modalHistory.test.ts`).
+- [x] Ningún modal puede quedar sin esto (`src/lib/useBackButtonClose.contract.test.ts`).
 - [x] Con más de 30 avisos, la campanita muestra los 30 más nuevos.
 
 ## 6. Decisiones y tradeoffs
@@ -282,13 +300,22 @@ ve los destinatarios de todos. `id` es el del renglón del destinatario
 - Marcar como leída una notificación puntual sin marcar el resto.
 - Paginar/buscar en el historial de `/comunicaciones`.
 - Deshacer un borrado, o borrar deslizando la fila.
-- Lo mismo de «atrás» para el menú de secciones (`SectionsMenu`), que hoy
-  tampoco empuja entrada de historial (y además navega desde adentro, así que
-  necesita el mismo orden `back()` → `popstate` → `push`).
-- Que `useBackButtonClose` aguante el doble montaje de StrictMode en `next dev`.
 
 ## 8. Changelog
 
+- 2026-11-06: **pedido del usuario** («en cualquier modal que se abra, darle atrás
+  tiene que significar cerrar el modal, o ir hacia atrás respecto del modal que está
+  en primer plano, no ir para atrás en la página subyacente»). Se revisaron todos los
+  modales: el menú de secciones, «Editar gasto» y «Marcar como pagado» no manejaban
+  «atrás» (navegaba la página de abajo), con modales apilados un solo «atrás» los
+  cerraba a todos, y «Ver equipos» → «Editar equipos» (cerrar uno y abrir otro en el
+  mismo render) pisaba la entrada del segundo. Ahora hay una pila de modales única
+  (`src/lib/modalHistory.ts`, con tests contra un historial simulado), el hook
+  `useBackButtonClose` la usa y devuelve `closeThen` para los que navegan (la
+  campanita y el menú de secciones), y un test de contrato impide que un modal nuevo
+  se olvide. Verificado en el navegador (build de producción, `page.goBack()`): menú,
+  campanita, editar gasto y marcar pagado. Se cierran los pendientes «el menú de
+  secciones» y «doble montaje de StrictMode» de la sección 7.
 - 2026-10-18: pedido explícito del usuario — poder borrar notificaciones que
   ya vio o no necesita, y que «atrás» cierre la campanita en vez de sacar de
   la página. Migración 0042 (`notification_recipients.deleted_at`, borrado

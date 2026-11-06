@@ -2,8 +2,8 @@
 
 - **Estado:** Implemented (migraciones `0044` y `0045` aplicadas a la base viva el 2026-11-01; el script de verificación dio 80/80 en una réplica local y su corrida completa contra la base viva sigue pendiente, ver el changelog)
 - **Rutas:** `/eventos/[eventId]`, `/gastos/[groupId]`
-- **Migraciones relacionadas:** `supabase/migrations/0044_lock_closed_events.sql`, `supabase/migrations/0045_event_closes_at_search_path.sql`
-- **Última actualización:** 2026-11-05
+- **Migraciones relacionadas:** `supabase/migrations/0044_lock_closed_events.sql`, `supabase/migrations/0045_event_closes_at_search_path.sql`, `supabase/migrations/0051_task_quantity_and_insumo_names.sql` (una policy más: el cambio de cantidad de un insumo)
+- **Última actualización:** 2026-11-06
 
 ## 1. Resumen
 
@@ -102,6 +102,12 @@ Lo que el SQL no explica por sí solo:
   los eventos cerrados o saldados que usaban ese lugar. Es solo el nombre de la sede,
   que el evento guarda como texto de referencia: no cambia nada de su contenido
   (asistencia, gastos, tareas) y la función corre fuera de estas policies a propósito.
+- Una policy más, de la `0051`: `event_tasks` no tenía `UPDATE` (la `0012` lo sacó) y la
+  `0051` le da uno acotado a la cantidad de un insumo (`quantity`, `updated_by`,
+  `updated_at`; ver `specs/013-invitados-tareas-y-stats.md`). Su restrictiva «Evento
+  cerrado: tareas solo de un admin (cambio)» sigue el mismo molde que las de arriba: con
+  el evento cerrado, solo un admin. La acción `updateTaskQuantity` pasa por la misma
+  guarda de «participación» que las otras de tareas.
 
 ## 4. Diseño / flujo
 
@@ -161,6 +167,9 @@ viva todavía no se corrió completo (ver el changelog del 2026-11-01).
       equipos, editar y borrar el evento quedan rechazados (error o 0 filas); el
       resultado, los gastos y los pagos siguen andando; el primer gasto de un
       evento cerrado sin gastos (gasto + partes) pasa.
+- [x] Como miembro común, con el evento cerrado, cambiar la cantidad de un insumo ya
+      asignado queda rechazado (0 filas) y como admin sí (`0051`,
+      `supabase/verify/0051_task_quantity_and_insumo_names.sql`).
 - [x] Como miembro común, con el evento saldado: además el resultado, gastos,
       partes, pagos y miembros del grupo quedan rechazados; las fotos se siguen
       subiendo.
@@ -235,3 +244,6 @@ viva todavía no se corrió completo (ver el changelog del 2026-11-01).
   `authenticated_security_definer_function_executable` sobre `public.event_lock_state`,
   a propósito: la app la llama con la sesión de cada persona (igual que
   `public.is_admin`) y `events` ya es legible para cualquier usuario logueado.
+- 2026-11-06: la `0051` le suma a las tareas un `UPDATE` acotado a la cantidad de un
+  insumo (`quantity`) con su restrictiva de cierre: con el evento cerrado solo un admin la
+  cambia (comprobado en la réplica local, `supabase/verify/0051_…sql`).

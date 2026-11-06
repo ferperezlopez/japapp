@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getMyNotifications,
@@ -49,8 +49,6 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
   const { notifications, setNotifications, error, clearError, remove, clearAll } =
     useNotificationInbox(null);
 
-  // Estables a propósito: el modal le pasa al hook de "atrás" un onClose que
-  // se captura una sola vez.
   const close = useCallback(() => setOpen(false), []);
   const navigate = useCallback((url: string) => router.push(url), [router]);
 
@@ -113,33 +111,17 @@ function NotificationsModal({
   onClose: () => void;
   onNavigate: (url: string) => void;
 }) {
-  // Destino al que hay que ir una vez que el modal ya soltó su entrada de
-  // historial (ver handleItemClick).
-  const pendingUrl = useRef<string | null>(null);
-
-  const handleClose = useCallback(() => {
-    onClose();
-    const url = pendingUrl.current;
-    pendingUrl.current = null;
-    if (url) onNavigate(url);
-  }, [onClose, onNavigate]);
-
   // "Atrás" (el botón del celular o del navegador) cierra el modal en vez de
-  // sacarte de la página.
-  useBackButtonClose(handleClose);
+  // sacarte de la página. Tocar un aviso cierra el modal Y navega: closeThen
+  // suelta primero la entrada de historial del modal y recién después navega,
+  // así el historial queda [página, destino], sin una entrada fantasma en el
+  // medio (ver useBackButtonClose).
+  const { closeThen } = useBackButtonClose(onClose);
 
-  // X, fondo y Escape. Si ya se tocó un aviso y estamos esperando el
-  // "atrás" que suelta la entrada del modal, se ignoran: cerrar ahora
-  // dispararía un segundo history.back() (el del cleanup del hook) y te
-  // sacaría de la página.
-  const requestClose = useCallback(() => {
-    if (pendingUrl.current) return;
-    handleClose();
-  }, [handleClose]);
-
+  // Escape y bloqueo del scroll del fondo (la X y el fondo llaman a onClose).
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") requestClose();
+      if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     const previousOverflow = document.body.style.overflow;
@@ -148,21 +130,10 @@ function NotificationsModal({
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [requestClose]);
+  }, [onClose]);
 
-  // Tocar un aviso cierra el modal Y navega. No se hace con
-  // `setOpen(false)` + `router.push` a la vez: al desmontarse, el hook hace un
-  // history.back() para soltar su entrada, y ese back asíncrono se pisa con la
-  // navegación de Next en curso (el mismo problema que documenta
-  // GustySnakeGame). Entonces primero se suelta la entrada (history.back()) y
-  // recién cuando llega ese popstate —que el hook traduce en handleClose— se
-  // navega. El historial queda [página, destino], sin una entrada fantasma en
-  // el medio.
   function handleItemClick(notification: Notification) {
-    if (pendingUrl.current) return;
-    pendingUrl.current = notification.url || "/notificaciones";
-    if (window.history.state?.modal) window.history.back();
-    else handleClose();
+    closeThen(() => onNavigate(notification.url || "/notificaciones"));
   }
 
   return (
@@ -171,7 +142,7 @@ function NotificationsModal({
       aria-modal="true"
       aria-label="Notificaciones"
       className="animate-reveal fixed inset-0 z-[60] flex items-start justify-center bg-black/70 p-4 pt-16"
-      onClick={requestClose}
+      onClick={onClose}
     >
       <div
         onClick={(event) => event.stopPropagation()}
@@ -185,7 +156,7 @@ function NotificationsModal({
             <button
               type="button"
               aria-label="Cerrar"
-              onClick={requestClose}
+              onClick={onClose}
               className="rounded-full p-1.5 text-foreground/50 transition-colors duration-200 hover:bg-surface hover:text-foreground"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">

@@ -20,7 +20,7 @@
   `specs/025-menu-del-evento.md`),
   `supabase/migrations/0050_venue_location_and_edit.sql` (los lugares guardan su
   ubicación y se pueden editar — ver `specs/007-lugares-de-evento.md`)
-- **Última actualización:** 2026-11-05
+- **Última actualización:** 2026-11-06
 
 ## 1. Resumen
 
@@ -53,9 +53,10 @@ para el asado/empanadas.
 - Clima del evento en el encabezado (pronóstico de Open-Meteo para la hora del
   evento en la ubicación de la sede, que se actualiza al abrir la página hasta que
   empieza y después queda fijo). Ver `specs/024-clima-del-evento.md`.
-- Editar el lugar del evento desde «✏️ Editar lugar» en el encabezado (cualquier
-  logueado): nombre, link de GPS y de quién es la casa; si cambia el nombre se
-  renombra en los eventos que lo usaban. Ver `specs/007-lugares-de-evento.md`.
+- Editar el lugar del evento desde «Editar evento»: en la lista de lugares,
+  «Editar “X”…» (nombre, link de GPS y de quién es la casa); si cambia el nombre se
+  renombra en los eventos que lo usaban. El encabezado tiene un solo botón de editar.
+  Ver `specs/007-lugares-de-evento.md`.
 - Tarjeta «Bebidas» (colapsada, entre las tareas y los gastos): lo que sugiere la
   calculadora para la gente de la juntada y, opcional, cuánto se compró y cuánto
   se consumió de cada tipo. Ver `specs/023-bebidas-del-evento.md`.
@@ -270,6 +271,11 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-06: el encabezado del evento queda con un solo botón de editar (el lápiz de
+  «Editar evento»): se sacó «✏️ Editar lugar», y el lugar se corrige desde la lista de
+  lugares del formulario de edición («Editar “X”…», `updateEvent` con `venue = __edit__`).
+  Los formularios de alta y de edición usan `onSubmit` (no `action`) para que un error
+  no los resetee. Ver `specs/007-lugares-de-evento.md`.
 - 2026-11-05: el clima del encabezado es el de la ubicación de la sede y vuelve
   «✏️ Editar lugar» (nombre, link de GPS y de quién es la casa), que se había sacado
   el 2026-09-18. Migración `0050`. Ver `specs/007-lugares-de-evento.md` y

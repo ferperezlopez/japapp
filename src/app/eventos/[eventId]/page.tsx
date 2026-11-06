@@ -7,7 +7,6 @@ import { AttendanceSummary } from "@/components/eventos/AttendanceSummary";
 import { DeleteEventButton } from "./DeleteEventButton";
 import { DrinksSection } from "./DrinksSection";
 import { EditEventForm } from "./EditEventForm";
-import { EditVenueForm } from "./EditVenueForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
 import { FutbolTeamsSection } from "./FutbolTeamsSection";
 import { UploadPhotoForm } from "./UploadPhotoForm";
@@ -27,6 +26,8 @@ import { getEventWeather, isWeatherFrozen } from "@/lib/clima/refresh";
 import { WeatherLine, WeatherNeedsLocation } from "@/components/eventos/WeatherLine";
 import { LockBanner } from "@/components/eventos/LockBanner";
 import { WhatsAppShareButton } from "@/components/WhatsAppShareButton";
+import { loadEventTasks } from "@/lib/eventos/tasks";
+import { buildTasksShareText, confirmedMembers, type ShareTask } from "@/lib/eventos/tasksShare";
 
 const dateFormatter = new Intl.DateTimeFormat("es-AR", {
   weekday: "long",
@@ -382,20 +383,21 @@ export default async function EventoPage({
   // (se cierra a las 24 h). "settlement": resultado y plata (se cierra al saldar).
   const canEditParticipation = canEdit(lock, "participation");
   const canEditSettlement = canEdit(lock, "settlement");
+  // Editar el evento (y, desde ahí, su lugar): quien lo creó o un admin
+  // (0043_admin_edit_any_event.sql); con el evento cerrado, solo un admin (0044).
+  const canEditEvent = (event.created_by === user?.id || isAdmin) && canEditParticipation;
   // La sede del evento (los eventos la nombran por texto): de ahí sale el clima.
   const eventVenue = venues?.find((v) => v.name === event.location);
   const [
-    { data: taskRows },
+    { rows: taskRows, quantitySupported },
     { data: insumoItems },
     { data: drinkRows, error: drinksError },
     weather,
     { data: menuRow },
   ] =
     await Promise.all([
-      supabase
-        .from("event_tasks")
-        .select("id, task_type, assigned_to, item_id")
-        .eq("event_id", eventId),
+      // Con la cantidad de cada insumo (0051); si esa columna todavía no existe, sin ella.
+      loadEventTasks(supabase, eventId),
       supabase.from("insumo_items").select("id, name, icon").order("name"),
       // Bebidas del evento (0047, spec 023). Si la consulta falla (por ejemplo
       // la tabla todavía no existe), la tarjeta no se muestra.
@@ -426,11 +428,11 @@ export default async function EventoPage({
 
   const assigneesByTask = new Map<
     string,
-    { id: string; userId: string; itemId: string | null }[]
+    { id: string; userId: string; itemId: string | null; quantity: string | null }[]
   >();
-  for (const t of taskRows ?? []) {
+  for (const t of taskRows) {
     const list = assigneesByTask.get(t.task_type) ?? [];
-    list.push({ id: t.id, userId: t.assigned_to, itemId: t.item_id });
+    list.push({ id: t.id, userId: t.assigned_to, itemId: t.item_id, quantity: t.quantity });
     assigneesByTask.set(t.task_type, list);
   }
   const reservaCanchaAssignedTo =
@@ -463,6 +465,31 @@ export default async function EventoPage({
 
   const attendeesJuntada = allAttendees.filter((a) => a.kind === "juntada");
   const attendeesFutbol = allAttendees.filter((a) => a.kind === "futbol");
+  // A quién se le puede asignar una tarea: solo a quienes confirmaron «Voy» a la juntada (lo que
+  // ya está asignado se sigue viendo aunque esa persona después cambie su respuesta).
+  const taskCandidates = confirmedMembers(members, attendeesJuntada);
+  // La asignación de tareas para mandar por WhatsApp (null si todavía no hay nada asignado).
+  const shareRows = (type: ShareTask["type"]) =>
+    (assigneesByTask.get(type) ?? []).map((a) => ({
+      userId: a.userId,
+      userName: memberName(a.userId),
+      itemName: itemName(a.itemId),
+      quantity: a.quantity,
+    }));
+  const tasksShareText = buildTasksShareText({
+    eventName: event.name,
+    eventDateLabel: dateFormatter.format(new Date(event.event_date)),
+    eventUrl,
+    tasks: [
+      ...TASK_TYPES.map((t) => ({ type: t.type, label: t.label, rows: shareRows(t.type) })),
+      ...(event.has_futbol
+        ? [{ type: "reserva_cancha" as const, label: "Reserva de cancha", rows: shareRows("reserva_cancha") }]
+        : []),
+    ],
+  });
+  const tasksShareUrl = tasksShareText
+    ? `https://wa.me/?text=${encodeURIComponent(tasksShareText)}`
+    : null;
   // Con cuánta gente se calcula la bebida: quienes confirmaron «Voy» a la
   // juntada más sus invitados (lo mismo que cuenta el RSVP de la juntada).
   const juntadaHeadcount =
@@ -674,17 +701,9 @@ export default async function EventoPage({
           nowMs={nowMs}
         />
       )}
-      {weather.needsVenueLocation && <WeatherNeedsLocation />}
-      {eventVenue && (
-        <EditVenueForm
-          venue={{
-            id: eventVenue.id,
-            name: eventVenue.name,
-            address: eventVenue.address,
-            host_user_id: eventVenue.host_user_id,
-          }}
-          members={members}
-        />
+      {/* El aviso explica cómo cargar la ubicación (Editar evento): solo a quien puede editar. */}
+      {weather.needsVenueLocation && canEditEvent && (
+        <WeatherNeedsLocation venueName={event.location ?? ""} />
       )}
       {event.description && (
         <p className="mt-2 text-sm text-foreground/80">
@@ -701,10 +720,8 @@ export default async function EventoPage({
       </Link>
 
       <div className="animate-reveal bg-grain mt-3 rounded-2xl border border-surface-border bg-surface p-5">
-        {/* Editar: quien creó el evento o un admin (0043_admin_edit_any_event.sql);
-            con el evento cerrado, solo un admin (0044). Borrar sigue siendo solo
-            del creador (más abajo). */}
-        {(event.created_by === user?.id || isAdmin) && canEditParticipation ? (
+        {/* Editar: ver canEditEvent. Borrar sigue siendo solo del creador (más abajo). */}
+        {canEditEvent ? (
           <EditEventForm
             eventId={eventId}
             venues={venues ?? []}
@@ -762,6 +779,11 @@ export default async function EventoPage({
           <p className="mt-3 text-xs text-foreground/50">
             Creado por: {memberName(event.created_by)}
           </p>
+          {canEditParticipation && (
+            <p className="mt-1 text-xs text-foreground/50">
+              Solo se puede asignar a quienes confirmaron «Voy» a la juntada.
+            </p>
+          )}
           <div className="mt-3 space-y-3">
             {TASK_TYPES.map((t) => (
               <div key={t.type} id={`tarea-${t.type}`}>
@@ -779,9 +801,10 @@ export default async function EventoPage({
                         name: memberName(a.userId),
                         avatarUrl: memberAvatar(a.userId),
                         itemName: itemName(a.itemId),
+                        quantity: a.quantity,
                       }),
                     )}
-                    members={members}
+                    members={taskCandidates}
                     items={
                       t.type === "compra_insumos"
                         ? (insumoItems ?? [])
@@ -789,11 +812,15 @@ export default async function EventoPage({
                     }
                     isAdmin={isAdmin}
                     readOnly={!canEditParticipation}
+                    quantityEnabled={quantitySupported}
                   />
                 </div>
               </div>
             ))}
           </div>
+          {tasksShareUrl && (
+            <WhatsAppShareButton href={tasksShareUrl} label="Compartir tareas por WhatsApp" />
+          )}
         </details>
       </section>
 

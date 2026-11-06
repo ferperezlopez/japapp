@@ -2,8 +2,8 @@
 
 - **Estado:** Implemented
 - **Rutas:** `/eventos` (extendida), `/eventos/[eventId]` (extendida), `/perfil` (extendida), `/perfil/[userId]` (extendida), `/miembros` (nueva)
-- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`, `supabase/migrations/0014_event_tasks_multi_item_per_person.sql`, `supabase/migrations/0033_futbol_stats_guests_and_guest_rename.sql`
-- **Última actualización:** 2026-09-19
+- **Migraciones relacionadas:** `supabase/migrations/0011_guests_tasks_venue_host.sql`, `supabase/migrations/0012_event_tasks_multi_assignee.sql`, `supabase/migrations/0013_insumo_items.sql`, `supabase/migrations/0014_event_tasks_multi_item_per_person.sql`, `supabase/migrations/0033_futbol_stats_guests_and_guest_rename.sql`, `supabase/migrations/0051_task_quantity_and_insumo_names.sql`
+- **Última actualización:** 2026-11-06
 
 ## 1. Resumen
 
@@ -42,7 +42,17 @@ asistencia de cada persona en su perfil.
   cargar) qué insumo se va a comprar, de un catálogo reusable entre
   eventos (carne, snacks, bebidas, vinos, etc.); una misma persona
   puede traer varios insumos distintos (se listan indentados debajo de
-  su nombre, cada uno con su propia opción de sacarlo).
+  su nombre, cada uno con su propia opción de sacarlo). Solo se ofrece
+  para asignar a quienes confirmaron «Voy» a la juntada (lo ya asignado
+  se sigue viendo aunque esa persona después cambie su respuesta). Cada
+  insumo puede llevar una cantidad opcional de texto libre («2 kg», «3
+  litros», «1 pack»), que se carga al asignarlo y se puede completar o
+  corregir después, sin sacar y volver a sumar a la persona (`0051`). Los
+  insumos siempre empiezan con mayúscula.
+- Compartir por WhatsApp la asignación de tareas: botón al pie del
+  desplegable que arma un mensaje con quién se ocupa de qué (insumos por
+  persona con su cantidad, «Sin asignar» en lo que falta y la reserva de
+  cancha si el evento tiene fútbol).
 - Sede con dueño: al cargar un lugar nuevo, se puede indicar de quién
   es la casa (generalmente el lugar de la JAPA es la casa de alguien).
   Se muestra junto al lugar en la página del evento.
@@ -77,6 +87,14 @@ asistencia de cada persona en su perfil.
 - Insumo obligatorio en "lavado de platos" u "orden de la sede" — no
   hay un "insumo" que elegir ahí, el selector de ítem es exclusivo de
   "compra de insumos".
+- Cantidades estructuradas (número + unidad) ni totales por insumo: la
+  cantidad es texto libre por asignación, no hay nada que sumar ni
+  ordenar.
+- Rechazar en el servidor la asignación de alguien que no confirmó: el
+  filtro de «solo confirmados» es de la pantalla (una pantalla vieja o un
+  admin no quedan bloqueados; el modelo del grupo es de confianza).
+- Filtrar «reserva de cancha» por confirmados: sigue ofreciendo a todos
+  (quien reserva la cancha no necesariamente juega).
 
 ## 3. Modelo de datos
 
@@ -138,6 +156,26 @@ Puntos que el SQL no explica por sí solo:
   duplicados exactos (misma persona + mismo insumo, o misma persona sin
   insumo) pasa a hacerse en `addTaskAssignee` con un `select` antes del
   `insert`, en vez de confiar en `onConflict`.
+- `0051_task_quantity_and_insumo_names.sql` suma `event_tasks.quantity`
+  (texto libre opcional de hasta 40 caracteres —contados como caracteres,
+  no bytes—, sin espacios en los costados y solo en `compra_insumos`: dos
+  `check`) y le da a `event_tasks` su primer camino de `UPDATE` desde la
+  `0012`, acotado a la cantidad: se sacó el `UPDATE` de tabla de `anon` y
+  `authenticated` y solo `authenticated` puede actualizar `quantity`,
+  `updated_by` y `updated_at` (mismo patrón que la `0040` en `profiles`),
+  con una policy permisiva (`task_type = 'compra_insumos'` y
+  `updated_by = auth.uid()`: quien corrige firma el cambio) y una
+  restrictiva de cierre (con el evento cerrado, solo un admin; ver
+  `specs/022-eventos-cerrados.md`). La cantidad va por asignación y no por
+  insumo del catálogo: depende de quién lo trae y de cada evento, y el
+  catálogo se comparte con Gastos.
+  La misma migración pone un trigger (`private.capitalize_insumo_name`,
+  `before insert or update of name` en `insumo_items`) que recorta el
+  nombre y le pone la primera letra en mayúscula, y corrige los que ya
+  estaban en minúscula (hoy solo «servilletas»). Corre antes de
+  `unique(name)`: dar de alta «servilletas» cuando ya existe «Servilletas»
+  choca con el existente en vez de crear un duplicado en minúscula.
+  Cambiar solo el ícono (lo hace un admin) no lo dispara.
 - `venues.host_user_id` es una columna separada de `venues.created_by`
   a propósito: `created_by` es quién tipeó el nombre del lugar por
   primera vez, `host_user_id` es de quién es la casa — dos conceptos
@@ -235,9 +273,10 @@ Puntos que el SQL no explica por sí solo:
 2. Para "compra de insumos", "lavado de platos" y "orden de la sede":
    `<TaskAssigneesEditor>` — mismo patrón visual que la sección de
    Invitados (chips con `Avatar` + nombre + X para sacar, más un
-   "+ Agregar" que revela un `<select>` con los miembros que todavía no
-   están asignados a esa tarea, para no poder sumar a la misma persona
-   dos veces). Llama a `addTaskAssignee`/`removeTaskAssignee`.
+   "+ Agregar" que revela un `<select>` con los miembros confirmados que
+   todavía no están asignados a esa tarea, para no poder sumar a la misma
+   persona dos veces; ver el punto 9). Llama a
+   `addTaskAssignee`/`removeTaskAssignee`.
 3. Para "reserva de cancha" (dentro de `⚽ Fútbol`): `<TaskAssignSelect>`
    sigue siendo un único `<select>` con auto-submit al cambiar la
    selección, pero llama a `setReservaCanchaAssignee` — que borra la
@@ -307,6 +346,66 @@ Puntos que el SQL no explica por sí solo:
    `revalidatePath` que `adminUpdateProfile`). No existía ninguna
    policy de `update` sobre `insumo_items` antes de esto — la nueva es
    la primera, acotada a admin (`using (public.is_admin(auth.uid()))`).
+9. **Solo gente confirmada.** Los tres editores reciben como `members` a
+   quienes tienen un RSVP «Voy» (`yes`) a la juntada
+   (`confirmedMembers(members, attendeesJuntada)`, función pura en
+   `src/lib/eventos/tasksShare.ts`). Los invitados no entran (no son
+   perfiles) y quien dijo «Tal vez» o «No voy», o no respondió, tampoco.
+   Es solo un filtro de la pantalla: lo ya asignado se sigue viendo y se
+   puede sacar aunque la persona después cambie su respuesta, y el
+   servidor no rechaza una asignación a alguien que no confirmó. Arriba
+   de la sección una línea explica la regla («Solo se puede asignar a
+   quienes confirmaron «Voy» a la juntada.», solo si el evento es
+   editable) y, sin nadie para ofrecer, el botón «+ Agregar» se
+   reemplaza por un texto tenue («Todavía no hay nadie confirmado para
+   asignar.» o «Ya están asignados todos los confirmados.»). «Reserva de
+   cancha» (`TaskAssignSelect`) no cambia.
+10. **Cantidad opcional (`0051`).** `addTaskAssignee(eventId, taskType,
+    userId, item?, quantity?)` normaliza la cantidad con
+    `normalizeQuantity` (`src/lib/eventos/insumos.ts`: recorta, junta los
+    espacios, vacía = sin cantidad, más de 40 caracteres = error claro,
+    validada antes de crear un insumo nuevo en el catálogo), la ignora
+    fuera de `compra_insumos` y solo manda la columna si hay una (así el
+    alta anda también con la migración sin aplicar). Si esa persona ya
+    tenía ese mismo insumo y se tipea una cantidad, la actualiza en esa
+    fila en vez de descartar el duplicado en silencio (sin volver a
+    notificar). `updateTaskQuantity(taskId, eventId, quantity)` completa,
+    corrige o saca (vacía) la cantidad de un insumo ya asignado: pide
+    sesión y la guarda de cierre, filtra por `id` y `event_id`, firma con
+    `updated_by`/`updated_at` y trata 0 filas (RLS: evento cerrado o
+    tarea que ya no está) como error en vez de darla por guardada; no
+    notifica a nadie. En la pantalla, el campo «Cantidad (opcional)» (tope
+    de 40) acompaña al selector de insumo en «+ Agregar insumo» y en
+    «+ Agregar persona»; en cada fila se ve como «— 🥩 Carne · 3 kg» y
+    tocarla (o «+ cantidad» si no tiene) abre un campo en línea con
+    Guardar/Cancelar (Enter guarda, Escape cancela). Con el evento cerrado
+    se ve pero no se edita. `loadEventTasks` (`src/lib/eventos/tasks.ts`)
+    pide las tareas con `quantity` y, si esa columna todavía no existe
+    (migración sin aplicar), repite la consulta sin ella y avisa
+    `quantitySupported: false`: la página sigue andando y el campo de
+    cantidad queda oculto hasta que se aplique la `0051`.
+11. **Mayúscula inicial.** `capitalizeFirst` (`insumos.ts`) pone en
+    mayúscula solo la primera letra («Coca cola», «7up», «Ñoquis»). Se
+    aplica al crear un insumo nuevo en `addTaskAssignee`; en `ItemPicker`
+    con `capitalizeNames` (solo en tareas: la opción «Crear» dice cómo va
+    a quedar, el teclado del celular arranca en mayúscula y un insumo
+    viejo guardado en minúscula se lista con mayúscula; Gastos no
+    cambia); y al mostrar las filas del editor y el texto de WhatsApp
+    (así se ve bien desde el despliegue aunque la migración se aplique
+    después). La base lo garantiza con el trigger de la `0051`.
+12. **Compartir por WhatsApp.** `buildTasksShareText`
+    (`src/lib/eventos/tasksShare.ts`, función pura con test) arma el
+    mensaje con el estilo de «Lista de anotados»: `📋 *Tareas — {evento}*`,
+    la fecha y, por tarea (🛒 compra de insumos, 🧽 lavado de platos,
+    🧹 orden de la sede y, si el evento tiene fútbol, ⚽ reserva de
+    cancha), un renglón por persona (en compra de insumos con sus insumos
+    y cantidades: «• Fernando: Carne (3 kg), Hielo»; las tareas sin nadie
+    dicen «Sin asignar» para que se note lo que falta) y el link al
+    evento. Mismo orden y nombres que la pantalla (`groupByPerson`).
+    Devuelve `null` si no hay ninguna asignación y entonces no se muestra
+    el botón. El `WhatsAppShareButton` («Compartir tareas por WhatsApp») va
+    al pie del desplegable y también se ve con el evento cerrado (es de
+    solo lectura).
 
 ### Sede con dueño
 
@@ -452,6 +551,33 @@ Puntos que el SQL no explica por sí solo:
       un nombre nuevo se refleja en cualquier otro evento donde
       aparezca ese mismo invitado. Como no-admin, esos mismos chips no
       son clickeables.
+- [x] «Asignación de tareas» ofrece para asignar solo a quienes confirmaron
+      «Voy» a la juntada; quien dijo «Tal vez» o «No voy», o no respondió,
+      no aparece en la lista.
+- [x] Quien ya estaba asignado se sigue viendo (y se puede sacar) aunque no
+      haya confirmado; sin nadie para ofrecer, en lugar de «+ Agregar» hay
+      un texto que lo explica.
+- [x] Al asignar un insumo se puede cargar una cantidad opcional («2 kg»,
+      «3 litros»); sin cantidad todo sigue como antes.
+- [x] La cantidad de un insumo ya asignado se completa, corrige o saca
+      tocándola, sin sacar y volver a sumar a la persona (y sin
+      notificarla otra vez); con el evento cerrado se ve pero no se edita
+      (un miembro común no puede cambiarla en la base; un admin sí).
+- [x] Una cantidad en blanco es «sin cantidad»; una de más de 40
+      caracteres se rechaza con un mensaje claro, sin crear el insumo
+      nuevo.
+- [x] Sumar el mismo insumo a la misma persona con una cantidad nueva
+      actualiza la cantidad de esa fila y no crea otra.
+- [x] Los insumos empiezan siempre con mayúscula: al crearlos (opción
+      «Crear "Servilletas"»), al listarlos y en la base («servilletas»
+      quedó corregido a «Servilletas»); dar de alta uno en minúscula que ya
+      existe no lo duplica.
+- [x] «Compartir tareas por WhatsApp» arma el mensaje con quién se ocupa de
+      qué (insumos con su cantidad, «Sin asignar» en lo que falta, la
+      reserva de cancha si hay fútbol) y no aparece si no hay ninguna
+      asignación.
+- [x] Con la migración `0051` sin aplicar, la página y el alta de tareas
+      andan igual, sin el campo de cantidad.
 
 ## 6. Decisiones y tradeoffs
 
@@ -477,6 +603,13 @@ Puntos que el SQL no explica por sí solo:
 | `AttendanceSummary` suma `guestCount` al numerador, no solo como texto | Dejar la barra/contador solo con `event_rsvps` y el "+N invitadxs" como nota aparte | Pedido explícito del usuario: los invitados no sumaban al contador de confirmados, aunque ya significaban "confirmado que viene" en el modelo de datos. |
 | `insumo_items.icon` explícito y editable por admin, con `resolveIcon` priorizándolo sobre `iconForInsumo` | Dejar el ícono siempre derivado por palabra clave, sin persistir ni poder editarlo | Pedido explícito del usuario: poder corregir/asignar el emoji de un ítem a mano, no solo depender del matching automático. |
 | `ItemPicker` extraído a `src/components/ItemPicker.tsx`, compartido con Gastos contra el mismo catálogo `insumo_items` | Un catálogo de ítems separado para Gastos | Decisión del usuario (`AskUserQuestion`): un emoji cargado de un lado se ve del otro, sin duplicar el concepto de "ítem con ícono". |
+| Cantidad de un insumo como texto libre por asignación (`event_tasks.quantity`, hasta 40 caracteres) | Número + unidad estructurados, o la cantidad en el catálogo `insumo_items` | Pedido: «cantidades, pesos, litros, etc.» — no hay nada que sumar ni ordenar; y depende de quién lo trae y de cada evento, mientras que el catálogo se comparte con Gastos. |
+| Corregir la cantidad con un `UPDATE` por columna (`quantity`, `updated_by`, `updated_at`) y su propia policy | Sacar y volver a sumar a la persona, o devolverle a `event_tasks` un `UPDATE` de fila completa | Sacar y sumar la volvería a notificar y perdería el lugar en la lista; con permisos por columna nadie puede reasignar ni cambiar el insumo por esta vía. Las asignaciones que ya existían quedan sin cantidad y se pueden completar después. |
+| «Solo confirmados» como filtro de la pantalla, sin rechazo en el servidor | Rechazarlo en `addTaskAssignee` o por RLS | Una pantalla vieja o un admin no quedan bloqueados, y el modelo del grupo es de confianza; lo pedido es qué se ofrece en la lista. |
+| Lo ya asignado se mantiene aunque la persona pase a «No voy» | Borrar sus asignaciones o esconderlas | Borrar o esconder en silencio dejaría una tarea sin dueño sin que nadie se entere; verla permite reasignarla. |
+| Mayúscula inicial en tres capas (trigger en la base, acción y pantalla) | Solo en la pantalla | Garantiza el catálogo sin importar quién escriba (y evita duplicados en minúscula contra `unique(name)`), y la pantalla muestra lo que se va a guardar; además la pantalla y el mensaje lo corrigen al mostrar, para que se vea bien desde el despliegue aunque la migración se aplique después. |
+| El mensaje de WhatsApp lista «Sin asignar» en las tareas vacías | Mostrar solo lo asignado | Es la lista de quién hace qué: lo que falta es justo lo que el grupo tiene que ver para ofrecerse. |
+| `loadEventTasks` pide la cantidad y, si la columna no existe, repite sin ella | Pedir `*`, o asumir que la migración ya está | El código se despliega antes de que la migración se aplique por el SQL editor: así la página y el alta no se rompen en el medio. |
 | Edición de invitados solo admin | Cualquier logueado, o solo `created_by` del invitado | Decisión explícita del usuario (`AskUserQuestion`), mismo criterio que `insumo_items.icon` — más conservador que el resto de `guests`/`event_guests`, que sigue siendo "cualquier logueado" para insertar/sumar. |
 | Editable desde "Van"/equipos guardados/MVP-goleador, no desde `TeamBuilderModal` | Agregar también un ícono de lápiz dentro del armador de equipos | Ahí tocar un nombre ya significa "asignarlo a una posición" — repurpar el tap rompería la interacción principal de ese modal. Se puede pedir después si hace falta. |
 
@@ -496,9 +629,19 @@ Puntos que el SQL no explica por sí solo:
   Decisiones, sección 6) — no pedido todavía.
 - Otros campos editables de un invitado más allá del nombre — hoy
   `guests` no tiene ninguna otra columna (sin avatar, sin notas).
+- Ofrecer en «reserva de cancha» solo a los jugadores confirmados del
+  fútbol, si se pide (hoy se ofrece a todos).
 
 ## 8. Changelog
 
+- 2026-11-06: cuatro pedidos sobre «Asignación de tareas» (`0051`): los
+  insumos admiten una cantidad opcional de texto libre (se carga al
+  asignar y se completa o corrige después, `updateTaskQuantity`); solo se
+  ofrece para asignar a quienes confirmaron «Voy»; los insumos empiezan
+  siempre con mayúscula (trigger en la base, corrección de «servilletas»,
+  `capitalizeFirst`); y se puede compartir por WhatsApp la lista de
+  asignación (`buildTasksShareText`). La página anda también con la
+  migración sin aplicar (`loadEventTasks`).
 - 2026-10-29: la asistencia de `/perfil`, `/perfil/[userId]` y `/miembros`
   cuenta solo respuestas a eventos que ya pasaron
   (`filtrarRsvpsDeEventosPasados`), igual que Analytics; antes una

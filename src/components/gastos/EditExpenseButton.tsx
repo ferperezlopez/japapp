@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AddExpenseForm, type ExpenseToEdit } from "./AddExpenseForm";
 import type { PickerItem } from "@/components/ItemPicker";
+import { useBackButtonClose } from "@/lib/useBackButtonClose";
 
 interface Person {
   id: string;
@@ -71,6 +72,8 @@ function EditExpenseModal({
   isAdmin: boolean;
   onClose: () => void;
 }) {
+  useBackButtonClose(onClose);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();

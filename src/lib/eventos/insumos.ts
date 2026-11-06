@@ -117,3 +117,29 @@ export function findSimilarItem<T extends { name: string }>(
   }
   return best;
 }
+
+// Primera letra en mayúscula (el resto queda como se escribió: «Coca cola», «7up», «Ñoquis») y sin
+// espacios de los costados. Los insumos del catálogo siempre empiezan con mayúscula: lo mismo que
+// hace el trigger de la base (0051), para que lo que se ve en pantalla sea lo que queda guardado.
+export function capitalizeFirst(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+// La cantidad de un insumo («2 kg», «3 litros», «1 pack») es texto libre y opcional. Mismo tope que
+// la restricción de la base (event_tasks_quantity_format, 0051), que cuenta caracteres.
+export const MAX_QUANTITY_LENGTH = 40;
+
+export type QuantityResult = { value: string | null } | { error: string };
+
+// Deja la cantidad como se guarda: espacios de los costados afuera y los del medio en uno solo
+// (la base exige que no sobren). Vacía = sin cantidad (`null`); más larga que el tope = error.
+export function normalizeQuantity(raw: string | null | undefined): QuantityResult {
+  const value = (raw ?? "").replace(/\s+/g, " ").trim();
+  if (!value) return { value: null };
+  // Por caracteres (puntos de código), igual que char_length de la base: un emoji cuenta uno.
+  if (Array.from(value).length > MAX_QUANTITY_LENGTH) {
+    return { error: `La cantidad es muy larga (máximo ${MAX_QUANTITY_LENGTH} caracteres).` };
+  }
+  return { value };
+}

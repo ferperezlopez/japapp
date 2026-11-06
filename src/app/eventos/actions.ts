@@ -4,14 +4,13 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActingUser } from "@/lib/supabase/actingUser";
 import { guardEdit } from "@/lib/eventos/lock";
+import { capitalizeFirst, normalizeQuantity } from "@/lib/eventos/insumos";
 import { DRINK_KEYS } from "@/lib/calculators/bebidas";
 import { hasAnyAmount, parseDrinksForm } from "@/lib/eventos/drinks";
 import { parseMenu } from "@/lib/eventos/menu";
-import {
-  resolveVenueCoordinates,
-  venueLocationStatus,
-  type VenueLocationStatus,
-} from "@/lib/eventos/venueLocation";
+import { applyVenueEdit } from "@/lib/eventos/venueEdit";
+import { EDIT_VENUE_VALUE, NEW_VENUE_VALUE } from "@/lib/eventos/venueSelection";
+import { resolveVenueCoordinates, type VenueLocationStatus } from "@/lib/eventos/venueLocation";
 import { sendPushToUsers } from "@/lib/push/send";
 import { maybeNotifyQuorum } from "@/lib/push/quorum";
 import { syncEventMediaToGooglePhotos } from "@/lib/googlePhotos/sync";
@@ -55,9 +54,19 @@ async function notifyTaskAssigned(
   );
 }
 
-// "venue" viene del <select> de lugares predefinidos; "__new__" indica que
-// se tipeó un lugar nuevo en newVenueName, que además se guarda en
-// `venues` para que quede disponible como opción la próxima vez.
+interface ResolvedVenue {
+  /** El lugar con el que queda el evento (null: sin lugar). */
+  location: string | null;
+  /** Solo si se editó un lugar: si se pudo sacar su ubicación para el clima (spec 024). */
+  venueLocation?: VenueLocationStatus;
+  error?: string;
+}
+
+// "venue" viene del <select> de lugares predefinidos. "__new__" indica que se
+// tipeó un lugar nuevo en newVenueName, que además se guarda en `venues` para
+// que quede disponible como opción la próxima vez. "__edit__" (solo al editar
+// un evento) indica que se corrigió el lugar elegido (editVenueName, ...): se
+// guarda en `venues` y el evento sigue en él (ver applyVenueEdit).
 // "newVenueHostUserId" es opcional: de quién es la casa (generalmente el
 // lugar donde se hace la JAPA es la casa de alguien) — separado de
 // created_by, que es solo quién tipeó el lugar por primera vez. Usado
@@ -66,17 +75,18 @@ async function resolveVenueLocation(
   supabase: SupabaseClient<Database>,
   formData: FormData,
   userId: string,
-) {
+  { allowEdit = false }: { allowEdit?: boolean } = {},
+): Promise<ResolvedVenue> {
   const venueSelection = String(formData.get("venue") ?? "");
   const newVenueName = String(formData.get("newVenueName") ?? "").trim();
   const newVenueHostUserId = String(formData.get("newVenueHostUserId") ?? "").trim();
   const newVenueAddress = String(formData.get("newVenueAddress") ?? "").trim();
 
-  if (venueSelection === "__new__") {
-    if (!newVenueName) return null;
-    // La ubicación para el clima (spec 024) se saca del link al guardar la sede. Si no se
-    // pudo leer, la sede se crea igual (el link sirve para «Cómo llegar») y se puede
-    // completar después con «Editar lugar»; sin ubicación no se mandan las columnas.
+  if (venueSelection === NEW_VENUE_VALUE) {
+    if (!newVenueName) return { location: null };
+    // La ubicación para el clima (spec 024) se saca del link al guardar el lugar. Si no se
+    // pudo leer, el lugar se crea igual (el link sirve para «Cómo llegar») y se puede
+    // completar después editándolo; sin ubicación no se mandan las columnas.
     const coordinates = await resolveVenueCoordinates(newVenueAddress);
     await supabase.from("venues").upsert(
       {
@@ -88,65 +98,22 @@ async function resolveVenueLocation(
       },
       { onConflict: "name", ignoreDuplicates: true },
     );
-    return newVenueName;
+    return { location: newVenueName };
   }
 
-  return venueSelection || null;
-}
-
-// Editar una sede ya guardada (spec 007): nombre, link de GPS y de quién es la casa. Cualquier
-// logueado puede (son datos compartidos del grupo). Va por la función update_venue (0050):
-// un solo camino para modificar una sede, que además renombra la sede en los eventos que la
-// nombraban por texto, también en los cerrados. La ubicación para el clima se vuelve a leer del
-// link solo si cambió el link o todavía no la tenía; si no se puede leer se guarda igual y se
-// avisa, para que se pegue el link largo o las coordenadas.
-export async function updateVenue(
-  venueId: string,
-  formData: FormData,
-): Promise<{ error: string } | { ok: true; location: VenueLocationStatus }> {
-  const name = String(formData.get("name") ?? "").trim();
-  const address = String(formData.get("address") ?? "").trim() || null;
-  const hostUserId = String(formData.get("hostUserId") ?? "").trim() || null;
-
-  if (!name) return { error: "Poné un nombre para el lugar." };
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "No estás logueado." };
-
-  const { data: current } = await supabase
-    .from("venues")
-    .select("address, lat, lng")
-    .eq("id", venueId)
-    .maybeSingle();
-  if (!current) return { error: "No se encontró ese lugar." };
-
-  const sameAddress = (current.address ?? null) === address;
-  const coordinates =
-    sameAddress && typeof current.lat === "number" && typeof current.lng === "number"
-      ? { lat: current.lat, lng: current.lng }
-      : await resolveVenueCoordinates(address);
-
-  const { error } = await supabase.rpc("update_venue", {
-    p_venue_id: venueId,
-    p_name: name,
-    p_address: address,
-    p_host_user_id: hostUserId,
-    p_lat: coordinates?.lat ?? null,
-    p_lng: coordinates?.lng ?? null,
-  });
-  if (error) {
-    if (error.code === "23505") return { error: "Ya hay un lugar con ese nombre." };
-    if (error.code === "23503") return { error: "No se encontró a esa persona." };
-    return { error: error.message };
+  if (venueSelection === EDIT_VENUE_VALUE) {
+    // Solo existe al editar un evento: en el alta no hay un lugar que corregir.
+    if (!allowEdit) return { location: null };
+    const edited = await applyVenueEdit(supabase, String(formData.get("editVenueId") ?? ""), {
+      name: String(formData.get("editVenueName") ?? ""),
+      address: String(formData.get("editVenueAddress") ?? ""),
+      hostUserId: String(formData.get("editVenueHostUserId") ?? ""),
+    });
+    if ("error" in edited) return { location: null, error: edited.error };
+    return { location: edited.name, venueLocation: edited.location };
   }
 
-  // Los eventos que usaban la sede (en la lista y en su página) la ven con lo nuevo.
-  revalidatePath("/eventos", "layout");
-  revalidatePath("/");
-  return { ok: true, location: venueLocationStatus(address, coordinates) };
+  return { location: venueSelection || null };
 }
 
 export async function createEvent(formData: FormData) {
@@ -166,7 +133,7 @@ export async function createEvent(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "No estás logueado." };
 
-  const location = await resolveVenueLocation(supabase, formData, user.id);
+  const { location } = await resolveVenueLocation(supabase, formData, user.id);
 
   const { data: event, error } = await supabase
     .from("events")
@@ -235,11 +202,13 @@ export async function updateEvent(eventId: string, formData: FormData) {
   if (!user) return { error: "No estás logueado." };
 
   // Un evento cerrado solo lo edita un admin (spec 022). Va antes de
-  // resolveVenueLocation, que puede crear un lugar nuevo.
+  // resolveVenueLocation, que puede crear o corregir un lugar.
   const lockedError = await guardEdit(supabase, eventId, "participation");
   if (lockedError) return { error: lockedError };
 
-  const location = await resolveVenueLocation(supabase, formData, user.id);
+  const venue = await resolveVenueLocation(supabase, formData, user.id, { allowEdit: true });
+  if (venue.error) return { error: venue.error };
+  const location = venue.location;
 
   // La barrera real es RLS: la policy "Quien creo el evento lo puede editar"
   // (created_by = auth.uid()) y, desde 0043, "Un admin puede editar cualquier
@@ -274,6 +243,11 @@ export async function updateEvent(eventId: string, formData: FormData) {
   revalidatePath(`/eventos/${eventId}`);
   revalidatePath("/eventos");
   revalidatePath("/");
+  if (venue.venueLocation) {
+    // Se corrigió un lugar: los demás eventos que lo usan lo ven con lo nuevo (nombre y clima).
+    revalidatePath("/eventos", "layout");
+    return { ok: true, venueLocation: venue.venueLocation };
+  }
   return { ok: true };
 }
 
@@ -623,12 +597,16 @@ export async function removeGuestFromEvent(eventGuestId: string, eventId: string
 // Solo "compra_insumos" pide un insumo (qué va a comprar esa persona):
 // igual criterio que addGuestToEvent con los invitados — se puede elegir
 // uno ya cargado antes (reusable entre eventos) o tipear uno nuevo, que
-// a partir de ahora también queda disponible para elegir.
+// a partir de ahora también queda disponible para elegir. Los insumos
+// nuevos se guardan con la primera letra en mayúscula (también lo hace la
+// base, 0051). Ahí mismo puede ir una cantidad opcional ("2 kg", "3
+// litros"): texto libre por asignación, no por insumo del catálogo.
 export async function addTaskAssignee(
   eventId: string,
   taskType: "compra_insumos" | "lavado_platos" | "orden_sede",
   userId: string,
   item?: { existingItemId?: string; newItemName?: string },
+  quantity?: string,
 ) {
   const supabase = await createClient();
   const {
@@ -640,11 +618,20 @@ export async function addTaskAssignee(
   const lockedError = await guardEdit(supabase, eventId, "participation");
   if (lockedError) return { error: lockedError };
 
+  // La cantidad solo existe en "compra_insumos" (la base lo exige): en las demás se ignora. Se
+  // valida antes de crear el insumo, para no dejar uno nuevo en el catálogo si la cantidad no sirve.
+  let quantityValue: string | null = null;
+  if (taskType === "compra_insumos") {
+    const normalized = normalizeQuantity(quantity);
+    if ("error" in normalized) return { error: normalized.error };
+    quantityValue = normalized.value;
+  }
+
   let itemId: string | null = null;
   if (taskType === "compra_insumos") {
     itemId = item?.existingItemId || null;
     if (!itemId) {
-      const newName = item?.newItemName?.trim();
+      const newName = capitalizeFirst(item?.newItemName ?? "");
       if (!newName) return { error: "Elegí o cargá qué vas a comprar." };
       const { data: newItem, error: itemError } = await supabase
         .from("insumo_items")
@@ -680,6 +667,8 @@ export async function addTaskAssignee(
       task_type: taskType,
       assigned_to: userId,
       item_id: itemId,
+      // Solo si hay una: así el alta sigue andando en una base sin la columna (0051 sin aplicar).
+      ...(quantityValue ? { quantity: quantityValue } : {}),
       updated_by: user.id,
     });
     if (error) return { error: error.message };
@@ -689,6 +678,66 @@ export async function addTaskAssignee(
     if (userId !== user.id) {
       await notifyTaskAssigned(supabase, eventId, taskType, userId, user.id);
     }
+  } else if (quantityValue) {
+    // Ya la tenía (mismo insumo): se ignora el duplicado, pero la cantidad que se tipeó es la
+    // nueva, y perderla en silencio sería peor. No se vuelve a notificar.
+    const saved = await saveTaskQuantity(supabase, existing.id, user.id, quantityValue);
+    if (saved.error) return { error: saved.error };
+  }
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+// Una RLS que filtra un UPDATE no da error (0 filas): sin este chequeo la pantalla daría por
+// guardada una cantidad que no se guardó (evento cerrado, tarea que ya no está...).
+async function saveTaskQuantity(
+  supabase: SupabaseClient<Database>,
+  taskId: string,
+  userId: string,
+  quantity: string | null,
+): Promise<{ error?: string }> {
+  const { data, error } = await supabase
+    .from("event_tasks")
+    .update({ quantity, updated_by: userId, updated_at: new Date().toISOString() })
+    .eq("id", taskId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) {
+    return { error: "No se pudo guardar la cantidad: el insumo no existe o no tenés permiso." };
+  }
+  return {};
+}
+
+// Completar o corregir la cantidad de un insumo ya asignado (vacía = sacarla), sin sacar y volver
+// a sumar a la persona (eso la re-notificaría). Cualquier logueado, como el alta y la baja; con el
+// evento cerrado, solo un admin (la base lo hace cumplir).
+export async function updateTaskQuantity(taskId: string, eventId: string, quantity: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
+
+  const normalized = normalizeQuantity(quantity);
+  if ("error" in normalized) return { error: normalized.error };
+
+  const { data, error } = await supabase
+    .from("event_tasks")
+    .update({
+      quantity: normalized.value,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", taskId)
+    .eq("event_id", eventId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) {
+    return { error: "No se pudo guardar la cantidad: el insumo no existe o no tenés permiso." };
   }
 
   revalidatePath(`/eventos/${eventId}`);

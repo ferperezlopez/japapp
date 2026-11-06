@@ -3,7 +3,8 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { updateEvent } from "../actions";
 import { Button } from "@/components/ui/Button";
-import { EventFormFields, NEW_VENUE_VALUE } from "../EventFormFields";
+import { EventFormFields, type VenueOption } from "../EventFormFields";
+import { NEW_VENUE_VALUE } from "@/lib/eventos/venueSelection";
 import { withMinDuration } from "@/lib/withMinDuration";
 
 function PencilIcon() {
@@ -20,6 +21,11 @@ function PencilIcon() {
     </svg>
   );
 }
+
+// Se corrigió el lugar pero no se pudo sacar su ubicación de lo que se cargó: el clima no se va a
+// mostrar. El formulario ya se cerró, así que el aviso queda debajo del botón de editar.
+const VENUE_LOCATION_MISSING =
+  "Lugar guardado, pero no pude sacar su ubicación de lo que cargaste, así que el clima no se va a mostrar. Probá con el link de «Compartir ubicación» de Google Maps (el largo, si el corto no anda) o pegá las coordenadas (ej. -34.60, -58.38).";
 
 interface EventDefaults {
   name: string;
@@ -39,12 +45,13 @@ export function EditEventForm({
 }: {
   eventId: string;
   event: EventDefaults;
-  venues: { id: string; name: string }[];
+  venues: VenueOption[];
   members: { id: string; name: string | null; email: string }[];
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   if (!open) {
@@ -53,13 +60,21 @@ export function EditEventForm({
         {children}
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setNotice(null);
+            setOpen(true);
+          }}
           aria-label="Editar evento"
           title="Editar evento"
           className="mt-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-foreground/50 transition-colors duration-200 hover:bg-surface hover:text-eventos"
         >
           <PencilIcon />
         </button>
+        {notice && (
+          <p role="status" className="mt-2 text-xs text-foreground/60" data-testid="venue-notice">
+            {notice}
+          </p>
+        )}
       </div>
     );
   }
@@ -77,13 +92,19 @@ export function EditEventForm({
 
   return (
     <form
-      action={(formData: FormData) => {
+      // onSubmit y no `action`: con `action`, React 19 resetea el formulario al terminar de
+      // enviar, y tras un error (nombre de lugar repetido, por ejemplo) la lista de lugares
+      // volvía a «Sin lugar» y lo escrito se perdía: reintentar guardaba el evento sin lugar.
+      onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
         setError(null);
         startTransition(async () => {
           const result = await withMinDuration(updateEvent(eventId, formData));
           if (result.error) {
             setError(result.error);
           } else {
+            setNotice(result.venueLocation === "missing" ? VENUE_LOCATION_MISSING : null);
             setOpen(false);
           }
         });
@@ -95,6 +116,7 @@ export function EditEventForm({
       <input type="hidden" name="menuBefore" value={event.menu ?? ""} />
       <EventFormFields
         venues={venues}
+        allowEditVenue
         members={members}
         defaultName={event.name}
         defaultEventDate={event.eventDateLocal}

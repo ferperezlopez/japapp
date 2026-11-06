@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { reportPayment } from "@/app/gastos/actions";
 import { withMinDuration } from "@/lib/withMinDuration";
+import { useBackButtonClose } from "@/lib/useBackButtonClose";
 import { Button } from "@/components/ui/Button";
 
 // Mismo shell de modal que EditGuestNameModal/ImageZoomModal (overlay,
@@ -70,6 +71,8 @@ function ReportPaymentModal({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useBackButtonClose(onClose);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
