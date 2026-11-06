@@ -377,6 +377,11 @@ Puntos que el SQL no explica por sí solo:
   calidad 85; el mapeo imagen → variante se verificó por muestreo de
   color del torso). `JerseyBadge` suma `"both"` y `renderPlayer` lo
   usa cuando `isMvp && isGoleador`.
+- 2026-11-06: el manejo de «atrás» de estos modales pasó a una pila de modales única
+  (`src/lib/modalHistory.ts`, ver `specs/018-log-comunicaciones-y-campanita.md`). Entre
+  otras cosas, «Editar equipos» dentro de «Ver equipos» cierra un modal y abre el otro en
+  el mismo render, y el retroceso del primero caía sobre la entrada del segundo (lo cerraba
+  o sacaba de la página): ahora las operaciones sobre el historial van de a una.
 - 2026-09-30: fix — con "Ver equipos" o "Armar equipos" abierto, el
   botón atrás (físico en Android o del navegador) navegaba hacia atrás
   en la página en vez de cerrar el modal. Investigado a fondo: era un

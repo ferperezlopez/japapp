@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useBackButtonClose } from "@/lib/useBackButtonClose";
 
 const ITEMS = [
   {
@@ -136,27 +137,15 @@ function HamburgerIcon() {
   );
 }
 
+type SectionItem = (typeof ITEMS)[number] | typeof ADMIN_ITEM;
+
 // Reemplaza la barra fija de abajo (BottomNav): con la lista de secciones
 // creciendo (se sumó Miembros y podrían sumarse más), un menú desplegable
 // escala mejor que ir agregando ítems a una franja siempre visible.
 export function SectionsMenu({ isAdmin = false }: { isAdmin?: boolean }) {
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const items = isAdmin ? [...ITEMS, ADMIN_ITEM] : ITEMS;
-
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  const items: readonly SectionItem[] = isAdmin ? [...ITEMS, ADMIN_ITEM] : ITEMS;
 
   return (
     <>
@@ -169,71 +158,113 @@ export function SectionsMenu({ isAdmin = false }: { isAdmin?: boolean }) {
       >
         <HamburgerIcon />
       </button>
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Secciones"
-          className="animate-reveal fixed inset-0 z-[60] flex items-start justify-center bg-black/70 p-4 pt-16"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-xs rounded-2xl bg-background p-2 shadow-xl"
-          >
-            <div className="flex items-center justify-between px-2 py-1.5">
-              <h3 className="font-heading text-sm font-semibold text-foreground">
-                Secciones
-              </h3>
-              <button
-                type="button"
-                aria-label="Cerrar"
-                onClick={() => setOpen(false)}
-                className="rounded-full p-1.5 text-foreground/50 transition-colors duration-200 hover:bg-surface hover:text-foreground"
-              >
-                <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                </svg>
-              </button>
-            </div>
-            <div className="mt-1 space-y-0.5">
-              {items.map((item) => {
-                const active =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(item.href.split("/").slice(0, 2).join("/"));
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className={`flex items-center gap-3 rounded-xl p-2 transition-colors duration-200 ${
-                      active ? "bg-surface" : "hover:bg-surface"
-                    }`}
-                  >
-                    <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.colorClasses}`}
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={1.75}
-                        className="h-5 w-5"
-                        aria-hidden="true"
-                      >
-                        {item.icon}
-                      </svg>
-                    </span>
-                    <span className="font-medium text-foreground">{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      {open && <SectionsModal items={items} onClose={close} />}
     </>
+  );
+}
+
+// Componente aparte (y no JSX adentro del menú) porque useBackButtonClose
+// pide que exista solo mientras el modal está abierto.
+function SectionsModal({
+  items,
+  onClose,
+}: {
+  items: readonly SectionItem[];
+  onClose: () => void;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  // «Atrás» cierra el menú en vez de sacarte de la página. Y como el menú
+  // navega, ir a una sección suelta primero la entrada de historial del modal
+  // (closeThen) y recién después navega: el historial queda [página, sección].
+  const { closeThen } = useBackButtonClose(onClose);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  function goTo(event: MouseEvent<HTMLAnchorElement>, href: string) {
+    // Con una tecla modificadora (abrir en otra pestaña) el navegador hace lo
+    // suyo y el menú sigue abierto.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    event.preventDefault();
+    closeThen(() => router.push(href));
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Secciones"
+      className="animate-reveal fixed inset-0 z-[60] flex items-start justify-center bg-black/70 p-4 pt-16"
+      onClick={onClose}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-xs rounded-2xl bg-background p-2 shadow-xl"
+      >
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <h3 className="font-heading text-sm font-semibold text-foreground">
+            Secciones
+          </h3>
+          <button
+            type="button"
+            aria-label="Cerrar"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-foreground/50 transition-colors duration-200 hover:bg-surface hover:text-foreground"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            </svg>
+          </button>
+        </div>
+        <div className="mt-1 space-y-0.5">
+          {items.map((item) => {
+            const active =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href.split("/").slice(0, 2).join("/"));
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={(event) => goTo(event, item.href)}
+                className={`flex items-center gap-3 rounded-xl p-2 transition-colors duration-200 ${
+                  active ? "bg-surface" : "hover:bg-surface"
+                }`}
+              >
+                <span
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${item.colorClasses}`}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.75}
+                    className="h-5 w-5"
+                    aria-hidden="true"
+                  >
+                    {item.icon}
+                  </svg>
+                </span>
+                <span className="font-medium text-foreground">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
