@@ -7,7 +7,6 @@ import { AttendanceSummary } from "@/components/eventos/AttendanceSummary";
 import { DeleteEventButton } from "./DeleteEventButton";
 import { DrinksSection } from "./DrinksSection";
 import { EditEventForm } from "./EditEventForm";
-import { EditVenueForm } from "./EditVenueForm";
 import { FutbolStatsForm } from "./FutbolStatsForm";
 import { FutbolTeamsSection } from "./FutbolTeamsSection";
 import { UploadPhotoForm } from "./UploadPhotoForm";
@@ -382,6 +381,9 @@ export default async function EventoPage({
   // (se cierra a las 24 h). "settlement": resultado y plata (se cierra al saldar).
   const canEditParticipation = canEdit(lock, "participation");
   const canEditSettlement = canEdit(lock, "settlement");
+  // Editar el evento (y, desde ahí, su lugar): quien lo creó o un admin
+  // (0043_admin_edit_any_event.sql); con el evento cerrado, solo un admin (0044).
+  const canEditEvent = (event.created_by === user?.id || isAdmin) && canEditParticipation;
   // La sede del evento (los eventos la nombran por texto): de ahí sale el clima.
   const eventVenue = venues?.find((v) => v.name === event.location);
   const [
@@ -674,17 +676,9 @@ export default async function EventoPage({
           nowMs={nowMs}
         />
       )}
-      {weather.needsVenueLocation && <WeatherNeedsLocation />}
-      {eventVenue && (
-        <EditVenueForm
-          venue={{
-            id: eventVenue.id,
-            name: eventVenue.name,
-            address: eventVenue.address,
-            host_user_id: eventVenue.host_user_id,
-          }}
-          members={members}
-        />
+      {/* El aviso explica cómo cargar la ubicación (Editar evento): solo a quien puede editar. */}
+      {weather.needsVenueLocation && canEditEvent && (
+        <WeatherNeedsLocation venueName={event.location ?? ""} />
       )}
       {event.description && (
         <p className="mt-2 text-sm text-foreground/80">
@@ -701,10 +695,8 @@ export default async function EventoPage({
       </Link>
 
       <div className="animate-reveal bg-grain mt-3 rounded-2xl border border-surface-border bg-surface p-5">
-        {/* Editar: quien creó el evento o un admin (0043_admin_edit_any_event.sql);
-            con el evento cerrado, solo un admin (0044). Borrar sigue siendo solo
-            del creador (más abajo). */}
-        {(event.created_by === user?.id || isAdmin) && canEditParticipation ? (
+        {/* Editar: ver canEditEvent. Borrar sigue siendo solo del creador (más abajo). */}
+        {canEditEvent ? (
           <EditEventForm
             eventId={eventId}
             venues={venues ?? []}

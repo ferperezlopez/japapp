@@ -28,7 +28,11 @@ export function CreateEventForm({
 
   return (
     <form
-      action={(formData: FormData) => {
+      // onSubmit y no `action`: con `action`, React 19 resetea el formulario al terminar de
+      // enviar y, tras un error, la lista de lugares volvía a «Sin lugar» (ver EditEventForm).
+      onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
         setError(null);
         startTransition(async () => {
           const result = await withMinDuration(createEvent(formData));

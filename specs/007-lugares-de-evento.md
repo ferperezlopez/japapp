@@ -1,13 +1,13 @@
 # 007 - Lugares de evento (venues) + día de semana visible
 
 - **Estado:** Implemented (migración `0050` aplicada a la base viva el 2026-11-05 y verificada; la lectura de un link corto de Google solo se puede probar en producción, porque el entorno de desarrollo no llega a Google)
-- **Rutas:** `/eventos` (formulario de alta), `/eventos/[eventId]` («✏️ Editar lugar»)
+- **Rutas:** `/eventos` (formulario de alta), `/eventos/[eventId]` («Editar evento» → lista de lugares)
 - **Migraciones relacionadas:** `supabase/migrations/0006_venues.sql`,
   `supabase/migrations/0019_venue_gps.sql` (revertida por `0021`),
   `supabase/migrations/0021_venue_address.sql`,
   `supabase/migrations/0022_venues_update_policy.sql` (su policy de `UPDATE` la saca la `0050`),
   `supabase/migrations/0050_venue_location_and_edit.sql`
-- **Última actualización:** 2026-11-05
+- **Última actualización:** 2026-11-06
 
 ## 1. Resumen
 
@@ -36,12 +36,15 @@ muestra.
   Maps hacia esa dirección directamente en el dispositivo de quien lo
   toca (no un mapa para mirar, dispara la navegación). Fecha, hora y
   lugar tienen cada uno su propio icono (calendario/reloj/pin).
-- Editar un lugar ya guardado desde «✏️ Editar lugar» en la página del
-  evento (cualquier logueado): nombre, dirección o link de Google Maps
-  (GPS) y de quién es la casa. Si cambia el nombre, se renombra también
-  en los eventos que lo usaban. Se había sacado el 2026-09-18 y volvió el
-  2026-11-05 (ver changelog): sin él no había cómo corregir un nombre, ni
-  cargarle el link a un lugar creado sin dirección, y el clima del evento
+- Editar un lugar ya guardado desde «Editar evento»: la lista de lugares
+  trae «Editar “X”…» (X es el lugar elegido) y abre nombre, dirección o
+  link de Google Maps (GPS) y de quién es la casa. Lo puede hacer quien puede
+  editar el evento (quien lo creó o un admin; con el evento cerrado, solo un
+  admin). Si cambia el nombre, se renombra también en los eventos que lo
+  usaban, y el evento queda en ese lugar. Se había sacado el 2026-09-18; volvió
+  el 2026-11-05 como un botón propio en el encabezado y el 2026-11-06 pasó a
+  «Editar evento» (ver changelog): sin esto no había cómo corregir un nombre,
+  ni cargarle el link a un lugar creado sin dirección, y el clima del evento
   (spec 024) depende de ese link.
 - La ubicación del lugar (`venues.lat`/`lng`, para el clima), que se saca
   del link de Google Maps (largo o corto) o de coordenadas tipeadas
@@ -109,8 +112,9 @@ Puntos que el SQL no explica por sí solo:
   dejan tocarlos de otra forma; es solo texto de referencia). Todo en una
   transacción, con candado de fila contra dos ediciones simultáneas; rechaza
   nombre vacío (`22023`), repetido (`23505`), lugar inexistente (`P0002`) y una
-  ubicación con solo latitud o solo longitud. Cualquier logueado puede editar
-  (mismo modelo de confianza que la `0022`). Un solo camino evita que una
+  ubicación con solo latitud o solo longitud. La función deja editar a cualquier
+  logueado (mismo modelo de confianza que la `0022`); la app lo ofrece desde
+  «Editar evento», o sea a quien puede editar el evento. Un solo camino evita que una
   llamada directa a la API renombre un lugar y deje eventos "huérfanos". El
   alta (`INSERT`, también el `upsert … ignoreDuplicates`) no cambia. Sigue sin
   haber policy de `delete` (no se puede borrar un lugar).
@@ -177,24 +181,36 @@ En el celular de quien toca "Cómo llegar", cualquiera de los dos casos
 abre la app de mapas instalada (deep link nativo de `google.com/maps`
 y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 
-**Editar un lugar:**
-1. En `/eventos/[eventId]`, si el evento tiene un lugar guardado, debajo del
-   encabezado aparece «✏️ Editar lugar» (`EditVenueForm`, cualquier logueado,
-   también en eventos cerrados: son datos compartidos del grupo, no del
-   evento). Abre un formulario con nombre, «Dirección o link de Google Maps
-   (GPS)» y «¿De quién es la casa?», con lo que tiene hoy el lugar.
-2. `updateVenue(venueId, formData)` (`actions.ts`) valida el nombre y la
-   sesión, lee la dirección y la ubicación actuales del lugar, resuelve la
-   ubicación nueva **solo si cambió el link o todavía no tenía** (si no,
-   conserva la que tiene) y llama a `update_venue`. Traduce `23505` a «Ya hay
-   un lugar con ese nombre.» y `23503` a «No se encontró a esa persona.», y
-   revalida `/eventos` (layout) y `/`.
-3. Devuelve si se pudo ubicar el lugar y el formulario lo dice: «Ubicación
-   detectada: el clima va a ser el de esta sede.»; «Lugar guardado, pero no
-   pude sacar la ubicación de lo que cargaste, así que el clima no se va a
-   mostrar. Probá con el link de «Compartir ubicación» de Google Maps (el
-   largo, si el corto no anda) o pegá las coordenadas (ej. -34.60, -58.38).»;
-   o, sin link, que sin el link no hay clima.
+**Editar un lugar** (desde «Editar evento»):
+1. En `/eventos/[eventId]` hay **un solo botón de editar**, el del evento (el
+   lápiz). Al abrir el formulario, si el lugar elegido es uno guardado, la lista
+   de lugares suma al final «Editar “X”…» (valor `__edit__`,
+   `src/lib/eventos/venueSelection.ts`; `EventFormFields` con `allowEditVenue`).
+   Elegirla abre «Nombre del lugar», «¿De quién es la casa?» y «Dirección o link
+   de Google Maps», con lo que tiene hoy el lugar; elegir otra opción los
+   esconde. Con «Sin lugar» o «+ Nuevo lugar…» la opción no se ofrece, y en el
+   alta de un evento no existe.
+2. `updateEvent` (`actions.ts`) → `resolveVenueLocation` → `applyVenueEdit`
+   (`src/lib/eventos/venueEdit.ts`): valida el nombre, lee la dirección y la
+   ubicación actuales del lugar, resuelve la ubicación nueva **solo si cambió el
+   link o todavía no tenía** (si no, conserva la que tiene) y llama a
+   `update_venue`. Traduce `23505` a «Ya hay un lugar con ese nombre.» y `23503`
+   a «No se encontró a esa persona.». Si el lugar falla, el evento no se toca;
+   si sale bien, el evento queda en el lugar con el nombre con el que quedó
+   (no en «__edit__») y se revalida `/eventos` (layout), porque los demás eventos
+   del lugar lo ven con lo nuevo.
+3. Si no se pudo sacar la ubicación (`missing`), el evento se guarda igual, el
+   formulario se cierra y debajo del botón de editar queda el aviso «Lugar
+   guardado, pero no pude sacar su ubicación de lo que cargaste, así que el
+   clima no se va a mostrar. Probá con el link de «Compartir ubicación» de Google
+   Maps (el largo, si el corto no anda) o pegá las coordenadas (ej. -34.60,
+   -58.38).» hasta que se vuelve a abrir el formulario. Sin link no hay aviso
+   propio: el encabezado ya explica cómo cargarlo (solo a quien puede editar el
+   evento, spec 024).
+4. Los formularios de evento usan `onSubmit` y no `action`: con `action`, React
+   19 resetea el formulario al enviar y, tras un error (un nombre repetido, por
+   ejemplo), la lista de lugares volvía a «Sin lugar» y lo escrito se perdía;
+   reintentar guardaba el evento sin lugar.
 
 **Ubicación del lugar** (`src/lib/eventos/venueLocation.ts`, con test):
 1. `parseCoordinates(texto)`, sin red: coordenadas tipeadas («lat, lng»),
@@ -243,13 +259,19 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
       opcional; guardar el evento persiste esa dirección en `venues`.
 - [x] Elegir un lugar existente de la lista no muestra el campo de
       dirección en el formulario del evento (la dirección de un lugar ya
-      guardado se corrige con «✏️ Editar lugar»).
+      guardado se corrige con «Editar “X”…» de la misma lista).
 - [x] Si el lugar del evento tiene dirección cargada, la página del
       evento muestra "🧭 Cómo llegar" con el link de navegación de
       Google Maps hacia esa dirección; si no tiene, no aparece nada.
-- [x] Cualquier logueado puede editar nombre, link y casa de un lugar ya
-      guardado desde «✏️ Editar lugar» (`src/app/eventos/actions.test.ts`,
-      `supabase/verify/0050_venue_location_and_edit.sql`).
+- [x] Quien puede editar el evento puede corregir nombre, link y casa de su
+      lugar desde «Editar evento» → «Editar “X”…» (`src/lib/eventos/venueEdit.test.ts`,
+      `src/app/eventos/actions.test.ts`, `supabase/verify/0050_venue_location_and_edit.sql`).
+- [x] El encabezado del evento tiene un solo botón de editar (el del evento): ni
+      «Editar lugar» ni lápices de texto.
+- [x] La lista de lugares ofrece «Editar “X”…» solo con un lugar guardado elegido,
+      y no en el alta de un evento.
+- [x] Un error al guardar (un nombre repetido) deja el formulario como estaba: la
+      lista de lugares sigue en «Editar…» y lo escrito no se pierde.
 - [x] Renombrar un lugar renombra también los eventos que lo usaban —incluidos
       los cerrados— y no toca los de otros lugares; cambiar solo el link no
       renombra nada (verify `0050`, J21–J29).
@@ -276,6 +298,7 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 | `venues` como lista de sugerencias sin FK desde `events` | `events.venue_id` normalizado, sin columna `location` de texto | No hay caso de uso hoy que necesite la relación (filtrar eventos por lugar, editar un lugar y propagar el cambio); agregarla sería anticipar una necesidad no pedida. |
 | Día de la semana calculado en el cliente, mostrado como texto auxiliar | Intentar am `<input type="date">` custom que muestre el día en el propio calendario | El calendario del `datetime-local` es UI nativa del browser/SO, no manipulable desde CSS/JS; mostrar el dato calculado al lado es la única vía sin reemplazar el input nativo por un date-picker propio (fuera de alcance de este pedido puntual). |
 | Dirección de texto + link "Directions" de Google Maps (sin API key) | (a) Mapa Leaflet + OpenStreetMap con pin de coordenadas (probado, revertido); (b) Google Maps JavaScript API embebido | El usuario probó el mapa Leaflet y no lo necesitaba: solo quería registrar la dirección para que cualquier participante la toque y el dispositivo dispare la navegación — un mapa para mirar no resuelve eso. El link `google.com/maps/dir/?api=1&destination=...` hace exactamente eso sin necesitar coordenadas, sin API key y sin ninguna librería de mapas (se sacó `leaflet`/`react-leaflet`, quedó cero dependencias de UI externas de nuevo). Se descartó la opción (b) porque exige una API key con facturación que el usuario tendría que crear y mantener, y además el usuario aclaró que no necesita ver un mapa embebido en la app. |
+| La edición del lugar vive dentro de «Editar evento» (opción «Editar “X”…» de la lista de lugares) | Un botón propio «Editar lugar» en el encabezado del evento (como estuvo el 2026-11-05) | Pedido del usuario (2026-11-06): el encabezado quedaba con dos lápices y un texto repetido; un solo botón de editar, y la corrección del lugar donde ya se elige el lugar. La función de la base sigue siendo la misma; cambia dónde la ofrece la app (a quien puede editar el evento). |
 | Cualquier logueado puede editar cualquier lugar (nombre, dirección, dueño) | Restringir a quien lo creó (`created_by`) | Pedido explícito del usuario, mismo criterio de confianza total que `event_tasks`/`futbol_stats`: no hay necesidad real de restringir esto dentro de un grupo de amigos. |
 | Cambio de nombre cascadea a `events.location` dentro de `update_venue` (una función de la base, una transacción) | (a) Bloquear el cambio de nombre si hay eventos que lo usan; (b) agregar `venue_id` como FK real en `events`; (c) cascada desde la action con dos llamadas | (a) frustraría el pedido del usuario sin necesidad; (b) es un cambio de modelo más grande de lo pedido (afectaría el mensaje de WhatsApp, la card del listado, etc., que hoy leen `event.location` como texto); (c) las policies de la `0044` no dejan a un logueado común tocar un evento cerrado, así que la cascada desde la app dejaría el nombre viejo en esos eventos (y el clima y «Cómo llegar» perderían la sede). La función es `security definer` y atómica. |
 | Un solo camino para modificar un lugar: la función, sin policy de `UPDATE` | Dejar la policy de la `0022` además de la función | Con la policy, una llamada directa a la API podría renombrar un lugar sin propagar el cambio y dejar eventos "huérfanos" (sin lugar, sin clima). El alta no cambia. |
@@ -294,6 +317,16 @@ y `maps.app.goo.gl`) directo en ese lugar — no un mapa para mirar.
 
 ## 8. Changelog
 
+- 2026-11-06: **pedido del usuario** (con captura del encabezado: «quedó como el
+  orto … saca todos esos lapicitos, dejá sólo un botón que denote "editar
+  evento"; al editar el evento, en la sección de lugar, en la lista de lugares la
+  opción de editar un lugar»). Se sacó «✏️ Editar lugar» (`EditVenueForm`) y
+  `updateVenue`; la lista de lugares de «Editar evento» suma «Editar “X”…», que
+  corrige el lugar por `update_venue` (`applyVenueEdit`) dentro de `updateEvent`.
+  El aviso del clima del encabezado perdió el emoji y se muestra solo a quien puede
+  editar el evento. De paso, un error al guardar un evento ya no resetea el
+  formulario (`onSubmit` en vez de `action`): antes la lista de lugares volvía a
+  «Sin lugar» y reintentar guardaba el evento sin lugar.
 - 2026-11-05: la migración `0050` se aplicó a la base viva por el SQL editor de Supabase (el
   servidor pide una confirmación que no le llega al usuario, igual que con la `0046`) y se
   verificó en vivo, solo lectura: las columnas `lat`/`lng` en `venues` y en `event_weather`

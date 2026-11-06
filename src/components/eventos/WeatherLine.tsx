@@ -43,11 +43,12 @@ export function WeatherLine({
 }
 
 // El evento tiene sede pero no se sabe dónde queda (no tiene link de Google Maps, o no se pudo
-// leer): no hay pronóstico que mostrar y se dice cómo conseguirlo.
-export function WeatherNeedsLocation() {
+// leer): no hay pronóstico que mostrar y se dice cómo conseguirlo (a quien puede editar el evento).
+export function WeatherNeedsLocation({ venueName }: { venueName: string }) {
   return (
     <p className="mt-2 text-xs text-foreground/50" data-testid="event-weather-needs-location">
-      Para ver el clima, cargá el link de Google Maps de la sede (✏️ Editar lugar).
+      Para ver el clima, cargá el link de Google Maps de la sede: Editar evento → Lugar → Editar «
+      {venueName}»…
     </p>
   );
 }

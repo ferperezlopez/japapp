@@ -4,7 +4,7 @@
 - **Rutas:** `/eventos/[eventId]`
 - **Migraciones relacionadas:** `supabase/migrations/0048_event_weather.sql`,
   `supabase/migrations/0050_venue_location_and_edit.sql` (ubicación de la sede)
-- **Última actualización:** 2026-11-05
+- **Última actualización:** 2026-11-06
 
 ## 1. Resumen
 
@@ -31,8 +31,8 @@ pronóstico era siempre el de Buenos Aires.
   007) a la hora del evento **en ese lugar** (`timezone=auto`). Sin sede, o sin saber dónde
   queda, no hay clima: nunca se muestra el de otra ciudad. Si el evento tiene sede sin
   ubicación, una línea tenue lo explica («Para ver el clima, cargá el link de Google Maps
-  de la sede (✏️ Editar lugar)»), solo cuando el clima se pediría (no empezó y está dentro
-  de los 16 días).
+  de la sede: Editar evento → Lugar → Editar «Fercho's»…»), solo a quien puede editar el
+  evento y solo cuando el clima se pediría (no empezó y está dentro de los 16 días).
 - El pronóstico se pide a Open-Meteo (gratis, sin clave) al abrir el evento si falta, si
   tiene más de 3 horas, si se movió la fecha u hora del evento o si se cambió la sede o su
   ubicación, y se guarda en `event_weather`. Solo si el evento está dentro de los 16 días
