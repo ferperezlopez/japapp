@@ -13,7 +13,7 @@
   informe de pago realizado, ver sección 4),
   `supabase/migrations/0046_expense_edit.sql` (función `update_expense`:
   editar un gasto)
-- **Última actualización:** 2026-11-01
+- **Última actualización:** 2026-11-06
 
 ## 1. Resumen
 
@@ -35,7 +35,10 @@ transferencias posible.
   `insumo_items` — elegir un ítem existente muestra su emoji junto a
   la descripción; tipear texto libre nuevo sigue funcionando igual que
   antes, pero **no** crea una entrada nueva en el catálogo (ver
-  sección 6, decisión "sin auto-creación"). Quién *carga* el gasto
+  sección 6, decisión "sin auto-creación"). Los nombres del catálogo
+  empiezan siempre con mayúscula (trigger de la `0051`, ver
+  `specs/013-invitados-tareas-y-stats.md`); el picker de Gastos no
+  cambia. Quién *carga* el gasto
   sigue necesitando ser miembro real del grupo. Quién puede figurar
   como **pagó**/**participante**:
   - Si el grupo está enlazado a un evento: solo quien tiene
@@ -327,6 +330,11 @@ Puntos que el SQL no explica por sí solo:
 
 ## 8. Changelog
 
+- 2026-11-06: el catálogo `insumo_items` que Gastos comparte con «compra de
+  insumos» guarda ahora los nombres siempre con la primera letra en
+  mayúscula (trigger de la `0051`; «servilletas» quedó como «Servilletas»), así
+  que la descripción de un gasto elegido del catálogo sale con mayúscula inicial. El
+  picker de Gastos no cambia: lo tipeado sigue sin crear nada en el catálogo.
 - 2026-11-01: el recordatorio automático de saldo pendiente (spec 017) ignoraba
   los pagos informados y le avisaba a quien ya había pagado: ahora los descuenta.
   `payments` pasa a ser obligatorio en `calcularBalances` y `hasPendingSettlement`
