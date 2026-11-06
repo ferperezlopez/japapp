@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getActingUser } from "@/lib/supabase/actingUser";
 import { guardEdit } from "@/lib/eventos/lock";
+import { capitalizeFirst, normalizeQuantity } from "@/lib/eventos/insumos";
 import { DRINK_KEYS } from "@/lib/calculators/bebidas";
 import { hasAnyAmount, parseDrinksForm } from "@/lib/eventos/drinks";
 import { parseMenu } from "@/lib/eventos/menu";
@@ -596,12 +597,16 @@ export async function removeGuestFromEvent(eventGuestId: string, eventId: string
 // Solo "compra_insumos" pide un insumo (qué va a comprar esa persona):
 // igual criterio que addGuestToEvent con los invitados — se puede elegir
 // uno ya cargado antes (reusable entre eventos) o tipear uno nuevo, que
-// a partir de ahora también queda disponible para elegir.
+// a partir de ahora también queda disponible para elegir. Los insumos
+// nuevos se guardan con la primera letra en mayúscula (también lo hace la
+// base, 0051). Ahí mismo puede ir una cantidad opcional ("2 kg", "3
+// litros"): texto libre por asignación, no por insumo del catálogo.
 export async function addTaskAssignee(
   eventId: string,
   taskType: "compra_insumos" | "lavado_platos" | "orden_sede",
   userId: string,
   item?: { existingItemId?: string; newItemName?: string },
+  quantity?: string,
 ) {
   const supabase = await createClient();
   const {
@@ -613,11 +618,20 @@ export async function addTaskAssignee(
   const lockedError = await guardEdit(supabase, eventId, "participation");
   if (lockedError) return { error: lockedError };
 
+  // La cantidad solo existe en "compra_insumos" (la base lo exige): en las demás se ignora. Se
+  // valida antes de crear el insumo, para no dejar uno nuevo en el catálogo si la cantidad no sirve.
+  let quantityValue: string | null = null;
+  if (taskType === "compra_insumos") {
+    const normalized = normalizeQuantity(quantity);
+    if ("error" in normalized) return { error: normalized.error };
+    quantityValue = normalized.value;
+  }
+
   let itemId: string | null = null;
   if (taskType === "compra_insumos") {
     itemId = item?.existingItemId || null;
     if (!itemId) {
-      const newName = item?.newItemName?.trim();
+      const newName = capitalizeFirst(item?.newItemName ?? "");
       if (!newName) return { error: "Elegí o cargá qué vas a comprar." };
       const { data: newItem, error: itemError } = await supabase
         .from("insumo_items")
@@ -653,6 +667,8 @@ export async function addTaskAssignee(
       task_type: taskType,
       assigned_to: userId,
       item_id: itemId,
+      // Solo si hay una: así el alta sigue andando en una base sin la columna (0051 sin aplicar).
+      ...(quantityValue ? { quantity: quantityValue } : {}),
       updated_by: user.id,
     });
     if (error) return { error: error.message };
@@ -662,6 +678,66 @@ export async function addTaskAssignee(
     if (userId !== user.id) {
       await notifyTaskAssigned(supabase, eventId, taskType, userId, user.id);
     }
+  } else if (quantityValue) {
+    // Ya la tenía (mismo insumo): se ignora el duplicado, pero la cantidad que se tipeó es la
+    // nueva, y perderla en silencio sería peor. No se vuelve a notificar.
+    const saved = await saveTaskQuantity(supabase, existing.id, user.id, quantityValue);
+    if (saved.error) return { error: saved.error };
+  }
+
+  revalidatePath(`/eventos/${eventId}`);
+  return { ok: true };
+}
+
+// Una RLS que filtra un UPDATE no da error (0 filas): sin este chequeo la pantalla daría por
+// guardada una cantidad que no se guardó (evento cerrado, tarea que ya no está...).
+async function saveTaskQuantity(
+  supabase: SupabaseClient<Database>,
+  taskId: string,
+  userId: string,
+  quantity: string | null,
+): Promise<{ error?: string }> {
+  const { data, error } = await supabase
+    .from("event_tasks")
+    .update({ quantity, updated_by: userId, updated_at: new Date().toISOString() })
+    .eq("id", taskId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) {
+    return { error: "No se pudo guardar la cantidad: el insumo no existe o no tenés permiso." };
+  }
+  return {};
+}
+
+// Completar o corregir la cantidad de un insumo ya asignado (vacía = sacarla), sin sacar y volver
+// a sumar a la persona (eso la re-notificaría). Cualquier logueado, como el alta y la baja; con el
+// evento cerrado, solo un admin (la base lo hace cumplir).
+export async function updateTaskQuantity(taskId: string, eventId: string, quantity: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "No estás logueado." };
+
+  const lockedError = await guardEdit(supabase, eventId, "participation");
+  if (lockedError) return { error: lockedError };
+
+  const normalized = normalizeQuantity(quantity);
+  if ("error" in normalized) return { error: normalized.error };
+
+  const { data, error } = await supabase
+    .from("event_tasks")
+    .update({
+      quantity: normalized.value,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", taskId)
+    .eq("event_id", eventId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) {
+    return { error: "No se pudo guardar la cantidad: el insumo no existe o no tenés permiso." };
   }
 
   revalidatePath(`/eventos/${eventId}`);

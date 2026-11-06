@@ -50,8 +50,10 @@ import {
   setRsvp,
   setReservaCanchaAssignee,
   updateEvent,
+  updateTaskQuantity,
   upsertFutbolStats,
 } from "./actions";
+import { sendPushToUsers } from "@/lib/push/send";
 
 type Call = [method: string, ...args: unknown[]];
 
@@ -581,5 +583,295 @@ describe("el alta de un lugar nuevo desde un evento", () => {
     await createEvent(form({ venue: "Casa de Pablo" }));
     expect(mocks.resolveVenueCoordinates).not.toHaveBeenCalled();
     expect(callsTo("upsert")).toEqual([]);
+  });
+});
+
+// Una respuesta por consulta (según la tabla y los métodos que se le encadenaron), para las acciones
+// que hacen varias consultas distintas sobre la misma tabla.
+function respondByQuery(resolve: (table: string, methods: string[]) => unknown) {
+  mocks.from.mockImplementation((table: string) => {
+    tables.push(table);
+    const methods: string[] = [];
+    const query: object = new Proxy(
+      {},
+      {
+        get(_target, method) {
+          if (method === "then") {
+            return (done: (value: unknown) => void) => done(resolve(table, methods));
+          }
+          return (...args: unknown[]) => {
+            methods.push(String(method));
+            calls.push([String(method), ...args]);
+            return query;
+          };
+        },
+      },
+    );
+    return query;
+  });
+}
+
+interface TasksDb {
+  /** La asignación que ya existe (misma persona y mismo insumo), si la hay. */
+  existing?: { id: string } | null;
+  /** El id con el que queda un insumo nuevo del catálogo. */
+  newItemId?: string;
+  /** Lo que contesta el UPDATE (`select("id")` de las filas que tocó). */
+  updated?: unknown[] | null;
+  updateError?: { message: string } | null;
+  insertError?: { message: string } | null;
+}
+
+function tasksDb({
+  existing = null,
+  newItemId = "item-new",
+  updated = [{ id: "task-9" }],
+  updateError = null,
+  insertError = null,
+}: TasksDb = {}) {
+  respondByQuery((table, methods) => {
+    if (table === "insumo_items") return { data: { id: newItemId }, error: null };
+    if (table === "event_tasks" && methods.includes("maybeSingle")) return { data: existing, error: null };
+    if (table === "event_tasks" && methods.includes("update")) return { data: updated, error: updateError };
+    if (table === "event_tasks" && methods.includes("insert")) return { data: null, error: insertError };
+    return { data: null, error: null };
+  });
+}
+
+const insertedTask = () => callsTo("insert")[0]?.[1] as Record<string, unknown> | undefined;
+const updatedTask = () => callsTo("update")[0]?.[1] as Record<string, unknown> | undefined;
+
+describe("addTaskAssignee", () => {
+  it("un insumo nuevo se crea en el catálogo con la primera letra en mayúscula", async () => {
+    tasksDb();
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { newItemName: "  servilletas " }),
+    ).toEqual({ ok: true });
+
+    expect(callsTo("upsert")).toEqual([
+      ["upsert", { name: "Servilletas", created_by: "user-1" }, { onConflict: "name" }],
+    ]);
+    expect(insertedTask()).toEqual({
+      event_id: EVENT_ID,
+      task_type: "compra_insumos",
+      assigned_to: "user-2",
+      item_id: "item-new",
+      updated_by: "user-1",
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/eventos/${EVENT_ID}`);
+  });
+
+  it("solo cambia la primera letra: lo demás queda como se escribió", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { newItemName: "coca COLA" });
+    expect(callsTo("upsert")[0][1]).toMatchObject({ name: "Coca COLA" });
+  });
+
+  it("un insumo ya cargado se asigna sin crear nada en el catálogo", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" });
+    expect(callsTo("upsert")).toEqual([]);
+    expect(tables).not.toContain("insumo_items");
+    expect(insertedTask()).toMatchObject({ item_id: "item-7" });
+  });
+
+  it.each([
+    ["sin insumo", undefined],
+    ["con un nombre vacío", { newItemName: "" }],
+    ["con un nombre de solo espacios", { newItemName: "   " }],
+  ])("%s pide elegir o cargar qué se va a comprar y no escribe nada", async (_name, item) => {
+    tasksDb();
+    expect(await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", item)).toEqual({
+      error: "Elegí o cargá qué vas a comprar.",
+    });
+    expect(callsTo("upsert")).toEqual([]);
+    expect(callsTo("insert")).toEqual([]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("guarda la cantidad recortada junto con la asignación", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "  3   kg ");
+    expect(insertedTask()).toMatchObject({ item_id: "item-7", quantity: "3 kg" });
+  });
+
+  it.each([
+    ["no se tipea", undefined],
+    ["está vacía", ""],
+    ["es de solo espacios", "   "],
+  ])("si la cantidad %s no se manda la columna (anda también sin la migración 0051)", async (_name, quantity) => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, quantity);
+    expect(insertedTask()).toBeDefined();
+    expect(Object.keys(insertedTask() ?? {})).not.toContain("quantity");
+  });
+
+  it("una cantidad muy larga se rechaza antes de crear el insumo nuevo", async () => {
+    tasksDb();
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { newItemName: "pan" }, "x".repeat(41)),
+    ).toEqual({ error: "La cantidad es muy larga (máximo 40 caracteres)." });
+    expect(callsTo("upsert")).toEqual([]);
+    expect(callsTo("insert")).toEqual([]);
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("una cantidad de exactamente 40 caracteres se acepta", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "x".repeat(40));
+    expect(insertedTask()).toMatchObject({ quantity: "x".repeat(40) });
+  });
+
+  it.each(["lavado_platos", "orden_sede"] as const)(
+    "en %s no hay cantidad: se ignora aunque llegue",
+    async (taskType) => {
+      tasksDb();
+      expect(
+        await addTaskAssignee(EVENT_ID, taskType, "user-2", undefined, "x".repeat(99)),
+      ).toEqual({ ok: true });
+      expect(Object.keys(insertedTask() ?? {})).not.toContain("quantity");
+      expect(insertedTask()).toMatchObject({ task_type: taskType, item_id: null });
+    },
+  );
+
+  it("avisa a quien recibe la tarea, salvo que se la asigne a sí mismo", async () => {
+    tasksDb();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "2 kg");
+    expect(sendPushToUsers).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendPushToUsers).mock.calls[0][1]).toEqual(["user-2"]);
+
+    vi.mocked(sendPushToUsers).mockClear();
+    await addTaskAssignee(EVENT_ID, "compra_insumos", "user-1", { existingItemId: "item-7" }, "2 kg");
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+  });
+
+  it("si esa persona ya tenía ese insumo y no se tipea cantidad, no hace nada (como antes)", async () => {
+    tasksDb({ existing: { id: "task-9" } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }),
+    ).toEqual({ ok: true });
+    expect(callsTo("insert")).toEqual([]);
+    expect(callsTo("update")).toEqual([]);
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+  });
+
+  it("si ya lo tenía y se tipea una cantidad, la actualiza en esa asignación (sin duplicar ni avisar otra vez)", async () => {
+    tasksDb({ existing: { id: "task-9" } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, " 4 kg "),
+    ).toEqual({ ok: true });
+
+    expect(callsTo("insert")).toEqual([]);
+    expect(updatedTask()).toEqual({
+      quantity: "4 kg",
+      updated_by: "user-1",
+      updated_at: expect.any(String),
+    });
+    expect(callsTo("eq")).toContainEqual(["eq", "id", "task-9"]);
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/eventos/${EVENT_ID}`);
+  });
+
+  it("si ya lo tenía y la cantidad no se pudo guardar (0 filas por permisos), lo avisa", async () => {
+    tasksDb({ existing: { id: "task-9" }, updated: [] });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "4 kg"),
+    ).toEqual({ error: "No se pudo guardar la cantidad: el insumo no existe o no tenés permiso." });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("si la base rechaza la actualización de la cantidad, devuelve su mensaje", async () => {
+    tasksDb({ existing: { id: "task-9" }, updateError: { message: "boom" } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "4 kg"),
+    ).toEqual({ error: "boom" });
+  });
+
+  it("si la base rechaza el alta, devuelve su mensaje y no avisa a nadie", async () => {
+    tasksDb({ insertError: { message: "no se pudo" } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }),
+    ).toEqual({ error: "no se pudo" });
+    expect(sendPushToUsers).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("sin sesión no toca la base", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect(
+      await addTaskAssignee(EVENT_ID, "compra_insumos", "user-2", { existingItemId: "item-7" }, "2 kg"),
+    ).toEqual({ error: "No estás logueado." });
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateTaskQuantity", () => {
+  it("guarda la cantidad recortada y deja quién la corrigió", async () => {
+    tasksDb();
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "  3   kg ")).toEqual({ ok: true });
+
+    expect(tables).toEqual(["event_tasks"]);
+    expect(updatedTask()).toEqual({
+      quantity: "3 kg",
+      updated_by: "user-1",
+      updated_at: expect.any(String),
+    });
+    expect(callsTo("eq")).toEqual([
+      ["eq", "id", "task-1"],
+      ["eq", "event_id", EVENT_ID],
+    ]);
+    expect(mocks.guardEdit).toHaveBeenCalledWith(expect.anything(), EVENT_ID, "participation");
+    expect(mocks.revalidatePath).toHaveBeenCalledWith(`/eventos/${EVENT_ID}`);
+  });
+
+  it.each(["", "   "])("una cantidad vacía (%j) la saca", async (quantity) => {
+    tasksDb();
+    expect(await updateTaskQuantity("task-1", EVENT_ID, quantity)).toEqual({ ok: true });
+    expect(updatedTask()).toMatchObject({ quantity: null });
+  });
+
+  it("una cantidad muy larga se rechaza y no toca la base", async () => {
+    tasksDb();
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "x".repeat(41))).toEqual({
+      error: "La cantidad es muy larga (máximo 40 caracteres).",
+    });
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("sin sesión no toca la base", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null } });
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toEqual({
+      error: "No estás logueado.",
+    });
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.guardEdit).not.toHaveBeenCalled();
+  });
+
+  it("con el evento bloqueado devuelve el aviso y no escribe nada", async () => {
+    tasksDb();
+    mocks.guardEdit.mockResolvedValue(CLOSED);
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toEqual({ error: CLOSED });
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("si no tocó ninguna fila (la tarea ya no está o la base no deja) lo avisa en vez de dar por guardado", async () => {
+    tasksDb({ updated: [] });
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toEqual({
+      error: "No se pudo guardar la cantidad: el insumo no existe o no tenés permiso.",
+    });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("si la base no contesta filas (null) también lo avisa", async () => {
+    tasksDb({ updated: null });
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toHaveProperty("error");
+  });
+
+  it("si la base devuelve un error, devuelve su mensaje", async () => {
+    tasksDb({ updateError: { message: "boom" } });
+    expect(await updateTaskQuantity("task-1", EVENT_ID, "2 kg")).toEqual({ error: "boom" });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 });

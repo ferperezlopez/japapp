@@ -656,6 +656,7 @@ export interface Database {
             | "reserva_cancha";
           assigned_to: string;
           item_id: string | null;
+          quantity: string | null;
           updated_by: string;
           updated_at: string;
         };
@@ -669,6 +670,7 @@ export interface Database {
             | "reserva_cancha";
           assigned_to: string;
           item_id?: string | null;
+          quantity?: string | null;
           updated_by: string;
           updated_at?: string;
         };
@@ -682,6 +684,7 @@ export interface Database {
             | "reserva_cancha";
           assigned_to?: string;
           item_id?: string | null;
+          quantity?: string | null;
           updated_by?: string;
           updated_at?: string;
         };
