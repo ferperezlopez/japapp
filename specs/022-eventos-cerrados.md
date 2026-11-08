@@ -1,9 +1,9 @@
 # 022 - Eventos cerrados y saldados: solo lectura (salvo admins)
 
-- **Estado:** Implemented (migraciones `0044` y `0045` aplicadas a la base viva el 2026-11-01; el script de verificación dio 80/80 en una réplica local y su corrida completa contra la base viva sigue pendiente, ver el changelog)
+- **Estado:** Implemented (migraciones `0044` y `0045` aplicadas a la base viva el 2026-11-01; el script de verificación dio 80/80 en una réplica local y, el 2026-11-07, 80/80 con 0 FALLA corrido completo contra la base viva, ver el changelog)
 - **Rutas:** `/eventos/[eventId]`, `/gastos/[groupId]`
 - **Migraciones relacionadas:** `supabase/migrations/0044_lock_closed_events.sql`, `supabase/migrations/0045_event_closes_at_search_path.sql`, `supabase/migrations/0051_task_quantity_and_insumo_names.sql` (una policy más: el cambio de cantidad de un insumo)
-- **Última actualización:** 2026-11-06
+- **Última actualización:** 2026-11-07
 
 ## 1. Resumen
 
@@ -247,3 +247,12 @@ viva todavía no se corrió completo (ver el changelog del 2026-11-01).
 - 2026-11-06: la `0051` le suma a las tareas un `UPDATE` acotado a la cantidad de un
   insumo (`quantity`) con su restrictiva de cierre: con el evento cerrado solo un admin la
   cambia (comprobado en la réplica local, `supabase/verify/0051_…sql`).
+- 2026-11-07: **corrida completa del script de verificación contra la base viva**
+  (`supabase/verify/0044_lock_closed_events.sql`, pegado entero en el SQL editor de
+  Supabase): `=== 80 verificaciones, 0 con FALLA ===`. Incluye A1 a A4: los cuatro eventos
+  reales siguen como al 1/11 (los del 18/9, 2/10 y 16/10 saldados y el del 30/10 cerrado).
+  Con eso queda confirmado en producción lo que ya se había visto en la réplica local:
+  abierto, cerrado (con el borde de 23 h 59 min contra 24 h justas), saldado y admin se
+  comportan como dice la matriz de «Quién puede tocar qué». En la misma fecha se comprobó
+  en vivo, solo lectura, la policy restrictiva de la `0051` («Evento cerrado: tareas solo de
+  un admin (cambio)») junto a la permisiva que le da `UPDATE` a la cantidad de un insumo.
